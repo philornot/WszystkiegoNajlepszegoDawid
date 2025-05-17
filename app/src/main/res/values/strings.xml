@@ -1,0 +1,24 @@
+<resources>
+    <string name="app_name">Wszystkiego Najlepszego Dawid!</string>
+
+    <!-- Tytuły i opisy -->
+    <string name="app_title">Wszystkiego najlepszego Dawid!</string>
+    <string name="countdown_title">Czas do urodzin:</string>
+    <string name="gift_description">Twój prezent</string>
+    <string name="curtain_description">Kurtyna zakrywająca prezent</string>
+
+    <!-- Dialog -->
+    <string name="download_dialog_title">Pobrać prezent?</string>
+    <string name="download_dialog_message">Czy chcesz pobrać swój specjalny prezent urodzinowy?</string>
+    <string name="yes">Tak</string>
+    <string name="no">Nie</string>
+
+    <!-- Pobieranie -->
+    <string name="downloading_file">Pobieranie prezentu</string>
+    <string name="downloading_file_desc">Twój wyjątkowy prezent jest właśnie pobierany</string>
+    <string name="open_with">Otwórz używając</string>
+
+    <!-- Powiadomienia -->
+    <string name="notification_channel_name">Powiadomienia urodzinowe</string>
+    <string name="notification_channel_description">Powiadomienia o niespodziance urodzinowej</string>
+</resources>
