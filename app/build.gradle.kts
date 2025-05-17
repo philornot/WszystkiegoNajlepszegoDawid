@@ -90,79 +90,79 @@ android {
 }
 
 dependencies {
-    // DODANE: Biblioteka do desugaring - potrzebna dla Google Play Services
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+    // Biblioteka do desugaring - potrzebna dla Google Play Services
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
 
     // Podstawowe zależności Androida
-    implementation("androidx.core:core-ktx:1.16.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.0")
-    implementation("androidx.activity:activity-compose:1.10.1")
+    implementation(libs.androidx.core.ktx.v1160)
+    implementation(libs.androidx.lifecycle.runtime.ktx.v290)
+    implementation(libs.androidx.activity.compose)
 
     // Compose
-    implementation(platform("androidx.compose:compose-bom:2025.05.00"))
-    implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.ui:ui-graphics")
-    implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.compose.material3:material3")
+    implementation(platform(libs.androidx.compose.bom.v20250500))
+    implementation(libs.ui)
+    implementation(libs.ui.graphics)
+    implementation(libs.ui.tooling.preview)
+    implementation(libs.material3)
 
     // Ikony z biblioteki Material
-    implementation("androidx.compose.material:material-icons-extended:1.7.8")
+    implementation(libs.androidx.material.icons.extended)
 
     // WorkManager - do planowania zadań
-    implementation("androidx.work:work-runtime-ktx:2.10.1")
+    implementation(libs.androidx.work.runtime.ktx)
 
     // OkHttp - klient HTTP
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation(libs.okhttp)
 
     // Timber - do logowania
-    implementation("com.jakewharton.timber:timber:5.0.1")
+    implementation(libs.timber)
 
     // Google Drive API i zależności
-    implementation("com.google.api-client:google-api-client-android:2.2.0")
-    implementation("com.google.http-client:google-http-client-gson:1.43.1")
-    implementation("com.google.apis:google-api-services-drive:v3-rev20220815-2.0.0")
-    implementation("com.google.auth:google-auth-library-oauth2-http:1.19.0")
-    implementation("com.google.oauth-client:google-oauth-client-jetty:1.34.1")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
+    implementation(libs.google.api.client.android)
+    implementation(libs.google.http.client.gson)
+    implementation(libs.google.api.services.drive)
+    implementation(libs.google.auth.library.oauth2.http)
+    implementation(libs.google.oauth.client.jetty)
+    implementation(libs.kotlinx.coroutines.play.services)
 
     // Do pracy z JSON
-    implementation("com.google.code.gson:gson:2.11.0")
+    implementation(libs.gson)
     implementation(libs.androidx.junit.ktx)
 
     // Dla testów jednostkowych (folder 'test')
-    testImplementation("junit:junit:4.13.2")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
-    testImplementation("androidx.arch.core:core-testing:2.2.0")
-    testImplementation("org.mockito.kotlin:mockito-kotlin:5.2.1") // Możesz rozważyć usunięcie, jeśli używasz tylko MockK
-    testImplementation("org.robolectric:robolectric:4.11.1")
-    testImplementation("app.cash.turbine:turbine:1.0.0")
-    testImplementation("androidx.test:core:1.6.1")
-    testImplementation("androidx.work:work-testing:2.10.1")
+    testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.androidx.core.testing)
+    testImplementation(libs.mockito.kotlin) // Możesz rozważyć usunięcie, jeśli używasz tylko MockK
+    testImplementation(libs.robolectric)
+    testImplementation(libs.turbine)
+    testImplementation(libs.androidx.core)
+    testImplementation(libs.androidx.work.testing)
 
-    // POPRAWIONE: Dodatkowe zależności MockK dla testów
-    testImplementation("io.mockk:mockk:1.13.9")
-    testImplementation("io.mockk:mockk-agent:1.13.9") // Potrzebne do mockowania statycznych metod
-    testImplementation("io.mockk:mockk-android:1.13.9") // Dodane dla wsparcia Android
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit:1.9.10")
+    // Dodatkowe zależności MockK dla testów
+    testImplementation(libs.mockk)
+    testImplementation(libs.mockk.agent) // Potrzebne do mockowania statycznych metod
+    testImplementation(libs.mockk.android) // dla wsparcia Android
+    testImplementation(libs.kotlin.test.junit)
 
     // Dla testów instrumentalnych (folder 'androidTest')
-    androidTestImplementation("androidx.test.ext:junit:1.2.1")
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
-    androidTestImplementation("androidx.compose.ui:ui-test-junit4:1.8.1")
-    androidTestImplementation("androidx.test:core:1.6.1")
-    androidTestImplementation("androidx.work:work-testing:2.10.1")
+    androidTestImplementation(libs.androidx.junit.v121)
+    androidTestImplementation(libs.androidx.espresso.core.v361)
+    androidTestImplementation(libs.ui.test.junit4)
+    androidTestImplementation(libs.androidx.core)
+    androidTestImplementation(libs.androidx.work.testing)
 
-    // DODANE: MockK dla testów instrumentalnych
-    androidTestImplementation("io.mockk:mockk-android:1.13.9")
-    androidTestImplementation("io.mockk:mockk-agent:1.13.9")
+    // MockK dla testów instrumentalnych
+    androidTestImplementation(libs.mockk.android)
+    androidTestImplementation(libs.mockk.agent)
 
     // Dla debugowania Compose
-    debugImplementation("androidx.compose.ui:ui-tooling")
-    debugImplementation("androidx.compose.ui:ui-test-manifest")
+    debugImplementation(libs.ui.tooling)
+    debugImplementation(libs.ui.test.manifest)
 
     // Google Tasks API dla operacji na Future
-    implementation("com.google.android.gms:play-services-tasks:18.3.0")
+    implementation(libs.play.services.tasks)
 
     // Dodatkowe narzędzia do testów z Compose
-    testImplementation("androidx.compose.ui:ui-test-junit4:1.8.1")
+    testImplementation(libs.ui.test.junit4)
 }
