@@ -38,8 +38,8 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.philornot.siekiera.config.AppConfig
 import com.philornot.siekiera.notification.NotificationScheduler
-import com.philornot.siekiera.ui.screens.MainScreen
-import com.philornot.siekiera.ui.theme.GiftTheme
+import com.philornot.siekiera.ui.screens.main.MainScreen
+import com.philornot.siekiera.ui.theme.AppTheme
 import com.philornot.siekiera.utils.RealTimeProvider
 import com.philornot.siekiera.utils.TimeProvider
 import com.philornot.siekiera.utils.TimeUtils
@@ -169,7 +169,7 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            GiftTheme {
+            AppTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background
                 ) {
@@ -316,13 +316,10 @@ class MainActivity : ComponentActivity() {
         try {
             // Otwórz plik za pomocą zewnętrznej aplikacji (Daylio jeśli jest zainstalowana)
             val intent = Intent(Intent.ACTION_VIEW)
-            val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            val uri =
                 androidx.core.content.FileProvider.getUriForFile(
                     this, "${applicationContext.packageName}.provider", file
                 )
-            } else {
-                Uri.fromFile(file)
-            }
 
             intent.setDataAndType(uri, "application/octet-stream")
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)

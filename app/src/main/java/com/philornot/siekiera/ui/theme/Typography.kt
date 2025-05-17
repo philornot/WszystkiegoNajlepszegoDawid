@@ -8,16 +8,43 @@ import androidx.compose.ui.unit.sp
 
 // Definicja typografii dla aplikacji
 val Typography = Typography(
-    // Używane dla tytułów nagłówków
-    headlineLarge = TextStyle(
+    // Używane dla największych tytułów
+    displayLarge = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Bold,
+        fontSize = 57.sp,
+        lineHeight = 64.sp,
+        letterSpacing = (-0.25).sp
+    ),
+
+    // Używane dla średnich tytułów
+    displayMedium = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Bold,
+        fontSize = 45.sp,
+        lineHeight = 52.sp,
+        letterSpacing = 0.sp
+    ),
+
+    // Używane dla mniejszych tytułów
+    displaySmall = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Bold,
+        fontSize = 36.sp,
+        lineHeight = 44.sp,
+        letterSpacing = 0.sp
+    ),
+
+    // Używane dla głównych nagłówków
+    headlineLarge = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 32.sp,
         lineHeight = 40.sp,
         letterSpacing = 0.sp
     ),
 
-    // Używane dla podtytułów
+    // Używane dla średnich nagłówków
     headlineMedium = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.SemiBold,
@@ -29,13 +56,13 @@ val Typography = Typography(
     // Używane dla mniejszych nagłówków
     headlineSmall = TextStyle(
         fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 24.sp,
         lineHeight = 32.sp,
         letterSpacing = 0.sp
     ),
 
-    // Używane dla nagłówków sekcji
+    // Używane dla tytułów sekcji
     titleLarge = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Medium,
@@ -44,16 +71,16 @@ val Typography = Typography(
         letterSpacing = 0.sp
     ),
 
-    // Używane dla podtytułów sekcji
+    // Używane dla tytuów średnich sekcji
     titleMedium = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Medium,
-        fontSize = 18.sp,
+        fontSize = 16.sp,
         lineHeight = 24.sp,
         letterSpacing = 0.15.sp
     ),
 
-    // Używane dla mniejszych podtytułów
+    // Używane dla mniejszych tytułów
     titleSmall = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Medium,
@@ -68,10 +95,10 @@ val Typography = Typography(
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
         lineHeight = 24.sp,
-        letterSpacing = 0.15.sp
+        letterSpacing = 0.5.sp
     ),
 
-    // Używane dla tekstu pomocniczego
+    // Używane dla średniego tekstu
     bodyMedium = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Normal,
@@ -80,7 +107,7 @@ val Typography = Typography(
         letterSpacing = 0.25.sp
     ),
 
-    // Używane dla drobnego tekstu
+    // Używane dla mniejszego tekstu
     bodySmall = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Normal,

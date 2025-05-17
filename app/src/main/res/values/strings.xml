@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Wszystkiego Najlepszego Dawid!</string>
 
@@ -6,6 +7,28 @@
     <string name="countdown_title">Czas do urodzin:</string>
     <string name="gift_description">Twój prezent</string>
     <string name="curtain_description">Kurtyna zakrywająca prezent</string>
+    <string name="birthday_wishes_title">18 Lat!</string>
+
+    <!-- Jednostki czasu -->
+    <string name="time_days">dni</string>
+    <string name="time_hours">Godzin</string>
+    <string name="time_minutes">Minut</string>
+    <string name="time_seconds">Sekund</string>
+
+    <!-- Wiadomości urodzinowe -->
+    <string name="birthday_message_1">Osiemnastka to wyjątkowy moment w życiu każdego człowieka. Z okazji Twoich 18. urodzin, życzę Ci wszystkiego najlepszego!</string>
+    <string name="birthday_message_2">Twoje marzenia niech się spełniają, a plany realizują. Ciesz się w pełni dorosłością i wszystkimi możliwościami, które przed Tobą stoją!</string>
+    <string name="birthday_toast">Wszystkiego najlepszego! Twój prezent jest gotowy!</string>
+
+    <!-- Ikony urodzinowe -->
+    <string name="birthday_icon_cake">Tort</string>
+    <string name="birthday_icon_cake_desc">Na słodko i radośnie</string>
+    <string name="birthday_icon_party">Impreza</string>
+    <string name="birthday_icon_party_desc">Zabawa do rana</string>
+    <string name="birthday_icon_happiness">Szczęście</string>
+    <string name="birthday_icon_happiness_desc">W każdym dniu</string>
+    <string name="birthday_icon_gifts">Prezenty</string>
+    <string name="birthday_icon_gifts_desc">Wyjątkowe jak Ty</string>
 
     <!-- Dialog -->
     <string name="download_dialog_title">Pobrać prezent?</string>
@@ -16,9 +39,23 @@
     <!-- Pobieranie -->
     <string name="downloading_file">Pobieranie prezentu</string>
     <string name="downloading_file_desc">Twój wyjątkowy prezent jest właśnie pobierany</string>
+    <string name="download_success">Prezent pobrany pomyślnie!</string>
+    <string name="download_error">Wystąpił błąd podczas pobierania. Spróbuj ponownie.</string>
     <string name="open_with">Otwórz używając</string>
+
+    <!-- Przed urodzinami -->
+    <string name="coming_soon">WKRÓTCE</string>
+    <string name="collect_gift">Odbierz swój prezent!</string>
 
     <!-- Powiadomienia -->
     <string name="notification_channel_name">Powiadomienia urodzinowe</string>
     <string name="notification_channel_description">Powiadomienia o niespodziance urodzinowej</string>
+    <string name="notification_permission_rationale">Potrzebujemy uprawnień do wyświetlania powiadomień, aby poinformować Cię gdy prezent będzie gotowy.</string>
+    <string name="notification_permission_granted">Będziesz powiadomiony w dniu urodzin!</string>
+    <string name="notification_permission_denied">Bez uprawnień do powiadomień nie będziesz mógł zobaczyć powiadomienia urodzinowego.</string>
+
+    <!-- Błędy -->
+    <string name="no_app_to_open">Brak aplikacji do otworzenia pliku Daylio. Zainstaluj aplikację Daylio.</string>
+    <string name="file_open_error">Błąd podczas otwierania pliku: %1$s</string>
+    <string name="error_permissions">Nie można otworzyć ekranu uprawnień: %1$s</string>
 </resources>
