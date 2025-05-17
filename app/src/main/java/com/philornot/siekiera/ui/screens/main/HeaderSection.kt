@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.philornot.siekiera.ui.theme.AccentPink
+import com.philornot.siekiera.ui.theme.LavenderPurple
 import com.philornot.siekiera.ui.theme.PurpleDark
 import com.philornot.siekiera.ui.theme.PurpleLight
 import com.philornot.siekiera.ui.theme.PurplePrimary
@@ -62,18 +63,19 @@ fun HeaderSection(
             text = "Wszystkiego najlepszego\nDawid!", modifier = Modifier.padding(vertical = 8.dp)
         )
 
-        // Górna dekoracja
+        // Górna dekoracja - linia została naprawiona i wzmocniona
         Box(
             modifier = Modifier
                 .fillMaxWidth(0.8f)
                 .height(3.dp)
                 .alpha(shimmerAlpha)
-                .shadow(2.dp)
+                .shadow(4.dp) // Wzmocniony cień
                 .background(
                     Brush.horizontalGradient(
                         colors = listOf(
                             Color.Transparent,
                             PurplePrimary,
+                            LavenderPurple, // Dodana wartość #dab9f5
                             PurpleLight,
                             PurplePrimary,
                             Color.Transparent
@@ -83,19 +85,20 @@ fun HeaderSection(
                 .align(Alignment.TopCenter)
         )
 
-        // Dolna dekoracja
+        // Dolna dekoracja - nieprzerwana i wzmocniona
         Box(
             modifier = Modifier
-                .fillMaxWidth(0.8f)
+                .fillMaxWidth(0.85f) // Nieco dłuższa niż górna
                 .height(3.dp)
                 .alpha(shimmerAlpha)
-                .shadow(2.dp)
+                .shadow(4.dp) // Wzmocniony cień
                 .background(
                     Brush.horizontalGradient(
                         colors = listOf(
                             Color.Transparent,
                             PurplePrimary,
-                            AccentPink,
+                            LavenderPurple, // Dodana wartość #dab9f5
+                            PurpleLight,
                             PurplePrimary,
                             Color.Transparent
                         )
@@ -121,9 +124,13 @@ fun GradientTitle(
         ), label = "gradientOffset"
     )
 
-    // Kolory gradientu
+    // Kolory gradientu z dodanym lawendowym
     val gradientColors = listOf(
-        PurplePrimary, PurpleLight, AccentPink, PurpleLight, PurplePrimary
+        PurplePrimary,
+        PurpleLight,
+        LavenderPurple, // Dodana wartość #dab9f5
+        PurpleLight,
+        PurplePrimary
     )
 
     // Brush dla tekstu
@@ -199,7 +206,9 @@ fun ShimmerDot(
             .background(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        PurpleLight, PurpleDark
+                        LavenderPurple, // Dodana wartość #dab9f5
+                        PurpleLight,
+                        PurpleDark
                     )
                 ), shape = androidx.compose.foundation.shape.CircleShape
             )
@@ -218,6 +227,7 @@ fun ShimmerLine(
         colors = listOf(
             PurpleDark.copy(alpha = 0.5f),
             PurplePrimary,
+            LavenderPurple, // Dodana wartość #dab9f5
             PurpleLight,
             PurplePrimary,
             PurpleDark.copy(alpha = 0.5f)

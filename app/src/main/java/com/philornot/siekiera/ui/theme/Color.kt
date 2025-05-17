@@ -8,8 +8,11 @@ val PurpleDark = Color(0xFF6D28D9)    // Ciemniejszy fiolet
 val PurpleLight = Color(0xFFA78BFA)   // Jaśniejszy fiolet
 val PurplePastel = Color(0xFFDDD6FE)  // Pastelowy fiolet
 
+// Nowy kolor - lawendowy fiolet
+val LavenderPurple = Color(0xFFDAB9F5) // Lawendowy fiolet
+
 // Akcenty
-val AccentPink = Color(0xFFEC4899)    // Różowy akcent - Dawid lubi fiolet, różowy ładnie się z nim komponuje
+val AccentPink = Color(0xFFEC4899)    // Różowy akcent - używany w mniejszym stopniu
 val AccentBlue = Color(0xFF3B82F6)    // Niebieski akcent
 val AccentTeal = Color(0xFF14B8A6)    // Turkusowy akcent
 
@@ -24,7 +27,7 @@ val ErrorRed = Color(0xFFDC2626)      // Czerwony dla błędów
 val SuccessGreen = Color(0xFF10B981)  // Zielony dla sukcesu
 val WarningYellow = Color(0xFFFEF08A) // Żółty dla ostrzeżeń
 
-// Kolory dla kurtyny
-val CurtainPrimary = Color(0xFFEC4899) // Różowy kolor kurtyny
-val CurtainSecondary = Color(0xFFF472B6) // Jaśniejszy róż dla kurtyny
-val CurtainAccent = Color(0xFFFFD1DC)  // Akcentowy kolor dla kurtyny
+// Kolory dla kurtyny - zmienione na bardziej fioletowe
+val CurtainPrimary = Color(0xFFA78BFA) // Zmieniono z różowego na fioletowy
+val CurtainSecondary = Color(0xFFDAB9F5) // Zmieniono na lawendowy #dab9f5
+val CurtainAccent = Color(0xFFD8B4FE)  // Akcentowy kolor dla kurtyny

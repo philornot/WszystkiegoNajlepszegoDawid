@@ -4,7 +4,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
@@ -59,6 +58,7 @@ import androidx.compose.ui.unit.sp
 import com.philornot.siekiera.ui.theme.CurtainAccent
 import com.philornot.siekiera.ui.theme.CurtainPrimary
 import com.philornot.siekiera.ui.theme.CurtainSecondary
+import com.philornot.siekiera.ui.theme.LavenderPurple
 import com.philornot.siekiera.ui.theme.PurplePrimary
 
 /**
@@ -122,7 +122,7 @@ fun CurtainSection(
 }
 
 /**
- * Animowana, elegancka kurtyna z efektami.
+ * Animowana, elegancka kurtyna z efektami
  */
 @Composable
 fun FancyCurtain(modifier: Modifier = Modifier) {
@@ -138,11 +138,12 @@ fun FancyCurtain(modifier: Modifier = Modifier) {
         label = "curtainWave"
     )
 
-    // Gradientowe kolory kurtyny
+    // Gradientowe kolory kurtyny - bardziej fioletowe, mniej różowe
     val gradient = Brush.verticalGradient(
         colors = listOf(
             CurtainPrimary,
             CurtainSecondary,
+            LavenderPurple,
             CurtainPrimary.copy(alpha = 0.8f),
             CurtainSecondary.copy(alpha = 0.9f)
         )
@@ -161,7 +162,7 @@ fun FancyCurtain(modifier: Modifier = Modifier) {
 
             // Pionowa linia podziału
             drawLine(
-                color = CurtainAccent.copy(alpha = 0.5f),
+                color = LavenderPurple.copy(alpha = 0.7f), // Zmieniono kolor
                 start = Offset(centerX, 0f),
                 end = Offset(centerX, height),
                 strokeWidth = 5f
@@ -186,7 +187,7 @@ fun FancyCurtain(modifier: Modifier = Modifier) {
 
                 drawPath(
                     path = path,
-                    color = CurtainAccent.copy(alpha = 0.3f),
+                    color = LavenderPurple.copy(alpha = 0.4f), // Zmieniono kolor
                     style = Stroke(width = 2f)
                 )
             }
@@ -205,27 +206,10 @@ fun FancyCurtain(modifier: Modifier = Modifier) {
 
                 drawPath(
                     path = wavePath,
-                    color = CurtainAccent.copy(alpha = 0.2f),
+                    color = CurtainAccent.copy(alpha = 0.3f), // Zmieniono kolor
                     style = Stroke(width = 1f)
                 )
             }
-        }
-
-        // Dodajemy napis na kurtynie
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "WKRÓTCE",
-                style = MaterialTheme.typography.displayMedium,
-                color = Color.White.copy(alpha = 0.8f),
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .offset(y = 8.dp * curtainOffset)
-                    .padding(20.dp)
-            )
         }
     }
 }
@@ -267,8 +251,8 @@ fun FancyGift(
         label = "giftPress"
     )
 
-    val elevation by animateDpAsState(
-        targetValue = if (isPressed) 4.dp else 8.dp,
+    val elevation by animateFloatAsState(
+        targetValue = if (isPressed) 4f else 8f,
         animationSpec = tween(150),
         label = "giftElevation"
     )
@@ -279,12 +263,12 @@ fun FancyGift(
         modifier = modifier
             .scale(scale * pressScale)
             .rotate(rotation)
-            .shadow(elevation, CircleShape)
+            .shadow(elevation.dp, CircleShape)
             .clip(CircleShape)
             .background(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        PurplePrimary,
+                        LavenderPurple,  // Zmieniono z PurplePrimary na LavenderPurple
                         PurplePrimary.copy(alpha = 0.9f)
                     )
                 )
