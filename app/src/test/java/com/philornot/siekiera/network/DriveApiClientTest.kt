@@ -1,5 +1,3 @@
-// W pliku DriveApiClientTest.kt
-
 package com.philornot.siekiera.network
 
 import android.content.Context
@@ -16,6 +14,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.Mock
 import org.mockito.Mockito
+import org.mockito.Mockito.lenient
 import org.mockito.Mockito.`when`
 import org.mockito.junit.MockitoJUnitRunner
 import org.mockito.kotlin.any
@@ -24,7 +23,7 @@ import org.mockito.kotlin.mock
 import java.io.ByteArrayInputStream
 import java.util.Date
 
-@RunWith(MockitoJUnitRunner::class)
+@RunWith(MockitoJUnitRunner.Silent::class) // Changed to Silent to avoid unnecessary stubbing errors
 @ExperimentalCoroutinesApi
 class DriveApiClientTest {
 
@@ -66,22 +65,22 @@ class DriveApiClientTest {
 
     @Before
     fun setup() {
-        // Mock context and resources
-        `when`(mockContext.applicationContext).thenReturn(mockContext)
-        `when`(mockContext.resources).thenReturn(mockResources)
-        `when`(mockResources.getIdentifier(any(), eq("raw"), any())).thenReturn(123)
-        `when`(mockResources.openRawResource(123)).thenReturn(
+        // Mock context and resources - use lenient to avoid unnecessarily strict checks
+        lenient().`when`(mockContext.applicationContext).thenReturn(mockContext)
+        lenient().`when`(mockContext.resources).thenReturn(mockResources)
+        lenient().`when`(mockResources.getIdentifier(any(), eq("raw"), any())).thenReturn(123)
+        lenient().`when`(mockResources.openRawResource(123)).thenReturn(
             ByteArrayInputStream(
                 testServiceAccountContent
             )
         )
 
         // Create mocks for Drive API chain
-        `when`(mockDrive.files()).thenReturn(mockDriveFiles)
-        `when`(mockDriveFiles.list()).thenReturn(mockDriveFilesList)
+        lenient().`when`(mockDrive.files()).thenReturn(mockDriveFiles)
+        lenient().`when`(mockDriveFiles.list()).thenReturn(mockDriveFilesList)
 
         // Get mock setup
-        `when`(mockDriveFiles.get(any())).thenReturn(mockDriveFilesGet)
+        lenient().`when`(mockDriveFiles.get(any())).thenReturn(mockDriveFilesGet)
 
         // Set up DriveApiClient with test mocks
         driveApiClient = DriveApiClient(mockContext)
@@ -92,10 +91,9 @@ class DriveApiClientTest {
         field.set(driveApiClient, mockDrive)
     }
 
-    // POPRAWKA: Dodajemy metodę @After do czyszczenia po testach
     @After
     fun tearDown() {
-        // Czyszczenie singletona
+        // Clearing singleton
         DriveApiClient.clearMockInstance()
     }
 
@@ -117,7 +115,6 @@ class DriveApiClientTest {
         val fileId = "test_file_id"
         val fileName = "test.daylio"
         val mimeType = "application/octet-stream"
-        // POPRAWKA: Zmiana z Int (5) na Long (5L)
         val size = 5L
 
         val mockFile = com.google.api.services.drive.model.File().setId(fileId).setName(fileName)
@@ -207,7 +204,7 @@ class DriveApiClientTest {
 
         // Then
         assertNotNull(instance)
-        assertTrue(DriveApiClient.mockInstance == null) // Upewnienie się, że mockInstance nadal jest null
+        assertTrue(DriveApiClient.mockInstance == null) // Ensure mockInstance is still null
     }
 
     @Test
