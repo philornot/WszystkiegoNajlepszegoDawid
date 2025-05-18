@@ -23,21 +23,18 @@ import kotlinx.coroutines.delay
 import kotlin.random.Random
 
 /**
- * A subtle confetti effect that appears once when the time is up.
- * This effect is minimal and non-distracting.
+ * A subtle confetti effect that appears once when the time is up. This
+ * effect is minimal and non-distracting.
  */
 @Composable
 fun ConfettiEffect(
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     var isVisible by remember { mutableStateOf(true) }
     val alpha by animateFloatAsState(
-        targetValue = if (isVisible) 1f else 0f,
-        animationSpec = tween(
-            durationMillis = if (isVisible) 500 else 1000,
-            easing = LinearEasing
-        ),
-        label = "confettiAlpha"
+        targetValue = if (isVisible) 1f else 0f, animationSpec = tween(
+            durationMillis = if (isVisible) 500 else 1000, easing = LinearEasing
+        ), label = "confettiAlpha"
     )
 
     // Generate the confetti particles only once
@@ -61,19 +58,15 @@ fun ConfettiEffect(
                     when (particle.shape) {
                         ConfettiShape.CIRCLE -> {
                             drawCircle(
-                                color = particle.color,
-                                radius = particle.size * 5,
-                                alpha = 0.7f
+                                color = particle.color, radius = particle.size * 5, alpha = 0.7f
                             )
                         }
+
                         ConfettiShape.RECTANGLE -> {
                             drawRect(
-                                color = particle.color,
-                                size = androidx.compose.ui.geometry.Size(
-                                    particle.size * 10,
-                                    particle.size * 4
-                                ),
-                                alpha = 0.7f
+                                color = particle.color, size = androidx.compose.ui.geometry.Size(
+                                    particle.size * 10, particle.size * 4
+                                ), alpha = 0.7f
                             )
                         }
                     }
@@ -90,7 +83,7 @@ private data class ConfettiParticle(
     val size: Float,
     val rotation: Float,
     val color: Color,
-    val shape: ConfettiShape
+    val shape: ConfettiShape,
 )
 
 // Confetti shape enum

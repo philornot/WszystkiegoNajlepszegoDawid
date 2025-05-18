@@ -2,6 +2,9 @@ package com.philornot.siekiera.ui.screens.main
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -26,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -52,13 +56,13 @@ fun CurtainSection(
         // Clean curtain animation
         AnimatedVisibility(
             visible = !isTimeUp, enter = fadeIn(), exit = fadeOut(
-            animationSpec = tween(
-                durationMillis = 1000, easing = LinearEasing
-            )
-        ) + slideOutVertically(
-            animationSpec = tween(
-                durationMillis = 1000, easing = LinearEasing
-            ), targetOffsetY = { it }), modifier = Modifier.testTag("curtain")
+                animationSpec = tween(
+                    durationMillis = 1000, easing = LinearEasing
+                )
+            ) + slideOutVertically(
+                animationSpec = tween(
+                    durationMillis = 1000, easing = LinearEasing
+                ), targetOffsetY = { it }), modifier = Modifier.testTag("curtain")
         ) {
             Curtain(modifier = Modifier.fillMaxSize())
         }
@@ -71,7 +75,7 @@ fun CurtainSection(
                 )
             ), modifier = Modifier.testTag("gift_container")
         ) {
-            Gift(
+            GiftButton(
                 modifier = Modifier.size(200.dp), onClick = onGiftClicked
             )
         }
@@ -112,36 +116,56 @@ fun Curtain(modifier: Modifier = Modifier) {
     }
 }
 
-/** Simple, elegant gift design with lavender theme. */
+/** Enhanced gift button with sparkle animation on hover and pulse effect */
 @Composable
-fun Gift(
+fun GiftButton(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primary
-        ),
-        shape = CircleShape,
-        modifier = modifier
-            .clip(CircleShape)
-            .clickable(onClick = onClick)
-            .testTag("gift")
+    // Animated scale for a pulse effect
+    val pulseScale = animateFloatAsState(
+        targetValue = 1.05f,  // Subtle pulse
+        animationSpec = infiniteRepeatable(
+            animation = tween(800), repeatMode = RepeatMode.Reverse
+        ), label = "pulseAnimation"
+    )
+
+    Box(
+        modifier = Modifier.size(220.dp),  // Slightly larger container for the effect
+        contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp)
+        // Subtle sparkle effect around the gift
+        SparkleAnimation(
+            modifier = Modifier.fillMaxSize()
+        )
+
+        // Gift button with pulse animation
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primary
+            ),
+            shape = CircleShape,
+            modifier = modifier
+                .scale(pulseScale.value)  // Apply pulse animation
+                .clip(CircleShape)
+                .clickable(onClick = onClick)
+                .testTag("gift")
         ) {
-            // Gift icon
-            Icon(
-                imageVector = Icons.Outlined.CardGiftcard,
-                contentDescription = "Gift",
-                tint = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier.size(80.dp)
-            )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp)
+            ) {
+                // Gift icon
+                Icon(
+                    imageVector = Icons.Outlined.CardGiftcard,
+                    contentDescription = "Gift",
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(80.dp)
+                )
+            }
         }
     }
 }

@@ -29,7 +29,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * Redesigned main screen with a clean, lavender theme and minimal
@@ -62,6 +64,9 @@ fun MainScreen(
 
     // Track if we should show celebration screen after clicking gift
     var showCelebration by remember { mutableStateOf(false) }
+
+    // Track if we should show fireworks
+    var showFireworks by remember { mutableStateOf(false) }
 
     // Update time every second
     LaunchedEffect(Unit) {
@@ -107,10 +112,17 @@ fun MainScreen(
                         // Curtain or gift section
                         CurtainSection(
                             isTimeUp = isTimeUp, onGiftClicked = {
-                                // Show celebration screen after clicking gift
+                                // Show fireworks immediately when the gift is clicked
                                 if (isTimeUp) {
-                                    showCelebration = true
-                                    onGiftClicked()
+                                    showFireworks = true
+
+                                    // Delay showing celebration screen to allow fireworks animation to play
+                                    // This will be the "Main event" before transitioning to the message
+                                    MainScope().launch {
+                                        delay(3500) // Delay celebration screen to enjoy fireworks
+                                        showCelebration = true
+                                        onGiftClicked()
+                                    }
                                 }
                             }, modifier = Modifier.weight(1f)
                         )
@@ -124,9 +136,17 @@ fun MainScreen(
                     }
                 }
 
-                // Simple confetti effect when time is up
+                // Simple confetti effect when time is up (subtle background effect)
                 if (isTimeUp && !showCelebration) {
                     ConfettiEffect()
+                }
+
+                // Explosive fireworks when gift is clicked
+                AnimatedVisibility(
+                    visible = showFireworks && !showCelebration, enter = fadeIn(), exit = fadeOut()
+                ) {
+                    // Use our explosive fireworks display for maximum impact!
+                    ExplosiveFireworksDisplay()
                 }
 
                 // Celebration screen after clicking gift
@@ -135,7 +155,7 @@ fun MainScreen(
                 ) {
                     BirthdayMessage(
                         modifier = Modifier.fillMaxSize(), onBackClick = {
-                            // Tutaj obsługujemy powrót do głównego ekranu
+                            // Handle returning to main screen
                             showCelebration = false
                         })
                 }

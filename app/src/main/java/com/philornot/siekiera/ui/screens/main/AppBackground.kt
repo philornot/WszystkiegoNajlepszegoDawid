@@ -17,7 +17,7 @@ import androidx.compose.ui.graphics.Brush
 @Composable
 fun AppBackground(
     isTimeUp: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     // Choose different gradients based on whether time is up
     val backgroundGradient = if (isTimeUp) {
