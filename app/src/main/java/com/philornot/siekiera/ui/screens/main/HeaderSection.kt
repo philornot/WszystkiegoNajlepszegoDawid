@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Divider
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -37,25 +38,18 @@ fun HeaderSection(
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
             )
+
+            Spacer(Modifier.height(4.dp))
 
             // Name with emphasis
             Text(
                 text = "Dawid!",
                 style = MaterialTheme.typography.headlineLarge,
-                color = MaterialTheme.colorScheme.primary,
+                color = MaterialTheme.colorScheme.secondary,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Simple divider with a gentle lavender color
-            HorizontalDivider(
-                modifier = Modifier.fillMaxWidth(0.5f),
-                thickness = 2.dp,
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
             )
         }
     }

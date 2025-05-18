@@ -147,7 +147,7 @@ fun CountdownSection(
         ) {
             // Positive message after countdown ends
             Text(
-                text = "Wszystkiego Najlepszego!",
+                text = "WOOO HOOO",
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold,
@@ -156,7 +156,7 @@ fun CountdownSection(
             )
 
             Text(
-                text = "18 lat to wyjątkowy moment!",
+                text = "Udało ci się przeżyć 72 pory roku\n(i to POD RZĄD!!)",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.secondary,
                 textAlign = TextAlign.Center

@@ -22,15 +22,12 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
 /**
@@ -61,7 +58,8 @@ fun CurtainSection(
         ) + slideOutVertically(
             animationSpec = tween(
                 durationMillis = 1000, easing = LinearEasing
-            ), targetOffsetY = { it }), modifier = Modifier.testTag("curtain")) {
+            ), targetOffsetY = { it }), modifier = Modifier.testTag("curtain")
+        ) {
             Curtain(modifier = Modifier.fillMaxSize())
         }
 
@@ -142,18 +140,7 @@ fun Gift(
                 imageVector = Icons.Outlined.CardGiftcard,
                 contentDescription = "Gift",
                 tint = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier
-                    .size(80.dp)
-                    .padding(bottom = 16.dp)
-            )
-
-            // Text
-            Text(
-                text = "Odbierz swój prezent!",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onPrimary,
-                fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.Center
+                modifier = Modifier.size(80.dp)
             )
         }
     }
