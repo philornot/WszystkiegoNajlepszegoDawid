@@ -37,7 +37,7 @@ class BootReceiverTest {
         // Utworzenie instancji receivera
         bootReceiver = BootReceiver()
 
-        // Ustaw singleton dla testów
+        // POPRAWKA: Wyraźnie ustawiamy singleton przed testami
         AppConfig.INSTANCE = mockAppConfig
     }
 
@@ -45,6 +45,9 @@ class BootReceiverTest {
     fun `onReceive ignores non-boot intents`() {
         // Given
         val intent = Intent("SOME_OTHER_ACTION")
+
+        // POPRAWKA: Upewniamy się, że singleton jest ustawiony
+        AppConfig.INSTANCE = mockAppConfig
 
         // When
         bootReceiver.onReceive(mockContext, intent)
@@ -60,6 +63,10 @@ class BootReceiverTest {
         // Given
         val intent = Intent(Intent.ACTION_BOOT_COMPLETED)
 
+        // POPRAWKA: Wyraźnie ustawiamy zachowanie i upewniamy się, że singleton jest ustawiony
+        `when`(mockAppConfig.isBirthdayNotificationEnabled()).thenReturn(false)
+        AppConfig.INSTANCE = mockAppConfig
+
         // When
         bootReceiver.onReceive(mockContext, intent)
 
@@ -74,13 +81,16 @@ class BootReceiverTest {
         // Given
         val intent = Intent(Intent.ACTION_BOOT_COMPLETED)
 
-        // Configure AppConfig to return that notifications are enabled
+        // POPRAWKA: Konfigurujemy mocka i upewniamy się, że singleton jest ustawiony
         `when`(mockAppConfig.isBirthdayNotificationEnabled()).thenReturn(true)
 
         // Set the birthday date to be in the future
         val futureDate = Calendar.getInstance(TimeZone.getTimeZone("Europe/Warsaw"))
         futureDate.add(Calendar.DAY_OF_YEAR, 1) // Tomorrow
         `when`(mockAppConfig.getBirthdayTimeMillis()).thenReturn(futureDate.timeInMillis)
+
+        // POPRAWKA: Upewniamy się, że singleton jest ustawiony
+        AppConfig.INSTANCE = mockAppConfig
 
         // When
         bootReceiver.onReceive(mockContext, intent)
@@ -98,13 +108,16 @@ class BootReceiverTest {
         // Given
         val intent = Intent(Intent.ACTION_BOOT_COMPLETED)
 
-        // Configure AppConfig to return that notifications are enabled
+        // POPRAWKA: Konfigurujemy mocka i upewniamy się, że singleton jest ustawiony
         `when`(mockAppConfig.isBirthdayNotificationEnabled()).thenReturn(true)
 
         // Set the birthday date to be in the past
         val pastDate = Calendar.getInstance(TimeZone.getTimeZone("Europe/Warsaw"))
         pastDate.add(Calendar.DAY_OF_YEAR, -1) // Yesterday
         `when`(mockAppConfig.getBirthdayTimeMillis()).thenReturn(pastDate.timeInMillis)
+
+        // POPRAWKA: Upewniamy się, że singleton jest ustawiony
+        AppConfig.INSTANCE = mockAppConfig
 
         // When
         bootReceiver.onReceive(mockContext, intent)
