@@ -1,6 +1,7 @@
 package com.philornot.siekiera.ui.viewmodel
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
+import com.philornot.siekiera.config.AppConfig
 import com.philornot.siekiera.utils.TestTimeProvider
 import com.philornot.siekiera.utils.TimeUtils
 import junit.framework.TestCase.assertEquals
@@ -18,6 +19,9 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
+import org.mockito.Mock
+import org.mockito.Mockito.`when`
+import org.mockito.MockitoAnnotations
 import java.util.Calendar
 import java.util.TimeZone
 import java.util.concurrent.TimeUnit
@@ -35,30 +39,30 @@ class MainViewModelTest {
     private lateinit var timeProvider: TestTimeProvider
     private val warsawTimeZone = TimeZone.getTimeZone("Europe/Warsaw")
 
-    // Helper function to create calendar with Warsaw timezone
-    private fun createTestCalendar(
-        year: Int,
-        month: Int,
-        day: Int,
-        hour: Int = 0,
-        minute: Int = 0,
-        second: Int = 0,
-    ): Calendar {
-        return Calendar.getInstance(warsawTimeZone).apply {
-            set(Calendar.YEAR, year)
-            set(Calendar.MONTH, month)
-            set(Calendar.DAY_OF_MONTH, day)
-            set(Calendar.HOUR_OF_DAY, hour)
-            set(Calendar.MINUTE, minute)
-            set(Calendar.SECOND, second)
-            set(Calendar.MILLISECOND, 0)
-        }
-    }
+    @Mock
+    private lateinit var mockAppConfig: AppConfig
 
     @Before
     fun setup() {
+        MockitoAnnotations.openMocks(this)
         Dispatchers.setMain(testDispatcher)
         timeProvider = TestTimeProvider()
+
+        // Inicjalizuj mockAppConfig
+        val revealDate = Calendar.getInstance(warsawTimeZone).apply {
+            set(Calendar.YEAR, 2025)
+            set(Calendar.MONTH, Calendar.AUGUST)
+            set(Calendar.DAY_OF_MONTH, 24)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        `when`(mockAppConfig.getBirthdayTimeMillis()).thenReturn(revealDate)
+
+        // Ustaw singleton
+        AppConfig.INSTANCE = mockAppConfig
+
         viewModel = MainViewModel(timeProvider)
     }
 
@@ -70,7 +74,7 @@ class MainViewModelTest {
     @Test
     fun `getTimeRemaining returns correct time difference`() = runTest {
         // Given - Set current time to exactly 24 hours before the reveal date
-        val revealDate = TimeUtils.getRevealDateMillis()
+        val revealDate = TimeUtils.getRevealDateMillis(mockAppConfig)
         val oneDayInMillis = TimeUnit.DAYS.toMillis(1)
         val currentTime = revealDate - oneDayInMillis
         timeProvider.setCurrentTimeMillis(currentTime)
@@ -85,7 +89,7 @@ class MainViewModelTest {
     @Test
     fun `getTimeRemaining returns zero when time is up`() = runTest {
         // Given - Set current time to after the reveal date
-        val revealDate = TimeUtils.getRevealDateMillis()
+        val revealDate = TimeUtils.getRevealDateMillis(mockAppConfig)
         val currentTime = revealDate + 1000 // 1 second after
         timeProvider.setCurrentTimeMillis(currentTime)
 
@@ -99,7 +103,7 @@ class MainViewModelTest {
     @Test
     fun `isTimeUp returns false before reveal date`() = runTest {
         // Given - Set current time to before the reveal date
-        val revealDate = TimeUtils.getRevealDateMillis()
+        val revealDate = TimeUtils.getRevealDateMillis(mockAppConfig)
         val currentTime = revealDate - 1000 // 1 second before
         timeProvider.setCurrentTimeMillis(currentTime)
 
@@ -113,7 +117,7 @@ class MainViewModelTest {
     @Test
     fun `isTimeUp returns true on reveal date`() = runTest {
         // Given - Set current time to exactly the reveal date
-        val revealDate = TimeUtils.getRevealDateMillis()
+        val revealDate = TimeUtils.getRevealDateMillis(mockAppConfig)
         val currentTime = revealDate
         timeProvider.setCurrentTimeMillis(currentTime)
 
@@ -127,7 +131,7 @@ class MainViewModelTest {
     @Test
     fun `isTimeUp returns true after reveal date`() = runTest {
         // Given - Set current time to after the reveal date
-        val revealDate = TimeUtils.getRevealDateMillis()
+        val revealDate = TimeUtils.getRevealDateMillis(mockAppConfig)
         val currentTime = revealDate + 1000 // 1 second after
         timeProvider.setCurrentTimeMillis(currentTime)
 
@@ -161,7 +165,7 @@ class MainViewModelTest {
     @Test
     fun `updateState sets correct UI state before reveal date`() = runTest {
         // Given - Set current time to before the reveal date
-        val revealDate = TimeUtils.getRevealDateMillis()
+        val revealDate = TimeUtils.getRevealDateMillis(mockAppConfig)
         val currentTime = revealDate - TimeUnit.DAYS.toMillis(1) // 1 day before
         timeProvider.setCurrentTimeMillis(currentTime)
 
@@ -179,7 +183,7 @@ class MainViewModelTest {
     @Test
     fun `updateState sets correct UI state after reveal date`() = runTest {
         // Given - Set current time to after the reveal date
-        val revealDate = TimeUtils.getRevealDateMillis()
+        val revealDate = TimeUtils.getRevealDateMillis(mockAppConfig)
         val currentTime = revealDate + 1000 // 1 second after
         timeProvider.setCurrentTimeMillis(currentTime)
 
@@ -197,7 +201,7 @@ class MainViewModelTest {
     @Test
     fun `updateState with no parameter uses timeProvider`() = runTest {
         // Given - Set current time in the timeProvider
-        val revealDate = TimeUtils.getRevealDateMillis()
+        val revealDate = TimeUtils.getRevealDateMillis(mockAppConfig)
         val currentTime = revealDate - TimeUnit.HOURS.toMillis(2) // 2 hours before
         timeProvider.setCurrentTimeMillis(currentTime)
 

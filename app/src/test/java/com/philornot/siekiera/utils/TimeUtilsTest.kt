@@ -29,7 +29,9 @@ class TimeUtilsTest {
         calendar.set(2025, Calendar.AUGUST, 24, 0, 0, 0)
         calendar.set(Calendar.MILLISECOND, 0)
 
-        `when`(mockAppConfig.getBirthdayDate()).thenReturn(calendar)
+        // Usuwamy nieużywany stubbing
+        // `when`(mockAppConfig.getBirthdayDate()).thenReturn(calendar)
+
         `when`(mockAppConfig.getBirthdayTimeMillis()).thenReturn(calendar.timeInMillis)
 
         // Set our mock as the singleton instance

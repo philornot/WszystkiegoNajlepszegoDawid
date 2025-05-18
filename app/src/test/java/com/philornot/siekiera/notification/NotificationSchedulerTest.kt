@@ -10,19 +10,15 @@ import org.junit.Assume
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.mockito.ArgumentCaptor
-import org.mockito.Captor
 import org.mockito.Mock
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.junit.MockitoJUnitRunner
-import org.mockito.kotlin.eq
 import java.util.Calendar
 import java.util.TimeZone
 
 @RunWith(MockitoJUnitRunner::class)
 class NotificationSchedulerTest {
-
     @Mock
     private lateinit var mockContext: Context
 
@@ -34,9 +30,6 @@ class NotificationSchedulerTest {
 
     @Mock
     private lateinit var mockAppConfig: AppConfig
-
-    @Captor
-    private lateinit var timeCaptor: ArgumentCaptor<Long>
 
     private lateinit var pendingIntentFactory: NotificationScheduler.PendingIntentFactory
 
@@ -80,10 +73,9 @@ class NotificationSchedulerTest {
         }
 
         // Verify that setExactAndAllowWhileIdle was called with correct parameters
+        // Używamy rzeczywistych wartości dla wszystkich argumentów - bez matcherów
         verify(mockAlarmManager).setExactAndAllowWhileIdle(
-            eq(AlarmManager.RTC_WAKEUP),
-            eq(mockAppConfig.getBirthdayTimeMillis()),
-            eq(mockPendingIntent)
+            AlarmManager.RTC_WAKEUP, mockAppConfig.getBirthdayTimeMillis(), mockPendingIntent
         )
     }
 
@@ -101,10 +93,9 @@ class NotificationSchedulerTest {
         }
 
         // Verify that setExactAndAllowWhileIdle was called with correct parameters
+        // Używamy rzeczywistych wartości dla wszystkich argumentów - bez matcherów
         verify(mockAlarmManager).setExactAndAllowWhileIdle(
-            eq(AlarmManager.RTC_WAKEUP),
-            eq(mockAppConfig.getBirthdayTimeMillis()),
-            eq(mockPendingIntent)
+            AlarmManager.RTC_WAKEUP, mockAppConfig.getBirthdayTimeMillis(), mockPendingIntent
         )
     }
 
@@ -121,9 +112,7 @@ class NotificationSchedulerTest {
 
         // Should fall back to non-exact alarm
         verify(mockAlarmManager).set(
-            eq(AlarmManager.RTC_WAKEUP),
-            eq(mockAppConfig.getBirthdayTimeMillis()),
-            eq(mockPendingIntent)
+            AlarmManager.RTC_WAKEUP, mockAppConfig.getBirthdayTimeMillis(), mockPendingIntent
         )
     }
 }

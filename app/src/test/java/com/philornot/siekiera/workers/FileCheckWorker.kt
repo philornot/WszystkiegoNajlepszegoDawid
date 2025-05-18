@@ -52,150 +52,161 @@ class FileCheckWorkerTest {
     }
 
     @Test
-    fun `doWork initializes DriveApiClient`() = runBlocking {
-        // Given
-        val worker = TestListenableWorkerBuilder<FileCheckWorker>(mockContext).build()
+    fun `doWork initializes DriveApiClient`() {
+        // Zmieniamy na blok, a nie expression = runBlocking
+        runBlocking {
+            // Given
+            val worker = TestListenableWorkerBuilder<FileCheckWorker>(mockContext).build()
 
-        `when`(mockDriveApiClient.listFilesInFolder(any())).thenReturn(emptyList())
+            `when`(mockDriveApiClient.listFilesInFolder(any())).thenReturn(emptyList())
 
-        // When
-        worker.doWork()
+            // When
+            worker.doWork()
 
-        // Then
-        verify(mockDriveApiClient).initialize()
+            // Then
+            verify(mockDriveApiClient).initialize()
+        }
     }
 
     @Test
-    fun `doWork returns success when files are empty`() = runBlocking {
-        // Given
-        val worker = TestListenableWorkerBuilder<FileCheckWorker>(mockContext).build()
+    fun `doWork returns success when files are empty`() {
+        runBlocking {
+            // Given
+            val worker = TestListenableWorkerBuilder<FileCheckWorker>(mockContext).build()
 
-        `when`(mockDriveApiClient.listFilesInFolder(any())).thenReturn(emptyList())
+            `when`(mockDriveApiClient.listFilesInFolder(any())).thenReturn(emptyList())
 
-        // When
-        val result = worker.doWork()
+            // When
+            val result = worker.doWork()
 
-        // Then
-        assert(result is ListenableWorker.Result.Success)
+            // Then
+            assert(result is ListenableWorker.Result.Success)
+        }
     }
 
     @Test
-    fun `doWork downloads file when local file does not exist`() = runBlocking {
-        // Given
-        val worker = TestListenableWorkerBuilder<FileCheckWorker>(mockContext).build()
+    fun `doWork downloads file when local file does not exist`() {
+        runBlocking {
+            // Given
+            val worker = TestListenableWorkerBuilder<FileCheckWorker>(mockContext).build()
 
-        // Create mock file list with one file
-        val mockFile = DriveApiClient.FileInfo(
-            id = "test_file_id",
-            name = "test.daylio",
-            mimeType = "application/octet-stream",
-            size = 1024L,
-            modifiedTime = Date()
-        )
+            // Create mock file list with one file
+            val mockFile = DriveApiClient.FileInfo(
+                id = "test_file_id",
+                name = "test.daylio",
+                mimeType = "application/octet-stream",
+                size = 1024L,
+                modifiedTime = Date()
+            )
 
-        `when`(mockDriveApiClient.listFilesInFolder(any())).thenReturn(listOf(mockFile))
-        `when`(mockDriveApiClient.downloadFile(any())).thenReturn(ByteArrayInputStream("test data".toByteArray()))
+            `when`(mockDriveApiClient.listFilesInFolder(any())).thenReturn(listOf(mockFile))
+            `when`(mockDriveApiClient.downloadFile(any())).thenReturn(ByteArrayInputStream("test data".toByteArray()))
 
-        // Mock the File behavior using a temp file that doesn't exist
-        val tempFile = File.createTempFile("nonexistent", ".tmp")
-        tempFile.delete() // Make sure it doesn't exist
+            // Mock the File behavior using a temp file that doesn't exist
+            val tempFile = File.createTempFile("nonexistent", ".tmp")
+            tempFile.delete() // Make sure it doesn't exist
 
-        // Mock context to return our directory structure
-        val mockDir = File.createTempFile("mockDir", "")
-        mockDir.delete()
-        mockDir.mkdir()
+            // Mock context to return our directory structure
+            val mockDir = File.createTempFile("mockDir", "")
+            mockDir.delete()
+            mockDir.mkdir()
 
-        `when`(mockContext.getExternalFilesDir(any())).thenReturn(mockDir)
+            `when`(mockContext.getExternalFilesDir(any())).thenReturn(mockDir)
 
-        // When
-        val result = worker.doWork()
+            // When
+            val result = worker.doWork()
 
-        // Then
-        assert(result is ListenableWorker.Result.Success)
-        verify(mockDriveApiClient).downloadFile(eq("test_file_id"))
+            // Then
+            assert(result is ListenableWorker.Result.Success)
+            verify(mockDriveApiClient).downloadFile(eq("test_file_id"))
 
-        // Clean up
-        mockDir.deleteRecursively()
+            // Clean up
+            mockDir.deleteRecursively()
+        }
     }
 
     @Test
-    fun `doWork downloads newer file when remote file is newer`() = runBlocking {
-        // Given
-        val worker = TestListenableWorkerBuilder<FileCheckWorker>(mockContext).build()
+    fun `doWork downloads newer file when remote file is newer`() {
+        runBlocking {
+            // Given
+            val worker = TestListenableWorkerBuilder<FileCheckWorker>(mockContext).build()
 
-        // Create mock file list with one newer file
-        val currentTime = System.currentTimeMillis()
-        val newDate = Date(currentTime)
-        val oldDate = Date(currentTime - 86400000) // 1 day older
+            // Create mock file list with one newer file
+            val currentTime = System.currentTimeMillis()
+            val newDate = Date(currentTime)
+            val oldDate = Date(currentTime - 86400000) // 1 day older
 
-        val mockFile = DriveApiClient.FileInfo(
-            id = "test_file_id",
-            name = "test.daylio",
-            mimeType = "application/octet-stream",
-            size = 1024L,
-            modifiedTime = newDate
-        )
+            val mockFile = DriveApiClient.FileInfo(
+                id = "test_file_id",
+                name = "test.daylio",
+                mimeType = "application/octet-stream",
+                size = 1024L,
+                modifiedTime = newDate
+            )
 
-        `when`(mockDriveApiClient.listFilesInFolder(any())).thenReturn(listOf(mockFile))
-        `when`(mockDriveApiClient.downloadFile(any())).thenReturn(ByteArrayInputStream("test data".toByteArray()))
+            `when`(mockDriveApiClient.listFilesInFolder(any())).thenReturn(listOf(mockFile))
+            `when`(mockDriveApiClient.downloadFile(any())).thenReturn(ByteArrayInputStream("test data".toByteArray()))
 
-        // Create a temp file that's older than the remote file
-        val tempDir = createTempDirectory().toFile()
-        val localFile = File(tempDir, "test.daylio")
-        localFile.createNewFile()
-        localFile.setLastModified(oldDate.time)
+            // Create a temp file that's older than the remote file
+            val tempDir = createTempDirectory().toFile()
+            val localFile = File(tempDir, "test.daylio")
+            localFile.createNewFile()
+            localFile.setLastModified(oldDate.time)
 
-        // Mock context to return our directory structure
-        `when`(mockContext.getExternalFilesDir(any())).thenReturn(tempDir)
+            // Mock context to return our directory structure
+            `when`(mockContext.getExternalFilesDir(any())).thenReturn(tempDir)
 
-        // When
-        val result = worker.doWork()
+            // When
+            val result = worker.doWork()
 
-        // Then
-        assert(result is ListenableWorker.Result.Success)
-        verify(mockDriveApiClient).downloadFile(eq("test_file_id"))
+            // Then
+            assert(result is ListenableWorker.Result.Success)
+            verify(mockDriveApiClient).downloadFile(eq("test_file_id"))
 
-        // Clean up
-        tempDir.deleteRecursively()
+            // Clean up
+            tempDir.deleteRecursively()
+        }
     }
 
     @Test
-    fun `doWork skips download when local file is newest`() = runBlocking {
-        // Given
-        val worker = TestListenableWorkerBuilder<FileCheckWorker>(mockContext).build()
+    fun `doWork skips download when local file is newest`() {
+        runBlocking {
+            // Given
+            val worker = TestListenableWorkerBuilder<FileCheckWorker>(mockContext).build()
 
-        // Create mock file list with one older file
-        val currentTime = System.currentTimeMillis()
-        val oldDate = Date(currentTime - 86400000) // 1 day older
-        val newDate = Date(currentTime)
+            // Create mock file list with one older file
+            val currentTime = System.currentTimeMillis()
+            val oldDate = Date(currentTime - 86400000) // 1 day older
+            val newDate = Date(currentTime)
 
-        val mockFile = DriveApiClient.FileInfo(
-            id = "test_file_id",
-            name = "test.daylio",
-            mimeType = "application/octet-stream",
-            size = 1024L,
-            modifiedTime = oldDate
-        )
+            val mockFile = DriveApiClient.FileInfo(
+                id = "test_file_id",
+                name = "test.daylio",
+                mimeType = "application/octet-stream",
+                size = 1024L,
+                modifiedTime = oldDate
+            )
 
-        `when`(mockDriveApiClient.listFilesInFolder(any())).thenReturn(listOf(mockFile))
+            `when`(mockDriveApiClient.listFilesInFolder(any())).thenReturn(listOf(mockFile))
 
-        // Create a temp file that's newer than the remote file
-        val tempDir = createTempDirectory().toFile()
-        val localFile = File(tempDir, "test.daylio")
-        localFile.createNewFile()
-        localFile.setLastModified(newDate.time)
+            // Create a temp file that's newer than the remote file
+            val tempDir = createTempDirectory().toFile()
+            val localFile = File(tempDir, "test.daylio")
+            localFile.createNewFile()
+            localFile.setLastModified(newDate.time)
 
-        // Mock context to return our directory structure
-        `when`(mockContext.getExternalFilesDir(any())).thenReturn(tempDir)
+            // Mock context to return our directory structure
+            `when`(mockContext.getExternalFilesDir(any())).thenReturn(tempDir)
 
-        // When
-        val result = worker.doWork()
+            // When
+            val result = worker.doWork()
 
-        // Then
-        assert(result is ListenableWorker.Result.Success)
-        // Shouldn't call download since local file is newer
+            // Then
+            assert(result is ListenableWorker.Result.Success)
+            // Shouldn't call download since local file is newer
 
-        // Clean up
-        tempDir.deleteRecursively()
+            // Clean up
+            tempDir.deleteRecursively()
+        }
     }
 }

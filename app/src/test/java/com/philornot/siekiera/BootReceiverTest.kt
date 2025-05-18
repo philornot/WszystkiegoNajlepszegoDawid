@@ -3,7 +3,6 @@ package com.philornot.siekiera
 import android.content.Context
 import android.content.Intent
 import com.philornot.siekiera.config.AppConfig
-import com.philornot.siekiera.notification.NotificationScheduler
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -12,7 +11,6 @@ import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.junit.MockitoJUnitRunner
-import org.mockito.kotlin.spy
 import java.util.Calendar
 import java.util.TimeZone
 
@@ -26,7 +24,6 @@ class BootReceiverTest {
     private lateinit var mockAppConfig: AppConfig
 
     private lateinit var bootReceiver: BootReceiver
-    private lateinit var mockNotificationScheduler: NotificationScheduler
 
     @Before
     fun setup() {
@@ -34,13 +31,11 @@ class BootReceiverTest {
         `when`(mockContext.applicationContext).thenReturn(mockContext)
 
         // Set up AppConfig mock
+        `when`(mockAppConfig.isBirthdayNotificationEnabled()).thenReturn(false)
         AppConfig.INSTANCE = mockAppConfig
 
         // Create instance of the component to test
         bootReceiver = BootReceiver()
-
-        // Create a spy for the NotificationScheduler singleton
-        mockNotificationScheduler = spy(NotificationScheduler)
     }
 
     @Test
@@ -73,9 +68,10 @@ class BootReceiverTest {
 
         // Then
         verify(mockAppConfig).isBirthdayNotificationEnabled()
-        // Ideally we would verify NotificationScheduler.scheduleGiftRevealNotification was called,
-        // but since it's a static method it's harder to verify. In a real test, you could use a
-        // mocking library that supports static method verification or refactor to use dependency injection.
+        // Ideally we should verify NotificationScheduler.scheduleGiftRevealNotification was called,
+        // but since it's static we can't directly mock it. In a real-world scenario we would
+        // refactor the code to use dependency injection for better testability.
+        verify(mockAppConfig).getBirthdayTimeMillis()
     }
 
     @Test
@@ -96,6 +92,8 @@ class BootReceiverTest {
 
         // Then
         verify(mockAppConfig).isBirthdayNotificationEnabled()
+        // We should verify the time check
+        verify(mockAppConfig).getBirthdayTimeMillis()
         // No notification should be scheduled as the date is in the past
     }
 
