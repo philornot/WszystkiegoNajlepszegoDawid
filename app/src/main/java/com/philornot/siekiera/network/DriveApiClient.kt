@@ -2,6 +2,8 @@ package com.philornot.siekiera.network
 
 import android.content.Context
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport
+import com.google.api.client.http.HttpIOExceptionHandler
+import com.google.api.client.http.HttpRequest
 import com.google.api.client.http.HttpRequestInitializer
 import com.google.api.client.http.HttpTransport
 import com.google.api.client.json.JsonFactory
@@ -126,8 +128,8 @@ class DriveApiClient(context: Context) {
 
             // Ustaw obsługę ponownych prób
             request.numberOfRetries = 3
-            request.ioExceptionHandler = { ex, supportsRetry ->
-                Timber.w(ex, "IOException w żądaniu Drive API, supportsRetry=$supportsRetry")
+            request.ioExceptionHandler = HttpIOExceptionHandler { req: HttpRequest, supportsRetry: Boolean ->
+                Timber.w("IOException w żądaniu Drive API, supportsRetry=%b", supportsRetry)
                 // Zawsze próbuj ponownie dla błędów sieciowych
                 supportsRetry
             }
