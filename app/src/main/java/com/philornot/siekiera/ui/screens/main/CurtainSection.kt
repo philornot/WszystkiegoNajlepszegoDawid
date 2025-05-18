@@ -26,26 +26,33 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.toSize
 
 /**
  * Redesigned curtain and gift section with a clean, lavender theme.
  *
  * @param modifier Modifier for the container
  * @param isTimeUp Whether the time is up
- * @param onGiftClicked Callback for when the gift is clicked
+ * @param onGiftClicked Callback for when the gift is clicked with position
  */
 @Composable
 fun CurtainSection(
     modifier: Modifier = Modifier,
     isTimeUp: Boolean,
-    onGiftClicked: () -> Unit,
+    onGiftClicked: (centerX: Float, centerY: Float) -> Unit,
 ) {
     Box(
         modifier = modifier
@@ -76,8 +83,9 @@ fun CurtainSection(
             ), modifier = Modifier.testTag("gift_container")
         ) {
             GiftButton(
-                modifier = Modifier.size(200.dp), onClick = onGiftClicked
-            )
+                modifier = Modifier.size(200.dp), onClick = { centerX, centerY ->
+                    onGiftClicked(centerX, centerY)
+                })
         }
     }
 }
@@ -120,7 +128,7 @@ fun Curtain(modifier: Modifier = Modifier) {
 @Composable
 fun GiftButton(
     modifier: Modifier = Modifier,
-    onClick: () -> Unit,
+    onClick: (centerX: Float, centerY: Float) -> Unit,
 ) {
     // Animated scale for a pulse effect
     val pulseScale = animateFloatAsState(
@@ -129,6 +137,10 @@ fun GiftButton(
             animation = tween(800), repeatMode = RepeatMode.Reverse
         ), label = "pulseAnimation"
     )
+
+    // Keep track of this component's position in the layout
+    val positionState = remember { mutableStateOf(Offset.Zero) }
+    val sizeState = remember { mutableStateOf(Size.Zero) }
 
     Box(
         modifier = Modifier.size(220.dp),  // Slightly larger container for the effect
@@ -142,15 +154,28 @@ fun GiftButton(
         // Gift button with pulse animation
         Card(
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primary
-            ),
+            containerColor = MaterialTheme.colorScheme.primary
+        ),
             shape = CircleShape,
             modifier = modifier
                 .scale(pulseScale.value)  // Apply pulse animation
                 .clip(CircleShape)
-                .clickable(onClick = onClick)
-                .testTag("gift")
-        ) {
+                .clickable {
+                    // Calculate center position as normalized coordinates (0.0 to 1.0)
+                    val centerX =
+                        (positionState.value.x + sizeState.value.width / 2) / (positionState.value.x + sizeState.value.width)
+                    val centerY =
+                        (positionState.value.y + sizeState.value.height / 2) / (positionState.value.y + sizeState.value.height + 1000f) // Adding padding to account for screen height
+
+                    // Call the onClick handler with the center position of this component
+                    onClick(centerX, centerY)
+                }
+                .onGloballyPositioned { coordinates ->
+                    // Save the component position and size whenever layout changes
+                    positionState.value = coordinates.positionInRoot()
+                    sizeState.value = coordinates.size.toSize()
+                }
+                .testTag("gift")) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,

@@ -1,6 +1,8 @@
 package com.philornot.siekiera.ui.screens.main
 
+// Importy do efektów trzęsienia
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -21,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -65,8 +68,12 @@ fun MainScreen(
     // Track if we should show celebration screen after clicking gift
     var showCelebration by remember { mutableStateOf(false) }
 
-    // Track if we should show fireworks
-    var showFireworks by remember { mutableStateOf(false) }
+    // Track if we should show confetti explosion when gift is clicked
+    var showConfettiExplosion by remember { mutableStateOf(false) }
+
+    // Remember the click position for confetti explosion
+    var confettiCenterX by remember { mutableFloatStateOf(0.5f) }
+    var confettiCenterY by remember { mutableFloatStateOf(0.5f) }
 
     // Update time every second
     LaunchedEffect(Unit) {
@@ -82,9 +89,12 @@ fun MainScreen(
         }
     }
 
-    // Main container
+    // Main container with shake effect when time is almost up
     Box(
-        modifier = modifier.fillMaxSize()
+        modifier = modifier
+            .fillMaxSize()
+            .shakeEffect(timeRemaining = timeRemaining)
+            .flashEffect(timeRemaining = timeRemaining)
     ) {
         // App background
         AppBackground(isTimeUp = isTimeUp)
@@ -111,15 +121,19 @@ fun MainScreen(
 
                         // Curtain or gift section
                         CurtainSection(
-                            isTimeUp = isTimeUp, onGiftClicked = {
-                                // Show fireworks immediately when the gift is clicked
+                            isTimeUp = isTimeUp, onGiftClicked = { centerX, centerY ->
+                                // When gift is clicked, show confetti explosion and then transition to celebration
                                 if (isTimeUp) {
-                                    showFireworks = true
+                                    // Record click position for confetti
+                                    confettiCenterX = centerX
+                                    confettiCenterY = centerY
 
-                                    // Delay showing celebration screen to allow fireworks animation to play
-                                    // This will be the "Main event" before transitioning to the message
+                                    // Show confetti explosion
+                                    showConfettiExplosion = true
+
+                                    // Delay showing celebration screen
                                     MainScope().launch {
-                                        delay(3500) // Delay celebration screen to enjoy fireworks
+                                        delay(1500) // Shorter delay to transition after confetti explosion
                                         showCelebration = true
                                         onGiftClicked()
                                     }
@@ -136,17 +150,21 @@ fun MainScreen(
                     }
                 }
 
-                // Simple confetti effect when time is up (subtle background effect)
+                // Background fireworks when time is up
                 if (isTimeUp && !showCelebration) {
-                    ConfettiEffect()
+                    // Always show fireworks once time is up
+                    FireworksEffect()
                 }
 
-                // Explosive fireworks when gift is clicked
+                // Confetti explosion when gift is clicked
                 AnimatedVisibility(
-                    visible = showFireworks && !showCelebration, enter = fadeIn(), exit = fadeOut()
+                    visible = showConfettiExplosion && !showCelebration,
+                    enter = fadeIn(tween(100)),
+                    exit = fadeOut()
                 ) {
-                    // Use our explosive fireworks display for maximum impact!
-                    ExplosiveFireworksDisplay()
+                    ConfettiExplosionEffect(
+                        centerX = confettiCenterX, centerY = confettiCenterY
+                    )
                 }
 
                 // Celebration screen after clicking gift
@@ -155,7 +173,8 @@ fun MainScreen(
                 ) {
                     BirthdayMessage(
                         modifier = Modifier.fillMaxSize(), onBackClick = {
-                            // Handle returning to main screen
+                            // When returning to the main screen, reset the confetti explosion
+                            showConfettiExplosion = false
                             showCelebration = false
                         })
                 }
@@ -243,6 +262,13 @@ fun BirthdayMessage(
                         modifier = Modifier.size(28.dp)
                     )
                 }
+                Text(
+                    text = "A może po prostu chcesz pooglądać fajerwerki, nad którymi kompletnie nie spędziłem 3h...",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 10.dp)
+                )
             }
         }
     }
