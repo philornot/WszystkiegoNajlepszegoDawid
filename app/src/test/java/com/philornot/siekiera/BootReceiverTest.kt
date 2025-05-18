@@ -1,3 +1,5 @@
+// W pliku BootReceiverTest.kt
+
 package com.philornot.siekiera
 
 import android.content.Context

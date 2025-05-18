@@ -1,6 +1,9 @@
+// W pliku TimeUtilsTest.kt
+
 package com.philornot.siekiera.utils
 
 import com.philornot.siekiera.config.AppConfig
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
@@ -29,13 +32,17 @@ class TimeUtilsTest {
         calendar.set(2025, Calendar.AUGUST, 24, 0, 0, 0)
         calendar.set(Calendar.MILLISECOND, 0)
 
-        // Usuwamy nieużywany stubbing
-        // `when`(mockAppConfig.getBirthdayDate()).thenReturn(calendar)
-
+        // Konfiguracja mockAppConfig
         `when`(mockAppConfig.getBirthdayTimeMillis()).thenReturn(calendar.timeInMillis)
 
         // Set our mock as the singleton instance
         AppConfig.INSTANCE = mockAppConfig
+    }
+
+    // POPRAWKA: Czyszczenie singletona po każdym teście
+    @After
+    fun tearDown() {
+        AppConfig.INSTANCE = null
     }
 
     @Test

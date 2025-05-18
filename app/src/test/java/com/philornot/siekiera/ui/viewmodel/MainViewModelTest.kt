@@ -1,3 +1,5 @@
+// W pliku MainViewModelTest.kt
+
 package com.philornot.siekiera.ui.viewmodel
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
@@ -69,6 +71,8 @@ class MainViewModelTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        // POPRAWKA: Czyścimy singleton po teście
+        AppConfig.INSTANCE = null
     }
 
     @Test

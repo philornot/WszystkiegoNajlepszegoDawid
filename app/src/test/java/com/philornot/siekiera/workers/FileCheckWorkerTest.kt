@@ -14,10 +14,11 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.Mock
+import org.mockito.Mockito.lenient
 import org.mockito.Mockito.verify
-import org.mockito.Mockito.`when`
 import org.mockito.junit.MockitoJUnitRunner
 import org.mockito.kotlin.any
+import org.mockito.kotlin.whenever
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.FileOutputStream
@@ -54,24 +55,24 @@ class FileCheckWorkerTest {
         // Set main dispatcher for coroutines
         Dispatchers.setMain(testDispatcher)
 
-        // Mock AppConfig
-        `when`(mockAppConfig.getDriveFolderId()).thenReturn("test_folder_id")
-        `when`(mockAppConfig.getDaylioFileName()).thenReturn("test.daylio")
-        `when`(mockAppConfig.isVerboseLoggingEnabled()).thenReturn(true)
+        // Mock AppConfig - używamy lenient() aby uniknąć UnnecessaryStubbingException
+        lenient().`when`(mockAppConfig.getDriveFolderId()).thenReturn("test_folder_id")
+        lenient().`when`(mockAppConfig.getDaylioFileName()).thenReturn("test.daylio")
+        lenient().`when`(mockAppConfig.isVerboseLoggingEnabled()).thenReturn(true)
 
         // Make our mock the singleton instance
         AppConfig.INSTANCE = mockAppConfig
 
-        // Mock DriveApiClient initialization
+        // Mock DriveApiClient initialization - użycie lenient()
         runBlocking {
-            `when`(mockDriveApiClient.initialize()).thenReturn(true)
+            lenient().`when`(mockDriveApiClient.initialize()).thenReturn(true)
         }
 
         // Set our mock as the test client
         DriveApiClient.mockInstance = mockDriveApiClient
 
         // Mock application context
-        `when`(mockContext.applicationContext).thenReturn(mockContext)
+        lenient().`when`(mockContext.applicationContext).thenReturn(mockContext)
     }
 
     @After
@@ -80,6 +81,9 @@ class FileCheckWorkerTest {
         Dispatchers.resetMain()
         DriveApiClient.mockInstance = null
         AppConfig.INSTANCE = null
+
+        // POPRAWKA: Dodany reset dla FileCheckWorker.testDriveClient
+        FileCheckWorker.testDriveClient = null
     }
 
     /** Test 1: Sprawdzenie czy inicjalizacja DriveApiClient działa poprawnie */
@@ -87,7 +91,7 @@ class FileCheckWorkerTest {
     fun `initialize DriveApiClient test`() {
         runBlocking {
             // Given
-            `when`(mockDriveApiClient.initialize()).thenReturn(true)
+            whenever(mockDriveApiClient.initialize()).thenReturn(true)
 
             // When
             val result = mockDriveApiClient.initialize()
@@ -106,7 +110,7 @@ class FileCheckWorkerTest {
     fun `listFilesInFolder returns empty list test`() {
         runBlocking {
             // Given
-            `when`(mockDriveApiClient.listFilesInFolder("test_folder_id")).thenReturn(emptyList())
+            whenever(mockDriveApiClient.listFilesInFolder("test_folder_id")).thenReturn(emptyList())
 
             // When
             val files = mockDriveApiClient.listFilesInFolder("test_folder_id")
@@ -131,7 +135,7 @@ class FileCheckWorkerTest {
                     modifiedTime = Date()
                 )
             )
-            `when`(mockDriveApiClient.listFilesInFolder("test_folder_id")).thenReturn(testFiles)
+            whenever(mockDriveApiClient.listFilesInFolder("test_folder_id")).thenReturn(testFiles)
 
             // When
             val files = mockDriveApiClient.listFilesInFolder("test_folder_id")
@@ -150,7 +154,7 @@ class FileCheckWorkerTest {
         runBlocking {
             // Given
             val testData = "test data".toByteArray()
-            `when`(mockDriveApiClient.downloadFile("test_file_id")).thenReturn(
+            whenever(mockDriveApiClient.downloadFile("test_file_id")).thenReturn(
                 ByteArrayInputStream(testData)
             )
 
@@ -238,15 +242,15 @@ class FileCheckWorkerTest {
                 modifiedTime = Date()
             )
 
-            // Set up mocks
-            `when`(mockDriveApiClient.listFilesInFolder(any())).thenReturn(listOf(mockFile))
-            `when`(mockDriveApiClient.downloadFile(any())).thenReturn(
+            // Set up mocks - używamy whenever zamiast when
+            whenever(mockDriveApiClient.listFilesInFolder(any())).thenReturn(listOf(mockFile))
+            whenever(mockDriveApiClient.downloadFile(any())).thenReturn(
                 ByteArrayInputStream("test data".toByteArray())
             )
 
             // Create a temporary directory for testing
             val tempDir = createTempDirectory().toFile()
-            `when`(mockContext.getExternalFilesDir(any())).thenReturn(tempDir)
+            whenever(mockContext.getExternalFilesDir(any())).thenReturn(tempDir)
 
             // When - symulujemy przepływ pracy FileCheckWorker
             val files = mockDriveApiClient.listFilesInFolder("test_folder_id")

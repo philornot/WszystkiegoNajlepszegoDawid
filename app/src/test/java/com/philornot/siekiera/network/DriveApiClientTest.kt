@@ -1,3 +1,5 @@
+// W pliku DriveApiClientTest.kt
+
 package com.philornot.siekiera.network
 
 import android.content.Context
@@ -5,6 +7,7 @@ import android.content.res.Resources
 import com.google.api.services.drive.Drive
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -87,6 +90,13 @@ class DriveApiClientTest {
         val field = DriveApiClient::class.java.getDeclaredField("driveService")
         field.isAccessible = true
         field.set(driveApiClient, mockDrive)
+    }
+
+    // POPRAWKA: Dodajemy metodę @After do czyszczenia po testach
+    @After
+    fun tearDown() {
+        // Czyszczenie singletona
+        DriveApiClient.clearMockInstance()
     }
 
     @Test

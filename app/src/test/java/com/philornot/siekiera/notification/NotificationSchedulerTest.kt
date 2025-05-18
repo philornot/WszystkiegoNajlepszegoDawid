@@ -1,3 +1,5 @@
+// W pliku NotificationSchedulerTest.kt
+
 package com.philornot.siekiera.notification
 
 import android.app.AlarmManager
@@ -6,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import com.philornot.siekiera.config.AppConfig
+import org.junit.After
 import org.junit.Assume
 import org.junit.Before
 import org.junit.Test
@@ -34,8 +37,14 @@ class NotificationSchedulerTest {
 
     private lateinit var pendingIntentFactory: NotificationScheduler.PendingIntentFactory
 
+    // Zapisujemy oryginalną fabrykę, aby przywrócić ją po testach
+    private lateinit var originalPendingIntentFactory: NotificationScheduler.PendingIntentFactory
+
     @Before
     fun setup() {
+        // Zapisz oryginalną fabrykę
+        originalPendingIntentFactory = NotificationScheduler.pendingIntentFactory
+
         // Setup mock context to return our mock AlarmManager
         `when`(mockContext.getSystemService(Context.ALARM_SERVICE)).thenReturn(mockAlarmManager)
 
@@ -63,17 +72,29 @@ class NotificationSchedulerTest {
 
         // Assign our mock factory
         NotificationScheduler.pendingIntentFactory = pendingIntentFactory
+
+        // POPRAWKA: Ustawienie singletona AppConfig
+        AppConfig.INSTANCE = mockAppConfig
+    }
+
+    @After
+    fun tearDown() {
+        // POPRAWKA: Przywracamy oryginalną fabrykę
+        NotificationScheduler.pendingIntentFactory = originalPendingIntentFactory
+
+        // POPRAWKA: Resetujemy singleton
+        AppConfig.INSTANCE = null
     }
 
     @Test
     fun `scheduleGiftRevealNotification sets exact alarm for correct date`() {
-        // Call the method under test
-        NotificationScheduler.scheduleGiftRevealNotification(mockContext, mockAppConfig)
-
         // For Android 12 and above, we need to check canScheduleExactAlarms
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             `when`(mockAlarmManager.canScheduleExactAlarms()).thenReturn(true)
         }
+
+        // Call the method under test
+        NotificationScheduler.scheduleGiftRevealNotification(mockContext, mockAppConfig)
 
         // Verify that setExactAndAllowWhileIdle was called with correct parameters
         verify(mockAlarmManager).setExactAndAllowWhileIdle(
@@ -86,13 +107,13 @@ class NotificationSchedulerTest {
         // Setup singleton instance
         AppConfig.INSTANCE = mockAppConfig
 
-        // Call the deprecated method
-        @Suppress("DEPRECATION") NotificationScheduler.scheduleGiftRevealNotification(mockContext)
-
         // For Android 12 and above, we need to check canScheduleExactAlarms
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             `when`(mockAlarmManager.canScheduleExactAlarms()).thenReturn(true)
         }
+
+        // Call the deprecated method
+        @Suppress("DEPRECATION") NotificationScheduler.scheduleGiftRevealNotification(mockContext)
 
         // Verify that setExactAndAllowWhileIdle was called with correct parameters
         verify(mockAlarmManager).setExactAndAllowWhileIdle(
