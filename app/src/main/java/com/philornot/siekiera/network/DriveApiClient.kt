@@ -104,7 +104,7 @@ class DriveApiClient(context: Context) {
                 id = file.id,
                 name = file.name,
                 mimeType = file.mimeType,
-                size = file.size,
+                size = file.size ?: 0L, // Użycie wartości domyślnej 0L jeśli size jest null
                 modifiedTime = parseRfc3339Date(file.modifiedTime.toStringRfc3339())
             )
         } catch (e: Exception) {
@@ -161,7 +161,7 @@ class DriveApiClient(context: Context) {
                     id = file.id,
                     name = file.name,
                     mimeType = file.mimeType,
-                    size = file.size,
+                    size = file.size ?: 0L, // Użycie wartości domyślnej 0L jeśli size jest null
                     modifiedTime = parseRfc3339Date(file.modifiedTime.toStringRfc3339())
                 )
             }
@@ -187,7 +187,7 @@ class DriveApiClient(context: Context) {
         val id: String,
         val name: String,
         val mimeType: String,
-        val size: Any,
+        val size: Long, // Zmieniono typ z Any na Long
         val modifiedTime: Date,
     )
 

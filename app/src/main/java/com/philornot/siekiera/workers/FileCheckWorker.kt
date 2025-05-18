@@ -1,7 +1,6 @@
 package com.philornot.siekiera.workers
 
 import android.content.Context
-import android.os.Environment
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.philornot.siekiera.config.AppConfig
@@ -22,8 +21,6 @@ import java.lang.ref.WeakReference
 class FileCheckWorker(
     context: Context,
     workerParams: WorkerParameters,
-    // Add this parameter for easier testing:
-    private val injectedDriveClient: DriveApiClient? = null,
 ) : CoroutineWorker(context, workerParams) {
 
     // Używamy WeakReference, aby uniknąć memory leaks
@@ -40,7 +37,7 @@ class FileCheckWorker(
 
     // Method to get DriveApiClient using a testable approach
     private fun getDriveClient(context: Context): DriveApiClient {
-        return injectedDriveClient ?: testDriveClient ?: DriveApiClient.getInstance(context)
+        return testDriveClient ?: DriveApiClient.getInstance(context)
     }
 
     override suspend fun doWork(): Result = coroutineScope {
@@ -138,7 +135,7 @@ class FileCheckWorker(
     }
 
     private fun getLocalFile(context: Context, fileName: String): File {
-        val directory = Environment.DIRECTORY_DOWNLOADS
+        val directory = android.os.Environment.DIRECTORY_DOWNLOADS
         val file = File(context.getExternalFilesDir(directory), fileName)
 
         // Upewnij się, że katalog istnieje

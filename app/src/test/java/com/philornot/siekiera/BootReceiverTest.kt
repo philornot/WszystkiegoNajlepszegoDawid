@@ -31,14 +31,14 @@ class BootReceiverTest {
         `when`(mockContext.applicationContext).thenReturn(mockContext)
 
         // Set up AppConfig mock with default values
-        // IMPORTANT: Make sure the mocks are set up properly for each test
+        // Domyślnie wyłączamy powiadomienia, aby testy mogły sprawdzić ten przypadek
         `when`(mockAppConfig.isBirthdayNotificationEnabled()).thenReturn(false)
 
-        // Set the mock as the singleton instance
-        AppConfig.INSTANCE = mockAppConfig
-
-        // Create instance of the component to test
+        // Utworzenie instancji receivera
         bootReceiver = BootReceiver()
+
+        // Ustaw singleton dla testów
+        AppConfig.INSTANCE = mockAppConfig
     }
 
     @Test
@@ -50,7 +50,23 @@ class BootReceiverTest {
         bootReceiver.onReceive(mockContext, intent)
 
         // Then - Notification scheduling should not happen
+        // Nie weryfikujemy wywołania isBirthdayNotificationEnabled()
+        // ponieważ ta metoda nie jest wywoływana dla nie-boot intentów
         verify(mockAppConfig, never()).isBirthdayNotificationEnabled()
+    }
+
+    @Test
+    fun `onReceive processes boot intent but notifications disabled`() {
+        // Given
+        val intent = Intent(Intent.ACTION_BOOT_COMPLETED)
+
+        // When
+        bootReceiver.onReceive(mockContext, intent)
+
+        // Then
+        verify(mockAppConfig).isBirthdayNotificationEnabled()
+        // No further processing should happen
+        verify(mockAppConfig, never()).getBirthdayTimeMillis()
     }
 
     @Test
@@ -72,6 +88,9 @@ class BootReceiverTest {
         // Then
         verify(mockAppConfig).isBirthdayNotificationEnabled()
         verify(mockAppConfig).getBirthdayTimeMillis()
+        // Nie możemy łatwo zweryfikować wywołania statycznej metody NotificationScheduler,
+        // ale to nie jest konieczne dla tego testu - wystarczy sprawdzić, że wywołane zostały
+        // odpowiednie metody na mockAppConfig
     }
 
     @Test
@@ -93,22 +112,6 @@ class BootReceiverTest {
         // Then
         verify(mockAppConfig).isBirthdayNotificationEnabled()
         verify(mockAppConfig).getBirthdayTimeMillis()
-    }
-
-    @Test
-    fun `onReceive processes boot intent but notifications disabled`() {
-        // Given
-        val intent = Intent(Intent.ACTION_BOOT_COMPLETED)
-
-        // Configure AppConfig to return that notifications are disabled
-        `when`(mockAppConfig.isBirthdayNotificationEnabled()).thenReturn(false)
-
-        // When
-        bootReceiver.onReceive(mockContext, intent)
-
-        // Then
-        verify(mockAppConfig).isBirthdayNotificationEnabled()
-        // No further processing should happen
-        verify(mockAppConfig, never()).getBirthdayTimeMillis()
+        // Powiadomienie nie powinno być zaplanowane, bo data już minęła
     }
 }

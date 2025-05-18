@@ -94,10 +94,6 @@ class DriveApiClientTest {
         // We bypass the real initialization here since we can't easily mock the static GoogleNetHttpTransport
         // Instead we'll verify driveService was set, which is done by field injection in setup
 
-        // Test needs to be updated - we directly set driveService in setup
-        // So initialize() won't do anything meaningful in the test
-        // Let's skip this test or modify it
-
         // Possible fix: Verify that the field exists and is not null
         val field = DriveApiClient::class.java.getDeclaredField("driveService")
         field.isAccessible = true
@@ -111,8 +107,8 @@ class DriveApiClientTest {
         val fileId = "test_file_id"
         val fileName = "test.daylio"
         val mimeType = "application/octet-stream"
-        // FIX: Change from Int to Long
-        val size = 5L  // Changed from 5 (Int) to 5L (Long)
+        // FIX: Change from Int to Long - używamy 5L zamiast 5
+        val size = 5L
 
         val mockFile = com.google.api.services.drive.model.File().setId(fileId).setName(fileName)
             .setMimeType(mimeType).setSize(size)
@@ -200,7 +196,6 @@ class DriveApiClientTest {
         val instance = DriveApiClient.getInstance(mockContext)
 
         // Then
-        // Lepszy test: sprawdzamy czy zwrócono nową instancję (nie null) i że nie jest to mockInstance
         assertNotNull(instance)
         assertTrue(DriveApiClient.mockInstance == null) // Upewnienie się, że mockInstance nadal jest null
     }
