@@ -12,6 +12,7 @@ import timber.log.Timber
  * planuje powiadomienia i zadania po restarcie urządzenia.
  */
 class BootReceiver : BroadcastReceiver() {
+
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
             Timber.d("System uruchomiony, ponowne planowanie zadań")

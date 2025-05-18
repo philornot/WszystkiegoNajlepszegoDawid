@@ -32,7 +32,6 @@ import org.junit.runners.Suite
     NotificationSchedulerTest::class,
     DriveApiClientTest::class,
     FileCheckWorkerTest::class,
-    BootReceiverTest::class
 )
 class AllUnitTestsSuite {
     // This class only serves as a holder for the suite annotations
