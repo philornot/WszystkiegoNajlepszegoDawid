@@ -70,18 +70,19 @@ android {
 
     packaging {
         resources {
+            excludes += "/*.txt"
+            excludes += "/META-INF/*.kotlin_module"
+            excludes += "/META-INF/ASL2.0"
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
             excludes += "/META-INF/DEPENDENCIES"
             excludes += "/META-INF/LICENSE"
+            excludes += "/META-INF/LICENSE-notice.md"
+            excludes += "/META-INF/LICENSE.md"
             excludes += "/META-INF/LICENSE.txt"
             excludes += "/META-INF/license.txt"
             excludes += "/META-INF/NOTICE"
             excludes += "/META-INF/NOTICE.txt"
             excludes += "/META-INF/notice.txt"
-            excludes += "/META-INF/ASL2.0"
-            excludes += "/META-INF/*.kotlin_module"
-            // Może potrzebne będą także te
-            excludes += "/*.txt"
             excludes += "META-INF/MANIFEST.MF"
             excludes += "META-INF/maven/**"
             excludes += "META-INF/versions/**"

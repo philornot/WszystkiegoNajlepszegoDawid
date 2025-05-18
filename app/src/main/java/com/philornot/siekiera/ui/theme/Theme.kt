@@ -15,17 +15,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
-// Schemat kolorów dla trybu jasnego
+// Light color scheme with lavender focus
 private val LightColorScheme = lightColorScheme(
-    primary = PurplePrimary,
+    primary = LavenderPrimary,
     onPrimary = White,
-    primaryContainer = PurplePastel,
-    onPrimaryContainer = PurpleDark,
-    secondary = AccentPink,
+    primaryContainer = LavenderPastel,
+    onPrimaryContainer = LavenderDark,
+    secondary = AccentMauve,
     onSecondary = White,
-    secondaryContainer = CurtainAccent,
-    onSecondaryContainer = CurtainPrimary,
-    tertiary = AccentBlue,
+    secondaryContainer = CurtainSecondary,
+    onSecondaryContainer = LavenderDark,
+    tertiary = AccentPeriwinkle,
     onTertiary = White,
     tertiaryContainer = LightGray,
     onTertiaryContainer = DarkGray,
@@ -33,20 +33,22 @@ private val LightColorScheme = lightColorScheme(
     background = White,
     onBackground = Black,
     surface = White,
-    onSurface = Black
+    onSurface = Black,
+    surfaceVariant = LavenderPastel.copy(alpha = 0.4f),
+    onSurfaceVariant = LavenderDark
 )
 
-// Schemat kolorów dla trybu ciemnego
+// Dark color scheme with lavender focus
 private val DarkColorScheme = darkColorScheme(
-    primary = PurpleLight,
+    primary = LavenderLight,
     onPrimary = Black,
-    primaryContainer = PurpleDark,
-    onPrimaryContainer = PurplePastel,
-    secondary = AccentPink,
+    primaryContainer = LavenderDark,
+    onPrimaryContainer = LavenderPastel,
+    secondary = AccentMauve,
     onSecondary = Black,
-    secondaryContainer = CurtainPrimary,
-    onSecondaryContainer = CurtainAccent,
-    tertiary = AccentBlue,
+    secondaryContainer = LavenderDark,
+    onSecondaryContainer = LavenderPastel,
+    tertiary = AccentPeriwinkle,
     onTertiary = Black,
     tertiaryContainer = DarkGray,
     onTertiaryContainer = LightGray,
@@ -54,22 +56,23 @@ private val DarkColorScheme = darkColorScheme(
     background = Black,
     onBackground = White,
     surface = DarkGray,
-    onSurface = White
+    onSurface = White,
+    surfaceVariant = LavenderDark.copy(alpha = 0.6f),
+    onSurfaceVariant = LavenderPastel
 )
 
 @Composable
 fun AppTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamiczne kolory są dostępne od Androida 12 (API 31)
-    dynamicColor: Boolean = true,
-    content: @Composable () -> Unit,
+    // Dynamic colors available on Android 12+
+    dynamicColor: Boolean = false, // Disabled by default to maintain lavender theme
+    content: @Composable () -> Unit
 ) {
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
-
         darkTheme -> DarkColorScheme
         else -> LightColorScheme
     }
@@ -84,6 +87,9 @@ fun AppTheme(
     }
 
     MaterialTheme(
-        colorScheme = colorScheme, typography = Typography, shapes = Shapes, content = content
+        colorScheme = colorScheme,
+        typography = Typography,
+        shapes = Shapes,
+        content = content
     )
 }
