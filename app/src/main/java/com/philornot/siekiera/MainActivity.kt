@@ -7,6 +7,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -72,6 +73,9 @@ class MainActivity : ComponentActivity() {
     // Stany zarządzania uprawnieniami
     private val notificationPermissionRequested = mutableStateOf(false)
 
+    // Preferencje aplikacji do śledzenia pierwszego uruchomienia
+    private lateinit var prefs: SharedPreferences
+
     // Launcher dla żądania uprawnień do dokładnych alarmów
     private val alarmPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -131,8 +135,13 @@ class MainActivity : ComponentActivity() {
         // Inicjalizacja AppConfig
         appConfig = AppConfig.getInstance(applicationContext)
 
+        // Inicjalizacja preferencji
+        prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
+        val isFirstRun = prefs.getBoolean("is_first_run", true)
+
         if (appConfig.isVerboseLoggingEnabled()) {
             Timber.d("Konfiguracja załadowana: data urodzin ${TimeUtils.formatDate(appConfig.getBirthdayDate().time)}")
+            Timber.d("Pierwsze uruchomienie aplikacji: $isFirstRun")
         }
 
         // Sprawdź uprawnienia do alarmów i powiadomień
@@ -147,6 +156,14 @@ class MainActivity : ComponentActivity() {
         // Zaplanuj codzienne sprawdzanie aktualizacji pliku
         if (appConfig.isDailyFileCheckEnabled()) {
             scheduleDailyFileCheck()
+
+            // Natychmiast sprawdź plik przy pierwszym uruchomieniu
+            if (isFirstRun) {
+                checkFileImmediately()
+
+                // Zapisz, że to już nie jest pierwsze uruchomienie
+                prefs.edit().putBoolean("is_first_run", false).apply()
+            }
         }
 
         // Zarejestruj receiver dla pobierania
@@ -237,6 +254,19 @@ class MainActivity : ComponentActivity() {
         NotificationScheduler.scheduleGiftRevealNotification(this, appConfig)
     }
 
+    /**
+     * Natychmiastowe sprawdzenie pliku przy pierwszym uruchomieniu. Funkcja
+     * dodana dla poprawy doświadczenia użytkownika.
+     */
+    private fun checkFileImmediately() {
+        Timber.d("Wykonuję natychmiastowe sprawdzenie pliku przy pierwszym uruchomieniu")
+        val oneTimeWorkRequest = OneTimeWorkRequestBuilder<FileCheckWorker>().setConstraints(
+                Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+            ).build()
+
+        WorkManager.getInstance(this).enqueue(oneTimeWorkRequest)
+    }
+
     /** Planuje codzienne sprawdzanie aktualizacji pliku na Google Drive. */
     private fun scheduleDailyFileCheck() {
         val constraints =
@@ -316,10 +346,9 @@ class MainActivity : ComponentActivity() {
         try {
             // Otwórz plik za pomocą zewnętrznej aplikacji (Daylio jeśli jest zainstalowana)
             val intent = Intent(Intent.ACTION_VIEW)
-            val uri =
-                androidx.core.content.FileProvider.getUriForFile(
-                    this, "${applicationContext.packageName}.provider", file
-                )
+            val uri = androidx.core.content.FileProvider.getUriForFile(
+                this, "${applicationContext.packageName}.provider", file
+            )
 
             intent.setDataAndType(uri, "application/octet-stream")
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
