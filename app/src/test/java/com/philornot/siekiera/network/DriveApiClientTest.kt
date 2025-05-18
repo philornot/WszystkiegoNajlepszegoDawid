@@ -111,7 +111,8 @@ class DriveApiClientTest {
         val fileId = "test_file_id"
         val fileName = "test.daylio"
         val mimeType = "application/octet-stream"
-        val size = 5L  // Changed from 1024L to match actual value in mock response
+        // FIX: Change from Int to Long
+        val size = 5L  // Changed from 5 (Int) to 5L (Long)
 
         val mockFile = com.google.api.services.drive.model.File().setId(fileId).setName(fileName)
             .setMimeType(mimeType).setSize(size)

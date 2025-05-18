@@ -17,7 +17,8 @@ import org.mockito.junit.MockitoJUnitRunner
 import java.util.Calendar
 import java.util.TimeZone
 
-@RunWith(MockitoJUnitRunner::class)
+// Changed to Silent runner to ignore unnecessary stubbings
+@RunWith(MockitoJUnitRunner.Silent::class)
 class NotificationSchedulerTest {
     @Mock
     private lateinit var mockContext: Context
@@ -42,6 +43,8 @@ class NotificationSchedulerTest {
         val calendar = Calendar.getInstance(TimeZone.getTimeZone("Europe/Warsaw"))
         calendar.set(2025, Calendar.AUGUST, 24, 0, 0, 0)
         calendar.set(Calendar.MILLISECOND, 0)
+
+        // This stubbing is actually used - don't remove it
         `when`(mockAppConfig.getBirthdayDate()).thenReturn(calendar)
         `when`(mockAppConfig.getBirthdayTimeMillis()).thenReturn(calendar.timeInMillis)
         `when`(mockAppConfig.isBirthdayNotificationEnabled()).thenReturn(true)
@@ -73,7 +76,6 @@ class NotificationSchedulerTest {
         }
 
         // Verify that setExactAndAllowWhileIdle was called with correct parameters
-        // Używamy rzeczywistych wartości dla wszystkich argumentów - bez matcherów
         verify(mockAlarmManager).setExactAndAllowWhileIdle(
             AlarmManager.RTC_WAKEUP, mockAppConfig.getBirthdayTimeMillis(), mockPendingIntent
         )
@@ -93,7 +95,6 @@ class NotificationSchedulerTest {
         }
 
         // Verify that setExactAndAllowWhileIdle was called with correct parameters
-        // Używamy rzeczywistych wartości dla wszystkich argumentów - bez matcherów
         verify(mockAlarmManager).setExactAndAllowWhileIdle(
             AlarmManager.RTC_WAKEUP, mockAppConfig.getBirthdayTimeMillis(), mockPendingIntent
         )

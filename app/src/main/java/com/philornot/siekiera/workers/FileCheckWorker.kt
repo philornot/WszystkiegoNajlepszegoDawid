@@ -22,6 +22,8 @@ import java.lang.ref.WeakReference
 class FileCheckWorker(
     context: Context,
     workerParams: WorkerParameters,
+    // Add this parameter for easier testing:
+    private val injectedDriveClient: DriveApiClient? = null,
 ) : CoroutineWorker(context, workerParams) {
 
     // Używamy WeakReference, aby uniknąć memory leaks
@@ -34,6 +36,11 @@ class FileCheckWorker(
     private fun getAppConfig(): AppConfig? {
         val context = getContext() ?: return null
         return AppConfig.getInstance(context)
+    }
+
+    // Method to get DriveApiClient using a testable approach
+    private fun getDriveClient(context: Context): DriveApiClient {
+        return injectedDriveClient ?: testDriveClient ?: DriveApiClient.getInstance(context)
     }
 
     override suspend fun doWork(): Result = coroutineScope {
@@ -69,8 +76,8 @@ class FileCheckWorker(
             Timber.d("Sprawdzanie aktualizacji pliku w folderze: $folderId, plik: $fileName")
         }
 
-        // Pobierz instancję klienta Drive API
-        val driveClient = DriveApiClient.getInstance(context)
+        // Get the Drive client using the testable method
+        val driveClient = getDriveClient(context)
 
         // Zainicjalizuj klienta, jeśli nie jest już zainicjalizowany
         if (!driveClient.initialize()) {

@@ -30,8 +30,11 @@ class BootReceiverTest {
         // Set up context mock
         `when`(mockContext.applicationContext).thenReturn(mockContext)
 
-        // Set up AppConfig mock
+        // Set up AppConfig mock with default values
+        // IMPORTANT: Make sure the mocks are set up properly for each test
         `when`(mockAppConfig.isBirthdayNotificationEnabled()).thenReturn(false)
+
+        // Set the mock as the singleton instance
         AppConfig.INSTANCE = mockAppConfig
 
         // Create instance of the component to test
@@ -68,9 +71,6 @@ class BootReceiverTest {
 
         // Then
         verify(mockAppConfig).isBirthdayNotificationEnabled()
-        // Ideally we should verify NotificationScheduler.scheduleGiftRevealNotification was called,
-        // but since it's static we can't directly mock it. In a real-world scenario we would
-        // refactor the code to use dependency injection for better testability.
         verify(mockAppConfig).getBirthdayTimeMillis()
     }
 
@@ -92,9 +92,7 @@ class BootReceiverTest {
 
         // Then
         verify(mockAppConfig).isBirthdayNotificationEnabled()
-        // We should verify the time check
         verify(mockAppConfig).getBirthdayTimeMillis()
-        // No notification should be scheduled as the date is in the past
     }
 
     @Test
