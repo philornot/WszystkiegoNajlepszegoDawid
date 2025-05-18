@@ -50,6 +50,7 @@ import java.io.File
 import java.util.Calendar
 import java.util.TimeZone
 import java.util.concurrent.TimeUnit
+import androidx.core.content.edit
 
 class MainActivity : ComponentActivity() {
 
@@ -162,7 +163,7 @@ class MainActivity : ComponentActivity() {
                 checkFileImmediately()
 
                 // Zapisz, że to już nie jest pierwsze uruchomienie
-                prefs.edit().putBoolean("is_first_run", false).apply()
+                prefs.edit { putBoolean("is_first_run", false) }
             }
         }
 
@@ -224,7 +225,13 @@ class MainActivity : ComponentActivity() {
 
                     // Dialog pobierania
                     if (showDialog.value) {
-                        AlertDialog(onDismissRequest = { showDialog.value = false }, title = {
+                        AlertDialog(onDismissRequest = {
+                            // Gdy użytkownik kliknie poza dialogiem, anulujemy pobieranie i pokazujemy toast
+                            Toast.makeText(
+                                this, "Anulowano pobieranie prezentu", Toast.LENGTH_SHORT
+                            ).show()
+                            showDialog.value = false
+                        }, title = {
                             Text(text = getString(R.string.download_dialog_title))
                         }, text = {
                             Text(text = getString(R.string.download_dialog_message))
@@ -238,8 +245,12 @@ class MainActivity : ComponentActivity() {
                             }
                         }, dismissButton = {
                             TextButton(
-                                onClick = { showDialog.value = false }) {
-                                Text(getString(R.string.no))
+                                onClick = {
+                                    // "Drugie Tak" - również pobiera plik
+                                    downloadFile()
+                                    showDialog.value = false
+                                }) {
+                                Text(getString(R.string.yes))
                             }
                         })
                     }
@@ -261,8 +272,8 @@ class MainActivity : ComponentActivity() {
     private fun checkFileImmediately() {
         Timber.d("Wykonuję natychmiastowe sprawdzenie pliku przy pierwszym uruchomieniu")
         val oneTimeWorkRequest = OneTimeWorkRequestBuilder<FileCheckWorker>().setConstraints(
-                Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
-            ).build()
+            Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+        ).build()
 
         WorkManager.getInstance(this).enqueue(oneTimeWorkRequest)
     }
