@@ -12,7 +12,7 @@
     <string name="drive_folder_id">1oiohasnIeKrtbmX2NY7g9p9HJF82zmn7</string> <!-- ID folderu na Google Drive -->
 
     <!-- Konfiguracja pliku -->
-    <string name="daylio_file_name">test.daylio</string>
+    <string name="daylio_file_name">wpisy.daylio</string>
 
     <!-- Konfiguracja mechanizmów aplikacji -->
     <bool name="enable_daily_file_check">true</bool>
