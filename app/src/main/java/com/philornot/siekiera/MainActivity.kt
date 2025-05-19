@@ -32,11 +32,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.work.Constraints
+import androidx.core.content.edit
 import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.philornot.siekiera.config.AppConfig
 import com.philornot.siekiera.notification.NotificationScheduler
@@ -51,7 +48,6 @@ import java.io.File
 import java.util.Calendar
 import java.util.TimeZone
 import java.util.concurrent.TimeUnit
-import androidx.core.content.edit
 
 class MainActivity : ComponentActivity() {
 
@@ -168,6 +164,7 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        // Zarejestruj receiver dla pobierania
         registerDownloadReceiver()
 
         setContent {
@@ -206,7 +203,7 @@ class MainActivity : ComponentActivity() {
                         targetDate = TimeUtils.getRevealDateMillis(appConfig),
                         currentTime = timeProvider.getCurrentTimeMillis(),
                         onGiftClicked = { showDialog.value = true },
-                        activity = this
+                        activity = this // Przekaż referencję do aktywności
                     )
 
                     // Dialog pobierania
@@ -245,6 +242,19 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Wymusza natychmiastowe sprawdzenie aktualizacji pliku. Można wywołać z
+     * innych komponentów, gdy zbliża się moment zakończenia odliczania.
+     */
+    fun checkFileNow() {
+        Timber.d("Wymuszam natychmiastowe sprawdzenie pliku")
+
+        // Wykorzystanie statycznej metody do tworzenia żądania
+        val oneTimeWorkRequest = FileCheckWorker.createOneTimeCheckRequest()
+
+        WorkManager.getInstance(this).enqueue(oneTimeWorkRequest)
+    }
+
     /** Planuje powiadomienie na dzień urodzin. */
     private fun scheduleRevealNotification() {
         Timber.d("Zlecam zaplanowanie powiadomienia urodzinowego")
@@ -257,23 +267,19 @@ class MainActivity : ComponentActivity() {
      */
     private fun checkFileImmediately() {
         Timber.d("Wykonuję natychmiastowe sprawdzenie pliku przy pierwszym uruchomieniu")
-        val oneTimeWorkRequest = OneTimeWorkRequestBuilder<FileCheckWorker>().setConstraints(
-            Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
-        ).build()
+
+        // Wykorzystanie statycznej metody do tworzenia żądania
+        val oneTimeWorkRequest = FileCheckWorker.createOneTimeCheckRequest()
 
         WorkManager.getInstance(this).enqueue(oneTimeWorkRequest)
     }
 
     /** Planuje codzienne sprawdzanie aktualizacji pliku na Google Drive. */
     private fun scheduleDailyFileCheck() {
-        val constraints =
-            Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
-
         val intervalHours = appConfig.getFileCheckIntervalHours().toLong()
 
-        val fileCheckRequest = PeriodicWorkRequestBuilder<FileCheckWorker>(
-            intervalHours, TimeUnit.HOURS
-        ).setConstraints(constraints)
+        // Wykorzystanie statycznej metody do tworzenia żądania
+        val fileCheckRequest = FileCheckWorker.createWorkRequest(intervalHours)
             .setInitialDelay(calculateInitialDelay(), TimeUnit.MILLISECONDS).build()
 
         Timber.d("Planuję codzienne sprawdzanie aktualizacji pliku co $intervalHours godzin")
@@ -325,10 +331,9 @@ class MainActivity : ComponentActivity() {
         }
 
         Timber.d("Plik nie istnieje lokalnie, zlecam pobranie z Google Drive")
-        // Rozpocznij pobieranie za pomocą FileCheckWorker zamiast używać DownloadManager
-        val oneTimeWorkRequest = OneTimeWorkRequestBuilder<FileCheckWorker>().setConstraints(
-            Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
-        ).build()
+
+        // Wykorzystanie statycznej metody do tworzenia żądania
+        val oneTimeWorkRequest = FileCheckWorker.createOneTimeCheckRequest()
 
         WorkManager.getInstance(this).enqueue(oneTimeWorkRequest)
 
@@ -351,56 +356,16 @@ class MainActivity : ComponentActivity() {
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
 
             val chooser = Intent.createChooser(intent, getString(R.string.open_with))
-            if (intent.resolveActivity(packageManager) != null) {
-                startActivity(chooser)
-            } else {
-                Timber.e("Brak aplikacji do otworzenia pliku .daylio")
-                Toast.makeText(
-                    this,
-                    "Brak aplikacji do otworzenia pliku Daylio. Zainstaluj aplikację Daylio.",
-                    Toast.LENGTH_LONG
-                ).show()
-            }
+
+            // Uruchom activity bez sprawdzania resolveActivity
+            startActivity(chooser)
+
         } catch (e: Exception) {
             Timber.e(e, "Błąd podczas otwierania pliku Daylio")
             Toast.makeText(
                 this, "Błąd podczas otwierania pliku: ${e.message}", Toast.LENGTH_LONG
             ).show()
         }
-    }
-
-    @SuppressLint("UnspecifiedRegisterReceiverFlag")
-    private fun registerDownloadReceiver() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(
-                onDownloadComplete,
-                IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
-                RECEIVER_NOT_EXPORTED
-            )
-        } else {
-            registerReceiver(
-                onDownloadComplete,
-                IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
-            )
-        }
-    }
-
-    /**
-     * Wymusza natychmiastowe sprawdzenie aktualizacji pliku.
-     * Można wywołać z innych komponentów, gdy zbliża się moment
-     * zakończenia odliczania.
-     */
-    fun checkFileNow() {
-        Timber.d("Wymuszam natychmiastowe sprawdzenie pliku")
-        val oneTimeWorkRequest = OneTimeWorkRequestBuilder<FileCheckWorker>()
-            .setConstraints(
-                Constraints.Builder()
-                    .setRequiredNetworkType(NetworkType.CONNECTED)
-                    .build()
-            )
-            .build()
-
-        WorkManager.getInstance(this).enqueue(oneTimeWorkRequest)
     }
 
     /**
@@ -468,6 +433,25 @@ class MainActivity : ComponentActivity() {
             }
         } else {
             Timber.d("Android < 13, uprawnienia do powiadomień nie są wymagane")
+        }
+    }
+
+    /**
+     * Rejestruje BroadcastReceiver dla pobierania w sposób zgodny z różnymi
+     * wersjami Androida.
+     */
+    @SuppressLint("UnspecifiedRegisterReceiverFlag")
+    private fun registerDownloadReceiver() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(
+                onDownloadComplete,
+                IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
+                RECEIVER_NOT_EXPORTED
+            )
+        } else {
+            registerReceiver(
+                onDownloadComplete, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
+            )
         }
     }
 

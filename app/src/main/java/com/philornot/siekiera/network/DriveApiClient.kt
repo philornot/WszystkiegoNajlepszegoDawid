@@ -1,5 +1,6 @@
 package com.philornot.siekiera.network
 
+import android.annotation.SuppressLint
 import android.content.Context
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport
 import com.google.api.client.http.HttpIOExceptionHandler
@@ -12,8 +13,10 @@ import com.google.api.services.drive.Drive
 import com.google.api.services.drive.DriveScopes
 import com.google.auth.http.HttpCredentialsAdapter
 import com.google.auth.oauth2.ServiceAccountCredentials
+import com.philornot.siekiera.R
 import com.philornot.siekiera.config.AppConfig
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.ByteArrayInputStream
@@ -45,6 +48,11 @@ class DriveApiClient(context: Context) {
     // Limity ponownych prób
     private var retryCount = 0
 
+    // Monitorowanie limitów API
+    private var requestCount = 0
+    private val maxRequestsPerMinute = 20  // Ustalony bezpieczny limit
+    private var lastMinuteReset = System.currentTimeMillis()
+
     // Funkcja pomocnicza do uzyskania kontekstu
     private fun getContext(): Context? = contextRef.get()
 
@@ -61,6 +69,7 @@ class DriveApiClient(context: Context) {
      * @return true jeśli inicjalizacja się powiodła, false w przeciwnym
      *    wypadku
      */
+    @SuppressLint("DiscouragedApi")
     suspend fun initialize(): Boolean = withContext(Dispatchers.IO) {
         try {
             val context = getContext() ?: return@withContext false
@@ -86,9 +95,20 @@ class DriveApiClient(context: Context) {
             val serviceAccountFileName = appConfig.getServiceAccountFileName()
 
             // Pobierz poświadczenia z zasobów aplikacji
-            val serviceAccountStream = context.resources.openRawResource(
-                context.resources.getIdentifier(serviceAccountFileName, "raw", context.packageName)
-            )
+            // Użyj bezpośredniego dostępu do zasobu, jeśli to możliwe
+            val serviceAccountStream = try {
+                // Próba użycia bezpośredniego identyfikatora zasobu
+                val resourceField = R.raw::class.java.getField(serviceAccountFileName)
+                val resourceId = resourceField.getInt(null)
+                context.resources.openRawResource(resourceId)
+            } catch (_: Exception) {
+                // Fallback do metody getIdentifier w przypadku błędu
+                Timber.w("Nie znaleziono bezpośredniego identyfikatora zasobu, używam getIdentifier")
+                val resourceId = context.resources.getIdentifier(
+                    serviceAccountFileName, "raw", context.packageName
+                )
+                context.resources.openRawResource(resourceId)
+            }
 
             // Skonfiguruj poświadczenia konta usługi
             val credentials = ServiceAccountCredentials.fromStream(serviceAccountStream)
@@ -106,6 +126,10 @@ class DriveApiClient(context: Context) {
 
             // Zapamiętaj czas inicjalizacji
             lastInitTime = System.currentTimeMillis()
+
+            // Zresetuj liczniki zapytań API
+            requestCount = 0
+            lastMinuteReset = System.currentTimeMillis()
 
             true
         } catch (e: Exception) {
@@ -140,6 +164,38 @@ class DriveApiClient(context: Context) {
     }
 
     /**
+     * Sprawdza limity API i opóźnia żądanie jeśli to konieczne.
+     * Zapobiega przekroczeniu limitów API Google Drive.
+     */
+    private suspend fun checkApiLimits() {
+        val currentTime = System.currentTimeMillis()
+
+        // Reset licznika co minutę
+        if (currentTime - lastMinuteReset > 60_000) {
+            Timber.d("Resetuję licznik żądań API (było: $requestCount)")
+            requestCount = 0
+            lastMinuteReset = currentTime
+            return
+        }
+
+        // Sprawdź czy nie przekraczamy limitu
+        if (requestCount >= maxRequestsPerMinute) {
+            // Poczekaj do następnej minuty
+            val waitTime = 60_000 - (currentTime - lastMinuteReset)
+            if (waitTime > 0) {
+                Timber.w("Osiągnięto limit API ($requestCount) - opóźnienie kolejnego żądania o $waitTime ms")
+                delay(waitTime)
+                requestCount = 0
+                lastMinuteReset = System.currentTimeMillis()
+            }
+        }
+
+        // Zwiększ licznik zapytań
+        requestCount++
+        Timber.d("API request count: $requestCount")
+    }
+
+    /**
      * Pobiera informacje o pliku z Google Drive.
      *
      * @param fileId ID pliku na Google Drive
@@ -151,14 +207,17 @@ class DriveApiClient(context: Context) {
             ?: throw IllegalStateException("Klient Drive API nie został zainicjalizowany")
 
         try {
+            // Sprawdź limity API przed wykonaniem żądania
+            checkApiLimits()
+
             Timber.d("Pobieranie informacji o pliku o ID: $fileId")
 
             val file =
                 driveService.files().get(fileId).setFields("id, name, mimeType, size, modifiedTime")
                     .execute()
 
-            // POPRAWKA: Jawnie rzutujemy wartość size na Long lub używamy 0L jako domyślnej wartości
-            val fileSize: Long = if (file.size != null) file.size.toLong() else 0L
+            // Bezpieczne konwertowanie rozmiaru pliku
+            val fileSize = file.size.toLong()
 
             // Resetuj licznik ponownych prób po sukcesie
             retryCount = 0
@@ -196,6 +255,9 @@ class DriveApiClient(context: Context) {
             ?: throw IllegalStateException("Klient Drive API nie został zainicjalizowany")
 
         try {
+            // Sprawdź limity API przed wykonaniem żądania
+            checkApiLimits()
+
             Timber.d("Pobieranie pliku o ID: $fileId")
 
             val outputStream = java.io.ByteArrayOutputStream()
@@ -230,6 +292,9 @@ class DriveApiClient(context: Context) {
             ?: throw IllegalStateException("Klient Drive API nie został zainicjalizowany")
 
         try {
+            // Sprawdź limity API przed wykonaniem żądania
+            checkApiLimits()
+
             Timber.d("Listowanie plików w folderze: $folderId")
 
             // Zapytanie o pliki w określonym folderze
@@ -241,8 +306,8 @@ class DriveApiClient(context: Context) {
             retryCount = 0
 
             result.files.map { file ->
-                // POPRAWKA: Jawnie rzutujemy wartość size na Long lub używamy 0L jako domyślnej wartości
-                val fileSize: Long = if (file.size != null) file.size.toLong() else 0L
+                // Bezpieczne konwertowanie rozmiaru pliku
+                val fileSize = file.size.toLong()
 
                 FileInfo(
                     id = file.id,
@@ -312,7 +377,7 @@ class DriveApiClient(context: Context) {
             Timber.d("Czekam $delayMs ms przed ponowieniem próby (próba $retryCount z $MAX_RETRY_COUNT)")
 
             // Zaczekaj przed ponowieniem próby
-            kotlinx.coroutines.delay(delayMs)
+            delay(delayMs)
             return true
         }
 
@@ -362,9 +427,11 @@ class DriveApiClient(context: Context) {
         @JvmStatic
         fun getInstance(context: Context): DriveApiClient {
             return mockInstance ?: synchronized(this) {
-                mockInstance ?: DriveApiClient(context.applicationContext).also {
-                    // NIE przypisujemy mockInstance = it, ponieważ to spowodowałoby memory leak
-                    // Używamy mockInstance tylko do testów, nie w kodzie produkcyjnym
+                // Tworzymy nową instancję jeśli mockInstance jest null
+                if (mockInstance == null) {
+                    DriveApiClient(context.applicationContext)
+                } else {
+                    mockInstance!!
                 }
             }
         }

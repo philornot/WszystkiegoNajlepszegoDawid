@@ -1,6 +1,5 @@
 package com.philornot.siekiera.ui.screens.main
 
-// Importy do efektów trzęsienia
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -16,9 +15,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -33,7 +30,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.philornot.siekiera.MainActivity
-import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -46,6 +42,7 @@ import timber.log.Timber
  * @param targetDate Birthday date in milliseconds
  * @param currentTime Current time (default is system time)
  * @param onGiftClicked Callback for when the gift is clicked
+ * @param activity Reference to MainActivity for file checking
  */
 @Composable
 fun MainScreen(
@@ -53,7 +50,7 @@ fun MainScreen(
     targetDate: Long,
     currentTime: Long = System.currentTimeMillis(),
     onGiftClicked: () -> Unit,
-    activity: MainActivity? = null
+    activity: MainActivity? = null, // Dodany parametr dla wywołania checkFileNow()
 ) {
     // Calculate if time is up
     var isTimeUp by remember { mutableStateOf(currentTime >= targetDate) }
@@ -67,6 +64,9 @@ fun MainScreen(
             )
         )
     }
+
+    // Track time of last file check
+    var lastCheckTime by remember { mutableLongStateOf(0L) }
 
     // Track if we should show celebration screen after clicking gift
     var showCelebration by remember { mutableStateOf(false) }
@@ -88,16 +88,22 @@ fun MainScreen(
             // Sprawdzaj częściej gdy pozostało mało czasu
             if (activity != null && timeRemaining > 0) {
                 val remainingMinutes = timeRemaining / 60000
+                val currentTime = System.currentTimeMillis()
 
-                // Dynamiczne harmonogramy sprawdzania w zależności od pozostałego czasu
-                if ((remainingMinutes <= 60 && remainingMinutes % 15 == 0L) || // co 15 minut gdy < 60 min
-                    (remainingMinutes <= 30 && remainingMinutes % 10 == 0L) || // co 10 minut gdy < 30 min
-                    (remainingMinutes <= 10 && remainingMinutes % 5 == 0L) ||  // co 5 minut gdy < 10 min
-                    (remainingMinutes <= 5 && remainingMinutes % 1 == 0L)) {   // co minutę gdy < 5 min
+                // Określ minimalny interwał między sprawdzeniami
+                val checkInterval = when {
+                    remainingMinutes <= 1 -> 30_000      // 30 sekund w ostatniej minucie
+                    remainingMinutes <= 5 -> 60_000      // 1 minuta
+                    remainingMinutes <= 15 -> 120_000    // 2 minuty
+                    remainingMinutes <= 60 -> 300_000    // 5 minut
+                    else -> 900_000                      // 15 minut
+                }
 
-                    // Uruchom jednorazowe sprawdzenie pliku
-                    Timber.d("Uruchamiam dodatkowe sprawdzenie pliku, pozostało $remainingMinutes minut")
+                // Sprawdź tylko jeśli minął wymagany czas od ostatniego sprawdzenia
+                if (currentTime - lastCheckTime >= checkInterval) {
+                    Timber.d("Uruchamiam dodatkowe sprawdzenie pliku, pozostało $remainingMinutes minut (interwał: ${checkInterval / 1000}s)")
                     activity.checkFileNow()
+                    lastCheckTime = currentTime
                 }
             }
 
@@ -109,6 +115,7 @@ fun MainScreen(
                 if (activity != null) {
                     Timber.d("Uruchamiam ostatnie sprawdzenie pliku po upływie czasu")
                     activity.checkFileNow()
+                    lastCheckTime = currentTimeState
                 }
             }
         }
@@ -125,84 +132,78 @@ fun MainScreen(
         AppBackground(isTimeUp = isTimeUp)
 
         // Main content
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background.copy(alpha = 0.7f),
-        ) {
-            // Main content
-            Box(modifier = Modifier.fillMaxSize()) {
-                // Regular screen with waiting/gift
-                AnimatedVisibility(
-                    visible = !showCelebration, enter = fadeIn(), exit = fadeOut()
+        Box(modifier = Modifier.fillMaxSize()) {
+            // Regular screen with waiting/gift
+            AnimatedVisibility(
+                visible = !showCelebration, enter = fadeIn(), exit = fadeOut()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        // Header with title
-                        HeaderSection()
+                    // Header with title
+                    HeaderSection()
 
-                        // Curtain or gift section
-                        CurtainSection(
-                            isTimeUp = isTimeUp, onGiftClicked = { centerX, centerY ->
-                                // When gift is clicked, show confetti explosion and then transition to celebration
-                                if (isTimeUp) {
-                                    // Record click position for confetti
-                                    confettiCenterX = centerX
-                                    confettiCenterY = centerY
+                    // Curtain or gift section
+                    CurtainSection(
+                        isTimeUp = isTimeUp, onGiftClicked = { centerX, centerY ->
+                            // When gift is clicked, show confetti explosion and then transition to celebration
+                            if (isTimeUp) {
+                                // Record click position for confetti
+                                confettiCenterX = centerX
+                                confettiCenterY = centerY
 
-                                    // Show confetti explosion
-                                    showConfettiExplosion = true
+                                // Show confetti explosion
+                                showConfettiExplosion = true
 
-                                    // Delay showing celebration screen
-                                    MainScope().launch {
-                                        delay(1500) // Shorter delay to transition after confetti explosion
-                                        showCelebration = true
-                                        onGiftClicked()
-                                    }
+                                // Delay showing celebration screen
+                                kotlinx.coroutines.MainScope().launch {
+                                    delay(1500) // Shorter delay to transition after confetti explosion
+                                    showCelebration = true
+                                    onGiftClicked()
                                 }
-                            }, modifier = Modifier.weight(1f)
-                        )
+                            }
+                        }, modifier = Modifier.weight(1f)
+                    )
 
-                        // Countdown section
-                        CountdownSection(
-                            timeRemaining = timeRemaining,
-                            isTimeUp = isTimeUp,
-                            modifier = Modifier.padding(bottom = 24.dp)
-                        )
-                    }
-                }
-
-                // Background fireworks when time is up
-                if (isTimeUp && !showCelebration) {
-                    // Always show fireworks once time is up
-                    FireworksEffect()
-                }
-
-                // Confetti explosion when gift is clicked
-                AnimatedVisibility(
-                    visible = showConfettiExplosion && !showCelebration,
-                    enter = fadeIn(tween(100)),
-                    exit = fadeOut()
-                ) {
-                    ConfettiExplosionEffect(
-                        centerX = confettiCenterX, centerY = confettiCenterY
+                    // Countdown section
+                    CountdownSection(
+                        timeRemaining = timeRemaining,
+                        isTimeUp = isTimeUp,
+                        modifier = Modifier.padding(bottom = 24.dp)
                     )
                 }
+            }
 
-                // Celebration screen after clicking gift
-                AnimatedVisibility(
-                    visible = showCelebration, enter = fadeIn(), exit = fadeOut()
-                ) {
-                    BirthdayMessage(
-                        modifier = Modifier.fillMaxSize(), onBackClick = {
-                            // When returning to the main screen, reset the confetti explosion
-                            showConfettiExplosion = false
-                            showCelebration = false
-                        })
-                }
+            // Background fireworks when time is up
+            if (isTimeUp && !showCelebration) {
+                // Always show fireworks once time is up
+                FireworksEffect()
+            }
+
+            // Confetti explosion when gift is clicked
+            AnimatedVisibility(
+                visible = showConfettiExplosion && !showCelebration,
+                enter = fadeIn(tween(100)),
+                exit = fadeOut()
+            ) {
+                ConfettiExplosionEffect(
+                    centerX = confettiCenterX, centerY = confettiCenterY
+                )
+            }
+
+            // Celebration screen after clicking gift
+            AnimatedVisibility(
+                visible = showCelebration, enter = fadeIn(), exit = fadeOut()
+            ) {
+                BirthdayMessage(
+                    modifier = Modifier.fillMaxSize(), onBackClick = {
+                        // When returning to the main screen, reset the confetti explosion
+                        showConfettiExplosion = false
+                        showCelebration = false
+                    })
             }
         }
     }
@@ -273,7 +274,7 @@ fun BirthdayMessage(
                 )
 
                 // Przycisk powrotu ze strzałką
-                IconButton(
+                androidx.compose.material3.IconButton(
                     onClick = onBackClick, modifier = Modifier
                         .size(56.dp)
                         .background(
