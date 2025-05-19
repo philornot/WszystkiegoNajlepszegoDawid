@@ -21,19 +21,19 @@ fun AppBackground(
 ) {
     // Choose different gradients based on whether time is up
     val backgroundGradient = if (isTimeUp) {
-        // Celebration background - slightly brighter but still subtle
+        // Celebration background
         Brush.verticalGradient(
             colors = listOf(
                 MaterialTheme.colorScheme.background,
-                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.15f),
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f),
                 MaterialTheme.colorScheme.background
             )
         )
     } else {
-        // Waiting background - very subtle gradient
+        // Waiting background
         Brush.verticalGradient(
             colors = listOf(
-                MaterialTheme.colorScheme.secondary,
+                MaterialTheme.colorScheme.secondaryContainer,
                 MaterialTheme.colorScheme.background,
                 MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
             )
