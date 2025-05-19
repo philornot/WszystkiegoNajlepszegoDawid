@@ -32,8 +32,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.core.content.edit
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.philornot.siekiera.config.AppConfig
 import com.philornot.siekiera.notification.NotificationScheduler
@@ -45,6 +47,7 @@ import com.philornot.siekiera.utils.TimeUtils
 import com.philornot.siekiera.workers.FileCheckWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.io.File
@@ -71,6 +74,20 @@ class MainActivity : ComponentActivity() {
 
             // Sprawdź plik po zakończeniu pobierania
             checkFileAfterDownload()
+        }
+    }
+
+    // Receiver do monitorowania zakończenia zadania FileCheckWorker
+    private val workInfoReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            Timber.d("Otrzymano broadcast o zakończeniu zadania FileCheckWorker")
+
+            // Po zakończeniu zadania FileCheckWorker, sprawdź pliki
+            CoroutineScope(Dispatchers.Main).launch {
+                // Krótkie opóźnienie, żeby pliki miały czas zostać zapisane
+                delay(500)
+                checkDownloadedFiles()
+            }
         }
     }
 
@@ -169,7 +186,7 @@ class MainActivity : ComponentActivity() {
             scheduleRevealNotification()
         }
 
-        // Zaplanuj codzienne sprawdzanie aktualizacji pliku
+        // Zaplanuj codzienne sprawdzanie aktualizacji pliku na Google Drive
         if (appConfig.isDailyFileCheckEnabled()) {
             scheduleDailyFileCheck()
 
@@ -184,6 +201,9 @@ class MainActivity : ComponentActivity() {
 
         // Zarejestruj receiver dla pobierania
         registerDownloadReceiver()
+
+        // Zarejestruj receiver dla monitorowania zadań WorkManager
+        registerWorkInfoReceiver()
 
         setContent {
             AppTheme {
@@ -260,6 +280,33 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** Rejestruje odbiornik do monitorowania stanu zadań WorkManager */
+    @SuppressLint("UnspecifiedRegisterReceiverFlag")
+    private fun registerWorkInfoReceiver() {
+        val filter = IntentFilter("com.philornot.siekiera.WORK_COMPLETED")
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(
+                workInfoReceiver, filter, RECEIVER_NOT_EXPORTED
+            )
+        } else {
+            registerReceiver(workInfoReceiver, filter)
+        }
+
+        // Dodaj listener WorkManager, który wyśle broadcast po zakończeniu zadania
+        WorkManager.getInstance(this).getWorkInfosByTagLiveData("file_check")
+            .observe(this) { workInfoList ->
+                if (workInfoList != null && workInfoList.isNotEmpty()) {
+                    val workInfo = workInfoList[0]
+                    if (workInfo.state == WorkInfo.State.SUCCEEDED) {
+                        // Wyślij broadcast informujący o zakończeniu zadania
+                        val intent = Intent("com.philornot.siekiera.WORK_COMPLETED")
+                        sendBroadcast(intent)
+                    }
+                }
+            }
+    }
+
     /**
      * Wymusza natychmiastowe sprawdzenie aktualizacji pliku. Można wywołać z
      * innych komponentów, gdy zbliża się moment zakończenia odliczania.
@@ -269,30 +316,76 @@ class MainActivity : ComponentActivity() {
 
         // Wykorzystanie statycznej metody do tworzenia żądania
         val oneTimeWorkRequest = FileCheckWorker.createOneTimeCheckRequest()
+            .addTag("file_check") // Dodajemy tag, aby można było śledzić stan zadania
+            .build()
 
         WorkManager.getInstance(this).enqueue(oneTimeWorkRequest)
     }
 
+    /**
+     * Sprawdza, czy w folderze pobranych plików pojawił się nowy plik .daylio
+     * po zakończeniu pobierania przez FileCheckWorker
+     */
+    private fun checkDownloadedFiles() {
+        val directory = Environment.DIRECTORY_DOWNLOADS
+        val externalDir = getExternalFilesDir(directory)
+
+        Timber.d("Sprawdzanie pobranych plików w katalogu: ${externalDir?.absolutePath}")
+
+        externalDir?.listFiles()?.filter {
+            it.name.endsWith(".daylio")
+        }?.maxByOrNull {
+            it.lastModified()
+        }?.let { newestFile ->
+            Timber.d("Znaleziono najnowszy plik .daylio: ${newestFile.name} (${newestFile.length()} bajtów)")
+
+            // Aktualizuj nazwę pliku w stanie
+            downloadFileName.value = newestFile.name
+
+            // Otwórz plik używając zainstalowanej aplikacji
+            openDaylioFile(newestFile)
+
+            // Oznacz pobieranie jako zakończone
+            isDownloadInProgress.value = false
+        } ?: run {
+            Timber.w("Nie znaleziono żadnych plików .daylio w katalogu pobranych")
+        }
+    }
+
     /** Sprawdza stan pliku po zakończeniu pobierania */
     private fun checkFileAfterDownload() {
+        // Sprawdź wszystkie pliki .daylio w katalogu pobranych
         val directory = Environment.DIRECTORY_DOWNLOADS
-        val fileName = appConfig.getDaylioFileName()
-        val file = File(getExternalFilesDir(directory), fileName)
+        val externalDir = getExternalFilesDir(directory)
 
-        if (file.exists() && file.length() > 0) {
-            Timber.d("Plik został pobrany pomyślnie: ${file.absolutePath} (rozmiar: ${file.length()} bajtów)")
+        Timber.d("Sprawdzanie plików po zakończeniu pobierania w katalogu: ${externalDir?.absolutePath}")
+
+        // Znajdź najnowszy plik .daylio
+        externalDir?.listFiles()?.filter {
+            it.name.endsWith(".daylio")
+        }?.maxByOrNull {
+            it.lastModified()
+        }?.let { newestFile ->
+            Timber.d("Znaleziono najnowszy plik po pobraniu: ${newestFile.name} (${newestFile.length()} bajtów)")
+
             Toast.makeText(
                 this, "Plik został pobrany pomyślnie!", Toast.LENGTH_SHORT
             ).show()
 
+            // Aktualizuj nazwę pliku w stanie
+            downloadFileName.value = newestFile.name
+
             // Automatyczne otwarcie pliku po pobraniu
             CoroutineScope(Dispatchers.Main).launch {
                 // Dodajemy małe opóźnienie, aby upewnić się, że plik został poprawnie zapisany
-                kotlinx.coroutines.delay(500)
-                openDaylioFile(file)
+                delay(500)
+                openDaylioFile(newestFile)
             }
-        } else {
-            Timber.w("Plik nie został pobrany poprawnie lub ma rozmiar 0 bajtów")
+
+            // Oznacz pobieranie jako zakończone
+            isDownloadInProgress.value = false
+        } ?: run {
+            Timber.w("Nie znaleziono żadnych plików .daylio po pobraniu")
             Toast.makeText(
                 this, "Wystąpił problem z pobraniem pliku. Spróbuj ponownie.", Toast.LENGTH_LONG
             ).show()
@@ -313,7 +406,8 @@ class MainActivity : ComponentActivity() {
         Timber.d("Wykonuję natychmiastowe sprawdzenie pliku przy pierwszym uruchomieniu")
 
         // Wykorzystanie statycznej metody do tworzenia żądania
-        val oneTimeWorkRequest = FileCheckWorker.createOneTimeCheckRequest()
+        val oneTimeWorkRequest =
+            FileCheckWorker.createOneTimeCheckRequest().addTag("file_check").build()
 
         WorkManager.getInstance(this).enqueue(oneTimeWorkRequest)
     }
@@ -323,7 +417,7 @@ class MainActivity : ComponentActivity() {
         val intervalHours = appConfig.getFileCheckIntervalHours().toLong()
 
         // Wykorzystanie statycznej metody do tworzenia żądania
-        val fileCheckRequest = FileCheckWorker.createWorkRequest(intervalHours)
+        val fileCheckRequest = FileCheckWorker.createWorkRequest(intervalHours).addTag("file_check")
             .setInitialDelay(calculateInitialDelay(), TimeUnit.MILLISECONDS).build()
 
         Timber.d("Planuję codzienne sprawdzanie aktualizacji pliku co $intervalHours godzin")
@@ -364,44 +458,59 @@ class MainActivity : ComponentActivity() {
      * lokalny plik.
      */
     private fun downloadFile() {
-        val directory = Environment.DIRECTORY_DOWNLOADS
-        val fileName = appConfig.getDaylioFileName()
-        val file = File(getExternalFilesDir(directory), fileName)
+        // FileCheckWorker pobierze najnowszy plik z Google Drive bez względu na nazwę
+        // Tutaj zainicjujemy sprawdzenie, które pobierze najnowszy plik
 
-        // Zapamiętaj nazwę pliku do późniejszego wykorzystania
-        downloadFileName.value = fileName
+        Timber.d("Rozpoczynam pobieranie najnowszego pliku z Google Drive")
 
-        // Sprawdź czy to tryb testowy - jeśli tak, usuń lokalny plik, aby wymusić pobranie
+        // Oznacz jako rozpoczęcie pobierania
+        isDownloadInProgress.value = true
+
         if (appConfig.isTestMode()) {
-            Timber.d("Tryb testowy włączony - usuwam lokalny plik, aby wymusić pobranie")
-            if (file.exists()) {
-                file.delete()
-            }
-        } else {
-            // Normalne zachowanie - sprawdź czy plik już istnieje
-            if (file.exists() && file.length() > 10 * 1024) { // Minimalny poprawny rozmiar 10KB
-                Timber.d("Plik już istnieje lokalnie i ma odpowiedni rozmiar, otwieram: ${file.absolutePath} (rozmiar: ${file.length()} bajtów)")
+            // W trybie testowym usuwamy istniejące pliki, aby wymusić pobranie
+            val directory = Environment.DIRECTORY_DOWNLOADS
+            val filePattern = ".daylio"
 
-                // Oznacz pobieranie jako zakończone, ponieważ plik już istnieje
-                isDownloadInProgress.value = false
-
-                // Otwórz plik bezpośrednio
-                openDaylioFile(file)
-                return
+            // Usuń wszystkie pliki .daylio, aby mieć pewność, że pobierze najnowszy
+            getExternalFilesDir(directory)?.listFiles()?.forEach { file ->
+                if (file.name.endsWith(filePattern)) {
+                    Timber.d("Tryb testowy włączony - usuwam lokalny plik: ${file.name}")
+                    file.delete()
+                }
             }
         }
 
-        Timber.d("Plik nie istnieje lokalnie lub ma nieodpowiedni rozmiar, zlecam pobranie z Google Drive")
-
-        // Oznacz, że pobieranie jest w trakcie
-        isDownloadInProgress.value = true
-
-        // Wykorzystanie statycznej metody do tworzenia żądania
-        val oneTimeWorkRequest = FileCheckWorker.createOneTimeCheckRequest()
-        WorkManager.getInstance(this).enqueue(oneTimeWorkRequest)
+        // Uruchom FileCheckWorker do pobrania najnowszego pliku
+        checkFileNow()
 
         // Pokaż informację o trwającym pobieraniu
         Toast.makeText(this, getString(R.string.downloading_file), Toast.LENGTH_SHORT).show()
+
+        // Rejestrujemy observer na WorkManager, aby monitorować zakończenie pobierania
+        WorkManager.getInstance(this).getWorkInfosByTagLiveData("file_check")
+            .observe(this) { workInfoList ->
+                if (workInfoList != null && workInfoList.isNotEmpty()) {
+                    val workInfo = workInfoList[0]
+
+                    if (workInfo.state == WorkInfo.State.SUCCEEDED) {
+                        Timber.d("Zadanie FileCheckWorker zakończone sukcesem - sprawdzam pliki")
+
+                        // Sprawdź pliki po zakończeniu zadania
+                        CoroutineScope(Dispatchers.Main).launch {
+                            // Daj plikowi chwilę na zapisanie się
+                            delay(500)
+                            checkDownloadedFiles()
+                        }
+                    } else if (workInfo.state.isFinished) {
+                        Timber.d("Zadanie FileCheckWorker zakończone (stan: ${workInfo.state}) - sprawdzam pliki")
+
+                        CoroutineScope(Dispatchers.Main).launch {
+                            delay(500)
+                            checkDownloadedFiles()
+                        }
+                    }
+                }
+            }
     }
 
     /** Otwiera plik Daylio za pomocą zainstalowanej aplikacji. */
@@ -409,59 +518,115 @@ class MainActivity : ComponentActivity() {
         Timber.d("Otwieranie pliku Daylio: ${file.absolutePath}")
 
         try {
-            // Otwórz plik za pomocą zewnętrznej aplikacji (Daylio jeśli jest zainstalowana)
-            val intent = Intent(Intent.ACTION_VIEW)
-            val uri = androidx.core.content.FileProvider.getUriForFile(
+            val uri = FileProvider.getUriForFile(
                 this, "${applicationContext.packageName}.provider", file
             )
 
-            // Ustaw poprawny MIME type dla pliku Daylio
-            intent.setDataAndType(uri, "application/octet-stream")
-            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            Timber.d("Utworzono URI dla pliku: $uri")
 
-            // Dodaj dodatkowe flagi, aby wymusić wybór aplikacji
-            val chooser = Intent.createChooser(intent, getString(R.string.open_with)).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            // PRÓBA 1: Otwieranie z MIME type "application/octet-stream"
+            val intent1 = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/octet-stream")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                // WAŻNE: Celowo usuwamy FLAG_ACTIVITY_NEW_TASK, która może blokować dialog
             }
 
-            // Dodatkowe logowanie dla testów
+            // PRÓBA 2: Otwieranie z MIME type "*/*" (dla wszystkich aplikacji)
+            val intent2 = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "*/*")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+
+            // Wybierz odpowiedni intent - sprawdź czy są aplikacje dostępne
+            val useIntent =
+                if (packageManager.queryIntentActivities(intent1, PackageManager.MATCH_DEFAULT_ONLY)
+                        .isNotEmpty()
+                ) {
+                    Timber.d("Używam intencji z MIME type application/octet-stream")
+                    intent1
+                } else {
+                    Timber.d("Używam intencji z MIME type */*")
+                    intent2
+                }
+
+            // Utworzenie choosera z wymuszoną opcją wyboru aplikacji
+            val chooserIntent = Intent.createChooser(
+                useIntent, getString(R.string.open_with)
+            )
+
+            // Sprawdź czy są aplikacje dostępne dla tego typu pliku
             val activities =
-                packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+                packageManager.queryIntentActivities(useIntent, PackageManager.MATCH_DEFAULT_ONLY)
+
             if (activities.isEmpty()) {
-                Timber.w("Nie znaleziono aplikacji do otwarcia pliku .daylio!")
+                Timber.w("Nie znaleziono aplikacji do otwarcia pliku!")
                 Toast.makeText(
                     this,
-                    "Nie znaleziono aplikacji do otwarcia pliku .daylio!",
+                    "Nie znaleziono aplikacji do otwarcia pliku ${file.name}!",
                     Toast.LENGTH_LONG
                 ).show()
-            } else {
-                Timber.d("Znaleziono ${activities.size} aplikacji do otwarcia pliku:")
-                activities.forEach { resolveInfo ->
-                    Timber.d(" - ${resolveInfo.activityInfo.packageName} / ${resolveInfo.activityInfo.name}")
-                }
+                return
             }
 
-            // Uruchom activity z dodatkowym sprawdzeniem czy są aplikacje do obsługi intent
-            if (activities.isNotEmpty()) {
-                startActivity(chooser)
-            } else {
-                // Jeśli nie ma bezpośredniej aplikacji, spróbuj bardziej ogólny intent
-                val genericIntent = Intent(Intent.ACTION_VIEW)
-                genericIntent.setDataAndType(uri, "*/*")
-                genericIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-
-                val genericChooser =
-                    Intent.createChooser(genericIntent, "Otwórz za pomocą dowolnej aplikacji")
-                genericChooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-
-                startActivity(genericChooser)
+            Timber.d("Znaleziono ${activities.size} aplikacji do otwarcia pliku:")
+            activities.forEach { resolveInfo ->
+                Timber.d(" - ${resolveInfo.activityInfo.packageName} / ${resolveInfo.activityInfo.name}")
             }
+
+            // Uruchom wybór aplikacji
+            startActivity(chooserIntent)
 
         } catch (e: Exception) {
             Timber.e(e, "Błąd podczas otwierania pliku Daylio")
             Toast.makeText(
                 this, "Błąd podczas otwierania pliku: ${e.message}", Toast.LENGTH_LONG
+            ).show()
+
+            // Spróbuj alternatywną metodę otwarcia
+            tryAlternativeFileOpening(file)
+        }
+    }
+
+    /** Alternatywna metoda otwierania pliku, jeśli standardowa nie zadziała */
+    private fun tryAlternativeFileOpening(file: File) {
+        try {
+            Timber.d("Próbuję alternatywną metodę otwarcia pliku")
+
+            // Stwórz URI
+            val uri = FileProvider.getUriForFile(
+                this, "${applicationContext.packageName}.provider", file
+            )
+
+            // Użyj intencji z setDataAndType, bez ustawiania flag ACTIVITY_NEW_TASK
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "*/*")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+
+            // Używanie programistycznego podejścia do wyboru aktywności
+            val title = getString(R.string.open_with)
+            val chooser = Intent.createChooser(intent, title)
+
+            // Dodaj flagi bezpośrednio do choosera
+            chooser.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+            packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+                .forEach {
+                    Timber.d("Granting permission to ${it.activityInfo.packageName}")
+                    grantUriPermission(
+                        it.activityInfo.packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                }
+
+            startActivity(chooser)
+
+        } catch (e: Exception) {
+            Timber.e(e, "Alternatywna metoda otwarcia pliku również zawiodła")
+            Toast.makeText(
+                this,
+                "Błąd podczas próby otwarcia pliku. Spróbuj otworzyć plik manualnie z katalogu: ${file.parentFile?.absolutePath}",
+                Toast.LENGTH_LONG
             ).show()
         }
     }
@@ -557,6 +722,13 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         Timber.d("MainActivity onResume")
 
+        // Po wznowieniu aktywności, sprawdź pliki w folderze Download
+        // Może użytkownik uruchomił inną aplikację do pobrania pliku
+        if (isDownloadInProgress.value) {
+            Timber.d("Sprawdzam czy pobieranie zostało zakończone podczas nieaktywności aplikacji")
+            checkDownloadedFiles()
+        }
+
         // Sprawdź ponownie uprawnienia po powrocie do aplikacji
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
@@ -568,23 +740,13 @@ class MainActivity : ComponentActivity() {
                 scheduleRevealNotification()
             }
         }
-
-        // Jeśli pobieranie było w trakcie, sprawdź plik
-        if (isDownloadInProgress.value && downloadFileName.value.isNotEmpty()) {
-            val file =
-                File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), downloadFileName.value)
-            if (file.exists() && file.length() > 0) {
-                isDownloadInProgress.value = false
-                Timber.d("Plik został pobrany podczas gdy aplikacja była w tle, otwieram go")
-                openDaylioFile(file)
-            }
-        }
     }
 
     override fun onDestroy() {
         super.onDestroy()
         try {
             unregisterReceiver(onDownloadComplete)
+            unregisterReceiver(workInfoReceiver)
             Timber.d("Wyrejestrowano BroadcastReceiver w onDestroy")
 
             // Wyczyść instancję AppConfig przy zamykaniu aktywności

@@ -1,6 +1,7 @@
 package com.philornot.siekiera.workers
 
 import android.content.Context
+import android.content.Intent
 import androidx.work.BackoffPolicy
 import androidx.work.CoroutineWorker
 import androidx.work.OneTimeWorkRequestBuilder
@@ -17,7 +18,6 @@ import java.io.IOException
 import java.lang.ref.WeakReference
 import java.util.Date
 import java.util.concurrent.TimeUnit
-import kotlin.math.abs
 
 /**
  * Worker, który codziennie o 23:59 sprawdza, czy w folderze na Google
@@ -54,6 +54,10 @@ class FileCheckWorker(
             withContext(Dispatchers.IO) {
                 checkForFileUpdate()
             }
+
+            // Powiadom aktywność o zakończeniu pracy
+            sendCompletionBroadcast()
+
             Result.success()
         } catch (e: IOException) {
             // Błędy sieciowe - próbujemy ponownie z backoff policy
@@ -73,6 +77,17 @@ class FileCheckWorker(
                 Result.failure()
             }
         }
+    }
+
+    /**
+     * Wysyła broadcast o zakończeniu pracy workera. Pozwala na powiadomienie
+     * aktywności, że pobranie pliku zostało zakończone.
+     */
+    private fun sendCompletionBroadcast() {
+        val context = getContext() ?: return
+        val intent = Intent("com.philornot.siekiera.WORK_COMPLETED")
+        context.sendBroadcast(intent)
+        Timber.d("Wysłano broadcast o zakończeniu pracy workera")
     }
 
     private suspend fun checkForFileUpdate() {
@@ -103,7 +118,7 @@ class FileCheckWorker(
             throw IOException("Nie udało się zainicjalizować klienta Drive API")
         }
 
-        // Wyszukaj pliki .daylio w folderze
+        // Wyszukaj wszystkie pliki .daylio w folderze (bez filtrowania po nazwie)
         val files = driveClient.listFilesInFolder(folderId).filter { it.name.endsWith(".daylio") }
 
         if (files.isEmpty()) {
@@ -111,7 +126,7 @@ class FileCheckWorker(
             return
         }
 
-        // Znajdź najnowszy plik
+        // Znajdź najnowszy plik - sortuj według daty modyfikacji w kolejności malejącej
         val newestFile = files.maxByOrNull { it.modifiedTime.time } ?: return
 
         Timber.d(
@@ -122,8 +137,10 @@ class FileCheckWorker(
             }, rozmiar: ${newestFile.size} bajtów"
         )
 
-        // Sprawdź lokalny plik
-        val localFile = getLocalFile(context, fileName)
+        // Sprawdź lokalny plik - użyj nazwy znalezionego pliku zamiast z konfiguracji
+        // Jest to zmiana, która pozwala na pobranie najnowszego pliku, niezależnie od jego nazwy
+        val localFileName = newestFile.name
+        val localFile = getLocalFile(context, localFileName)
 
         if (!localFile.exists()) {
             // Plik lokalny nie istnieje, pobierz go
@@ -142,16 +159,17 @@ class FileCheckWorker(
             } (${newestFile.modifiedTime.time})"
         )
 
-        // ZMIENIAMY: Wymuś aktualizację tylko jeśli plik jest bardzo mały lub jeśli zdalny plik jest znacznie większy
-        val localFileSize = localFile.length()
-        val forceUpdate =
-            (localFileSize == 0L) || (newestFile.size > MIN_EXPECTED_DAYLIO_SIZE && localFileSize < MIN_EXPECTED_DAYLIO_SIZE) || (newestFile.size > (localFileSize * 1.5))
+        // Usuń wymuszenie aktualizacji na podstawie rozmiaru pliku
+        // Teraz wymuszamy aktualizację tylko jeśli plik jest całkowicie pusty (0 bajtów)
+        val forceUpdate = (localFile.length() == 0L)
 
         if (forceUpdate) {
             Timber.d("Wymuszanie aktualizacji - lokalny plik ma rozmiar: ${localFile.length()} bajtów, zdalny: ${newestFile.size} bajtów")
         }
 
-        val isRemoteNewer = forceUpdate || isRemoteFileNewer(localFile, newestFile.modifiedTime)
+        // Porównaj rzeczywiste daty modyfikacji - nie uznawaj pliku za nowszy tylko dlatego, że daty są zbliżone
+        // Plik jest nowszy tylko jeśli data modyfikacji jest WIĘKSZA, nie "bliska"
+        val isRemoteNewer = forceUpdate || newestFile.modifiedTime.time > localFile.lastModified()
         Timber.d("Czy zdalny nowszy: $isRemoteNewer")
 
         if (isRemoteNewer) {
@@ -217,19 +235,9 @@ class FileCheckWorker(
     private fun isRemoteFileNewer(localFile: File, remoteModifiedTime: Date): Boolean {
         val localModified = localFile.lastModified()
 
-        // Porównaj czasy modyfikacji z uwzględnieniem marginesu błędu (1 sekunda)
-        // Dodajemy margines, aby uniknąć problemów z dokładnością porównania czasów
-        val isNewer = remoteModifiedTime.time > localModified + 1000
-
-        // W przypadku kiedy daty są bardzo zbliżone, zawsze przyjmujemy, że zdalny plik jest nowszy
-        val closeInTime =
-            abs(remoteModifiedTime.time - localModified) < 5000 // 5 sekund różnicy
-        if (closeInTime) {
-            Timber.d("Daty są bardzo zbliżone (różnica < 5s), przyjmuję że zdalny plik jest nowszy")
-            return true
-        }
-
-        return isNewer
+        // Porównaj daty modyfikacji - plik zdalny jest nowszy TYLKO jeśli ma datę modyfikacji
+        // późniejszą niż plik lokalny
+        return remoteModifiedTime.time > localModified
     }
 
     private suspend fun downloadAndSaveFile(
@@ -304,9 +312,6 @@ class FileCheckWorker(
         // Maksymalna liczba ponownych prób w przypadku błędu
         private const val MAX_RETRY_ATTEMPTS = 3
 
-        // Minimalny oczekiwany rozmiar pliku Daylio (zwykle 10KB+)
-        private const val MIN_EXPECTED_DAYLIO_SIZE = 10 * 1024L // 10KB
-
         /**
          * Tworzy request workera z odpowiednią polityką backoff. Używaj tej metody
          * w MainActivity zamiast bezpośrednio tworzyć request.
@@ -327,6 +332,6 @@ class FileCheckWorker(
             OneTimeWorkRequestBuilder<FileCheckWorker>().setConstraints(
                 androidx.work.Constraints.Builder()
                     .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED).build()
-            ).build()
+            )
     }
 }

@@ -8,8 +8,8 @@
     <string name="no">Nie</string>
 
     <!-- Pobieranie -->
-    <string name="downloading_file">Pobieranie prezentu</string>
-    <string name="open_with">Otwórz używając</string>
+    <string name="downloading_file">Pobieranie najnowszego prezentu</string>
+    <string name="open_with">Otwórz za pomocą</string>
 
     <!-- Powiadomienia -->
     <string name="notification_channel_name">Powiadomienia urodzinowe</string>
