@@ -35,7 +35,7 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 
 /**
- * Redesigned main screen with a clean, lavender theme and minimal
+ * Main screen with a clean, lavender theme and minimal
  * animations.
  *
  * @param modifier Modifier for the container
@@ -50,7 +50,7 @@ fun MainScreen(
     targetDate: Long,
     currentTime: Long = System.currentTimeMillis(),
     onGiftClicked: () -> Unit,
-    activity: MainActivity? = null, // Dodany parametr dla wywołania checkFileNow()
+    activity: MainActivity? = null,
 ) {
     // Calculate if time is up
     var isTimeUp by remember { mutableStateOf(currentTime >= targetDate) }
@@ -77,6 +77,22 @@ fun MainScreen(
     // Remember the click position for confetti explosion
     var confettiCenterX by remember { mutableFloatStateOf(0.5f) }
     var confettiCenterY by remember { mutableFloatStateOf(0.5f) }
+
+    // Reagowanie na zmianę stanu isTimeUp - automatyczne fajerwerki po zakończeniu odliczania
+    LaunchedEffect(isTimeUp) {
+        if (isTimeUp) {
+            Timber.d("Czas upłynął! Uruchamiam automatyczne fajerwerki!")
+            // Automatycznie uruchamiamy fajerwerki gdy czas się kończy
+            showConfettiExplosion = true
+
+            // Po 5 sekundach automatycznie ukrywamy efekt konfetti
+            // aby nie kolidował z innymi efektami
+            kotlinx.coroutines.MainScope().launch {
+                delay(5000)
+                showConfettiExplosion = false
+            }
+        }
+    }
 
     // Update time every second and check for file updates when time is close to expiry
     LaunchedEffect(Unit) {
@@ -177,13 +193,18 @@ fun MainScreen(
                 }
             }
 
-            // Background fireworks when time is up
-            if (isTimeUp && !showCelebration) {
-                // Always show fireworks once time is up
-                FireworksEffect()
+            // Wyświetlaj fajerwerki natychmiast, gdy czas się skończy
+            AnimatedVisibility(
+                visible = isTimeUp && !showCelebration,
+                enter = fadeIn(tween(300)),
+                exit = fadeOut()
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    ExplosiveFireworksDisplay()
+                }
             }
 
-            // Confetti explosion when gift is clicked
+            // Confetti explosion when gift is clicked or when time is up
             AnimatedVisibility(
                 visible = showConfettiExplosion && !showCelebration,
                 enter = fadeIn(tween(100)),
