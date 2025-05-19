@@ -15,6 +15,7 @@ import timber.log.Timber
 import java.io.File
 import java.io.IOException
 import java.lang.ref.WeakReference
+import java.util.Date
 import java.util.concurrent.TimeUnit
 
 /**
@@ -130,8 +131,23 @@ class FileCheckWorker(
             return
         }
 
-        // Sprawdź, czy zdalny plik jest nowszy
-        if (isRemoteFileNewer(localFile, newestFile.modifiedTime)) {
+        // Sprawdź, czy zdalny plik jest nowszy - dodane dokładniejsze logowanie
+        val localModified = Date(localFile.lastModified())
+        Timber.d(
+            "Porównanie dat - Lokalny: ${TimeUtils.formatDate(localModified)} (${localFile.lastModified()}), " +
+                    "Zdalny: ${TimeUtils.formatDate(newestFile.modifiedTime)} (${newestFile.modifiedTime.time})"
+        )
+
+        // Wymuś aktualizację pliku jeśli lokalny plik ma rozmiar 0 lub mniej niż 1KB
+        val forceUpdate = localFile.length() < 1024
+        if (forceUpdate) {
+            Timber.d("Wymuszanie aktualizacji - lokalny plik ma rozmiar: ${localFile.length()} bajtów")
+        }
+
+        val isRemoteNewer = forceUpdate || isRemoteFileNewer(localFile, newestFile.modifiedTime)
+        Timber.d("Czy zdalny nowszy: $isRemoteNewer")
+
+        if (isRemoteNewer) {
             // Utwórz kopię zapasową lokalnego pliku przed usunięciem
             createBackup(localFile)
 
@@ -139,7 +155,7 @@ class FileCheckWorker(
             Timber.d(
                 "Zdalny plik jest nowszy (lokalny: ${
                     TimeUtils.formatDate(
-                        java.util.Date(
+                        Date(
                             localFile.lastModified()
                         )
                     )
@@ -191,9 +207,21 @@ class FileCheckWorker(
         return file
     }
 
-    private fun isRemoteFileNewer(localFile: File, remoteModifiedTime: java.util.Date): Boolean {
+    private fun isRemoteFileNewer(localFile: File, remoteModifiedTime: Date): Boolean {
         val localModified = localFile.lastModified()
-        return remoteModifiedTime.time > localModified
+
+        // Porównaj czasy modyfikacji z uwzględnieniem marginesu błędu (1 sekunda)
+        // Dodajemy margines, aby uniknąć problemów z dokładnością porównania czasów
+        val isNewer = remoteModifiedTime.time > localModified + 1000
+
+        // Dodane: W przypadku kiedy daty są bardzo zbliżone, zawsze przyjmujemy, że zdalny plik jest nowszy
+        val closeInTime = Math.abs(remoteModifiedTime.time - localModified) < 5000 // 5 sekund różnicy
+        if (closeInTime) {
+            Timber.d("Daty są bardzo zbliżone (różnica < 5s), przyjmuję że zdalny plik jest nowszy")
+            return true
+        }
+
+        return isNewer
     }
 
     private suspend fun downloadAndSaveFile(
@@ -218,6 +246,16 @@ class FileCheckWorker(
                 if (tempFile.exists() && tempFile.length() > 0) {
                     if (tempFile.renameTo(localFile)) {
                         Timber.d("Plik pobrany i zapisany pomyślnie: ${localFile.absolutePath}")
+
+                        // Dodane: Pobierz informacje o pliku, aby ustawić prawidłową datę modyfikacji
+                        try {
+                            val fileInfo = client.getFileInfo(fileId)
+                            // Ustaw datę modyfikacji lokalnego pliku na taką samą jak zdalnego
+                            localFile.setLastModified(fileInfo.modifiedTime.time)
+                            Timber.d("Ustawiono datę modyfikacji lokalnego pliku: ${TimeUtils.formatDate(fileInfo.modifiedTime)}")
+                        } catch (e: Exception) {
+                            Timber.e(e, "Nie udało się ustawić daty modyfikacji")
+                        }
                     } else {
                         throw IOException("Nie udało się zmienić nazwy pliku tymczasowego na docelową")
                     }
@@ -270,8 +308,8 @@ class FileCheckWorker(
          */
         fun createOneTimeCheckRequest() =
             OneTimeWorkRequestBuilder<FileCheckWorker>().setConstraints(
-                    androidx.work.Constraints.Builder()
-                        .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED).build()
-                ).build()
+                androidx.work.Constraints.Builder()
+                    .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED).build()
+            ).build()
     }
 }

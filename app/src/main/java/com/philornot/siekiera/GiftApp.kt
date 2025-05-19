@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.work.Configuration
 import com.philornot.siekiera.config.AppConfig
 import com.philornot.siekiera.notification.NotificationScheduler
+import com.philornot.siekiera.utils.TimeUtils
 import timber.log.Timber
 
 class GiftApp : Application(), Configuration.Provider {
@@ -16,6 +17,9 @@ class GiftApp : Application(), Configuration.Provider {
 
         // Inicjalizacja AppConfig PRZED jakimkolwiek użyciem
         appConfig = AppConfig.getInstance(applicationContext)
+
+        // Inicjalizacja TimeUtils
+        TimeUtils.initialize(applicationContext)
 
         // Inicjalizacja Timber do logowania
         if (BuildConfig.DEBUG) {

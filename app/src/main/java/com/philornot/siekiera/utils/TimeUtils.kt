@@ -1,5 +1,6 @@
 package com.philornot.siekiera.utils
 
+import android.content.Context
 import com.philornot.siekiera.config.AppConfig
 import timber.log.Timber
 import java.text.SimpleDateFormat
@@ -16,6 +17,20 @@ import java.util.concurrent.TimeUnit
 object TimeUtils {
     // Strefa czasowa Warszawy
     private val WARSAW_TIMEZONE = TimeZone.getTimeZone("Europe/Warsaw")
+
+    // Przechowuje kontekst aplikacji - inicjalizowany przy pierwszym użyciu
+    private var appContext: Context? = null
+
+    /**
+     * Ustawia kontekst aplikacji, który będzie używany przez TimeUtils.
+     * Powinno być wywołane jeden raz podczas inicjalizacji aplikacji.
+     */
+    fun initialize(context: Context) {
+        if (appContext == null) {
+            appContext = context.applicationContext
+            Timber.d("TimeUtils: zainicjalizowano z kontekstem aplikacji")
+        }
+    }
 
     /**
      * Tworzy obiekt Calendar z określoną datą i czasem w strefie czasowej
@@ -56,17 +71,19 @@ object TimeUtils {
      * kontekstu aplikacji przez AppConfig. Ta metoda istnieje tylko dla
      * kompatybilności z istniejącym kodem.
      *
-     * @throws IllegalStateException jeśli INSTANCE nie zostało jeszcze
-     *    utworzone
+     * @throws IllegalStateException jeśli nie można uzyskać instancji
+     *    AppConfig
      */
     @Deprecated(
         "Użyj wersji z jawnie przekazanym AppConfig", ReplaceWith("getRevealDateMillis(appConfig)")
     )
     fun getRevealDateMillis(): Long {
-        // Pobierz instancję z singletona - jeśli nie istnieje, rzuć wyjątek
-        val appConfig =
-            AppConfig.INSTANCE ?: throw IllegalStateException("AppConfig nie zostało zainicjowane")
+        // Wykorzystanie zapisanego kontekstu aplikacji
+        val context = appContext ?: throw IllegalStateException(
+            "TimeUtils.initialize() nie zostało wywołane. Użyj wersji z jawnie przekazanym AppConfig."
+        )
 
+        val appConfig = AppConfig.getInstance(context)
         Timber.d("Używanie przestarzałej metody getRevealDateMillis()")
         return appConfig.getBirthdayTimeMillis()
     }

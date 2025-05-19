@@ -65,6 +65,9 @@ class MainActivity : ComponentActivity() {
         override fun onReceive(context: Context, intent: Intent) {
             val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
             Timber.d("Otrzymano broadcast o zakończeniu pobierania: id=$id")
+
+            // Sprawdź plik po zakończeniu pobierania
+            checkFileAfterDownload()
         }
     }
 
@@ -77,7 +80,7 @@ class MainActivity : ComponentActivity() {
     // Launcher dla żądania uprawnień do dokładnych alarmów
     private val alarmPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
-    ) { result ->
+    ) { _ ->
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
             val hasPermission = alarmManager.canScheduleExactAlarms()
@@ -133,6 +136,9 @@ class MainActivity : ComponentActivity() {
         // Inicjalizacja AppConfig
         appConfig = AppConfig.getInstance(applicationContext)
 
+        // Dodane: Upewnij się, że TimeUtils jest zainicjalizowane
+        TimeUtils.initialize(applicationContext)
+
         // Inicjalizacja preferencji
         prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
         val isFirstRun = prefs.getBoolean("is_first_run", true)
@@ -140,6 +146,11 @@ class MainActivity : ComponentActivity() {
         if (appConfig.isVerboseLoggingEnabled()) {
             Timber.d("Konfiguracja załadowana: data urodzin ${TimeUtils.formatDate(appConfig.getBirthdayDate().time)}")
             Timber.d("Pierwsze uruchomienie aplikacji: $isFirstRun")
+
+            // Dodane: Wyświetl informację o trybie testowym
+            if (appConfig.isTestMode()) {
+                Timber.d("UWAGA: Aplikacja działa w trybie testowym!")
+            }
         }
 
         // Sprawdź uprawnienia do alarmów i powiadomień
@@ -255,6 +266,28 @@ class MainActivity : ComponentActivity() {
         WorkManager.getInstance(this).enqueue(oneTimeWorkRequest)
     }
 
+    /** Sprawdza stan pliku po zakończeniu pobierania */
+    private fun checkFileAfterDownload() {
+        val directory = Environment.DIRECTORY_DOWNLOADS
+        val fileName = appConfig.getDaylioFileName()
+        val file = File(getExternalFilesDir(directory), fileName)
+
+        if (file.exists() && file.length() > 0) {
+            Timber.d("Plik został pobrany pomyślnie: ${file.absolutePath} (rozmiar: ${file.length()} bajtów)")
+            Toast.makeText(
+                this, "Plik został pobrany pomyślnie!", Toast.LENGTH_SHORT
+            ).show()
+
+            // Możemy automatycznie otworzyć plik
+            openDaylioFile(file)
+        } else {
+            Timber.w("Plik nie został pobrany poprawnie lub ma rozmiar 0 bajtów")
+            Toast.makeText(
+                this, "Wystąpił problem z pobraniem pliku. Spróbuj ponownie.", Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
     /** Planuje powiadomienie na dzień urodzin. */
     private fun scheduleRevealNotification() {
         Timber.d("Zlecam zaplanowanie powiadomienia urodzinowego")
@@ -285,7 +318,7 @@ class MainActivity : ComponentActivity() {
         Timber.d("Planuję codzienne sprawdzanie aktualizacji pliku co $intervalHours godzin")
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
             appConfig.getDailyFileCheckWorkName(),
-            ExistingPeriodicWorkPolicy.REPLACE,
+            ExistingPeriodicWorkPolicy.UPDATE, // Zmienione z REPLACE na UPDATE
             fileCheckRequest
         )
     }
@@ -324,13 +357,22 @@ class MainActivity : ComponentActivity() {
         val fileName = appConfig.getDaylioFileName()
         val file = File(getExternalFilesDir(directory), fileName)
 
-        if (file.exists()) {
-            Timber.d("Plik już istnieje lokalnie, otwieram: ${file.absolutePath}")
-            openDaylioFile(file)
-            return
+        // Sprawdź czy to tryb testowy - jeśli tak, usuń lokalny plik, aby wymusić pobranie
+        if (appConfig.isTestMode()) {
+            Timber.d("Tryb testowy włączony - usuwam lokalny plik, aby wymusić pobranie")
+            if (file.exists()) {
+                file.delete()
+            }
+        } else {
+            // Normalne zachowanie - sprawdź czy plik już istnieje
+            if (file.exists() && file.length() > 0) {
+                Timber.d("Plik już istnieje lokalnie, otwieram: ${file.absolutePath} (rozmiar: ${file.length()} bajtów)")
+                openDaylioFile(file)
+                return
+            }
         }
 
-        Timber.d("Plik nie istnieje lokalnie, zlecam pobranie z Google Drive")
+        Timber.d("Plik nie istnieje lokalnie lub ma rozmiar 0, zlecam pobranie z Google Drive")
 
         // Wykorzystanie statycznej metody do tworzenia żądania
         val oneTimeWorkRequest = FileCheckWorker.createOneTimeCheckRequest()
@@ -477,6 +519,9 @@ class MainActivity : ComponentActivity() {
         try {
             unregisterReceiver(onDownloadComplete)
             Timber.d("Wyrejestrowano BroadcastReceiver w onDestroy")
+
+            // Wyczyść instancję AppConfig przy zamykaniu aktywności
+            AppConfig.clearInstance()
         } catch (e: Exception) {
             Timber.e(e, "Błąd podczas wyrejestrowywania receivera")
         }

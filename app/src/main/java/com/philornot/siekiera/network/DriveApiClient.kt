@@ -26,6 +26,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Klient API do komunikacji z Google Drive używający konta usługi (Service
@@ -47,11 +49,6 @@ class DriveApiClient(context: Context) {
 
     // Limity ponownych prób
     private var retryCount = 0
-
-    // Monitorowanie limitów API
-    private var requestCount = 0
-    private val maxRequestsPerMinute = 20  // Ustalony bezpieczny limit
-    private var lastMinuteReset = System.currentTimeMillis()
 
     // Funkcja pomocnicza do uzyskania kontekstu
     private fun getContext(): Context? = contextRef.get()
@@ -119,17 +116,11 @@ class DriveApiClient(context: Context) {
 
             // Utwórz usługę Drive API
             driveService = Drive.Builder(
-                httpTransport,
-                jsonFactory,
-                createRequestInitializerWithRetry(requestInitializer)
+                httpTransport, jsonFactory, createRequestInitializerWithRetry(requestInitializer)
             ).setApplicationName(APPLICATION_NAME).build()
 
             // Zapamiętaj czas inicjalizacji
             lastInitTime = System.currentTimeMillis()
-
-            // Zresetuj liczniki zapytań API
-            requestCount = 0
-            lastMinuteReset = System.currentTimeMillis()
 
             true
         } catch (e: Exception) {
@@ -152,11 +143,12 @@ class DriveApiClient(context: Context) {
 
             // Ustaw obsługę ponownych prób
             request.numberOfRetries = 3
-            request.ioExceptionHandler = HttpIOExceptionHandler { req: HttpRequest, supportsRetry: Boolean ->
-                Timber.w("IOException w żądaniu Drive API, supportsRetry=%b", supportsRetry)
-                // Zawsze próbuj ponownie dla błędów sieciowych
-                supportsRetry
-            }
+            request.ioExceptionHandler =
+                HttpIOExceptionHandler { _: HttpRequest, supportsRetry: Boolean ->
+                    Timber.w("IOException w żądaniu Drive API, supportsRetry=%b", supportsRetry)
+                    // Zawsze próbuj ponownie dla błędów sieciowych
+                    supportsRetry
+                }
 
             // Dodaj dodatkowe nagłówki, jeśli potrzeba
             request.headers.set("Accept", "application/json")
@@ -164,35 +156,36 @@ class DriveApiClient(context: Context) {
     }
 
     /**
-     * Sprawdza limity API i opóźnia żądanie jeśli to konieczne.
-     * Zapobiega przekroczeniu limitów API Google Drive.
+     * Sprawdza limity API i opóźnia żądanie jeśli to konieczne. Zapobiega
+     * przekroczeniu limitów API Google Drive.
      */
     private suspend fun checkApiLimits() {
+        // Używamy statycznych liczników aby zapewnić współdzielenie między instancjami
         val currentTime = System.currentTimeMillis()
 
         // Reset licznika co minutę
-        if (currentTime - lastMinuteReset > 60_000) {
-            Timber.d("Resetuję licznik żądań API (było: $requestCount)")
-            requestCount = 0
-            lastMinuteReset = currentTime
+        if (currentTime - lastMinuteReset.get() > 60_000) {
+            Timber.d("Resetuję licznik żądań API (było: ${requestCount.get()})")
+            requestCount.set(0)
+            lastMinuteReset.set(currentTime)
             return
         }
 
         // Sprawdź czy nie przekraczamy limitu
-        if (requestCount >= maxRequestsPerMinute) {
+        if (requestCount.get() >= MAX_REQUESTS_PER_MINUTE) {
             // Poczekaj do następnej minuty
-            val waitTime = 60_000 - (currentTime - lastMinuteReset)
+            val waitTime = 60_000 - (currentTime - lastMinuteReset.get())
             if (waitTime > 0) {
-                Timber.w("Osiągnięto limit API ($requestCount) - opóźnienie kolejnego żądania o $waitTime ms")
+                Timber.w("Osiągnięto limit API (${requestCount.get()}) - opóźnienie kolejnego żądania o $waitTime ms")
                 delay(waitTime)
-                requestCount = 0
-                lastMinuteReset = System.currentTimeMillis()
+                requestCount.set(0)
+                lastMinuteReset.set(System.currentTimeMillis())
             }
         }
 
         // Zwiększ licznik zapytań
-        requestCount++
-        Timber.d("API request count: $requestCount")
+        val newCount = requestCount.incrementAndGet()
+        Timber.d("API request count: $newCount")
     }
 
     /**
@@ -417,6 +410,15 @@ class DriveApiClient(context: Context) {
         @JvmStatic
         internal var mockInstance: DriveApiClient? = null
 
+        // Statyczne liczniki do monitorowania limitów API - użycie AtomicInteger dla bezpieczeństwa wątków
+        @Volatile
+        private var requestCount = AtomicInteger(0)
+
+        @Volatile
+        private var lastMinuteReset = AtomicLong(System.currentTimeMillis())
+
+        private const val MAX_REQUESTS_PER_MINUTE = 20  // Ustalony bezpieczny limit
+
         /**
          * Pobiera instancję klienta Drive API. W testach zwraca zaślepkę, w
          * produkcji tworzy nową instancję.
@@ -428,11 +430,7 @@ class DriveApiClient(context: Context) {
         fun getInstance(context: Context): DriveApiClient {
             return mockInstance ?: synchronized(this) {
                 // Tworzymy nową instancję jeśli mockInstance jest null
-                if (mockInstance == null) {
-                    DriveApiClient(context.applicationContext)
-                } else {
-                    mockInstance!!
-                }
+                mockInstance ?: DriveApiClient(context.applicationContext)
             }
         }
 
