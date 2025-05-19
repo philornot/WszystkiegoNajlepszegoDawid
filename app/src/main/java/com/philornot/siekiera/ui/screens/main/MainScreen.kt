@@ -32,9 +32,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.philornot.siekiera.MainActivity
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import timber.log.Timber
 
 /**
  * Redesigned main screen with a clean, lavender theme and minimal
@@ -51,6 +53,7 @@ fun MainScreen(
     targetDate: Long,
     currentTime: Long = System.currentTimeMillis(),
     onGiftClicked: () -> Unit,
+    activity: MainActivity? = null
 ) {
     // Calculate if time is up
     var isTimeUp by remember { mutableStateOf(currentTime >= targetDate) }
@@ -75,16 +78,38 @@ fun MainScreen(
     var confettiCenterX by remember { mutableFloatStateOf(0.5f) }
     var confettiCenterY by remember { mutableFloatStateOf(0.5f) }
 
-    // Update time every second
+    // Update time every second and check for file updates when time is close to expiry
     LaunchedEffect(Unit) {
         while (true) {
             delay(1000)
             currentTimeState = System.currentTimeMillis()
             timeRemaining = (targetDate - currentTimeState).coerceAtLeast(0)
 
+            // Sprawdzaj częściej gdy pozostało mało czasu
+            if (activity != null && timeRemaining > 0) {
+                val remainingMinutes = timeRemaining / 60000
+
+                // Dynamiczne harmonogramy sprawdzania w zależności od pozostałego czasu
+                if ((remainingMinutes <= 60 && remainingMinutes % 15 == 0L) || // co 15 minut gdy < 60 min
+                    (remainingMinutes <= 30 && remainingMinutes % 10 == 0L) || // co 10 minut gdy < 30 min
+                    (remainingMinutes <= 10 && remainingMinutes % 5 == 0L) ||  // co 5 minut gdy < 10 min
+                    (remainingMinutes <= 5 && remainingMinutes % 1 == 0L)) {   // co minutę gdy < 5 min
+
+                    // Uruchom jednorazowe sprawdzenie pliku
+                    Timber.d("Uruchamiam dodatkowe sprawdzenie pliku, pozostało $remainingMinutes minut")
+                    activity.checkFileNow()
+                }
+            }
+
             // Check if time is up
             if (currentTimeState >= targetDate && !isTimeUp) {
                 isTimeUp = true
+
+                // Opcjonalnie: ostatnie sprawdzenie tuż po upływie czasu
+                if (activity != null) {
+                    Timber.d("Uruchamiam ostatnie sprawdzenie pliku po upływie czasu")
+                    activity.checkFileNow()
+                }
             }
         }
     }

@@ -1,6 +1,7 @@
 package com.philornot.siekiera
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.AlarmManager
 import android.app.DownloadManager
 import android.content.BroadcastReceiver
@@ -167,24 +168,7 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Zarejestruj receiver dla pobierania
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) { // Android 13+
-            registerReceiver(
-                onDownloadComplete,
-                IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
-                RECEIVER_EXPORTED
-            )
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) { // Android 8-12
-            registerReceiver(
-                onDownloadComplete,
-                IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
-                0 // Flaga nie jest wymagana dla Androida 8-12
-            )
-        } else { // Android poniżej 8
-            registerReceiver(
-                onDownloadComplete, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
-            )
-        }
+        registerDownloadReceiver()
 
         setContent {
             AppTheme {
@@ -221,7 +205,9 @@ class MainActivity : ComponentActivity() {
                     MainScreen(
                         targetDate = TimeUtils.getRevealDateMillis(appConfig),
                         currentTime = timeProvider.getCurrentTimeMillis(),
-                        onGiftClicked = { showDialog.value = true })
+                        onGiftClicked = { showDialog.value = true },
+                        activity = this
+                    )
 
                     // Dialog pobierania
                     if (showDialog.value) {
@@ -381,6 +367,40 @@ class MainActivity : ComponentActivity() {
                 this, "Błąd podczas otwierania pliku: ${e.message}", Toast.LENGTH_LONG
             ).show()
         }
+    }
+
+    @SuppressLint("UnspecifiedRegisterReceiverFlag")
+    private fun registerDownloadReceiver() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(
+                onDownloadComplete,
+                IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
+                RECEIVER_NOT_EXPORTED
+            )
+        } else {
+            registerReceiver(
+                onDownloadComplete,
+                IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
+            )
+        }
+    }
+
+    /**
+     * Wymusza natychmiastowe sprawdzenie aktualizacji pliku.
+     * Można wywołać z innych komponentów, gdy zbliża się moment
+     * zakończenia odliczania.
+     */
+    fun checkFileNow() {
+        Timber.d("Wymuszam natychmiastowe sprawdzenie pliku")
+        val oneTimeWorkRequest = OneTimeWorkRequestBuilder<FileCheckWorker>()
+            .setConstraints(
+                Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .build()
+            )
+            .build()
+
+        WorkManager.getInstance(this).enqueue(oneTimeWorkRequest)
     }
 
     /**

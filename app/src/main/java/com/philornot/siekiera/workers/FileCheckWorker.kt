@@ -2,7 +2,10 @@ package com.philornot.siekiera.workers
 
 import android.content.Context
 import androidx.work.BackoffPolicy
+import androidx.work.Constraints
 import androidx.work.CoroutineWorker
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkerParameters
 import com.philornot.siekiera.config.AppConfig
 import com.philornot.siekiera.network.DriveApiClient
@@ -259,8 +262,21 @@ class FileCheckWorker(
             androidx.work.PeriodicWorkRequestBuilder<FileCheckWorker>(
                 intervalHours, TimeUnit.HOURS
             ).setBackoffCriteria(
-                    BackoffPolicy.EXPONENTIAL, 30, // Minimalne opóźnienie to 30 minut
-                    TimeUnit.MINUTES
+                BackoffPolicy.EXPONENTIAL, 30, // Minimalne opóźnienie to 30 minut
+                TimeUnit.MINUTES
+            )
+
+        /**
+         * Tworzy jednorazowy request sprawdzający aktualizacje pliku.
+         * Użyteczne przy częstszym sprawdzaniu gdy licznik dobiega końca.
+         */
+        fun createOneTimeCheckRequest() =
+            OneTimeWorkRequestBuilder<FileCheckWorker>()
+                .setConstraints(
+                    Constraints.Builder()
+                        .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .build()
                 )
+                .build()
     }
 }
