@@ -2,28 +2,31 @@ package com.philornot.siekiera.workers
 
 import android.content.Context
 import android.content.Intent
+import android.os.Environment
 import androidx.work.BackoffPolicy
 import androidx.work.CoroutineWorker
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkerParameters
 import com.philornot.siekiera.config.AppConfig
 import com.philornot.siekiera.network.DriveApiClient
+import com.philornot.siekiera.notification.NotificationHelper
 import com.philornot.siekiera.utils.TimeUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
 import java.lang.ref.WeakReference
-import java.util.Date
 import java.util.concurrent.TimeUnit
 
 /**
  * Worker, który codziennie o 23:59 sprawdza, czy w folderze na Google
  * Drive jest nowsza wersja pliku.
  *
- * Dodano mechanizm exponential backoff oraz lepszą obsługę błędów.
+ * Dodano mechanizm pobierania pliku do publicznego folderu Pobrane oraz
+ * wysyłanie powiadomień o pobraniu pliku.
  */
 class FileCheckWorker(
     context: Context,
@@ -137,169 +140,86 @@ class FileCheckWorker(
             }, rozmiar: ${newestFile.size} bajtów"
         )
 
-        // Sprawdź lokalny plik - użyj nazwy znalezionego pliku zamiast z konfiguracji
-        // Jest to zmiana, która pozwala na pobranie najnowszego pliku, niezależnie od jego nazwy
-        val localFileName = newestFile.name
-        val localFile = getLocalFile(context, localFileName)
+        // Sprawdź, czy prezent został już odebrany
+        val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        val giftReceived = prefs.getBoolean("gift_received", false)
 
-        if (!localFile.exists()) {
-            // Plik lokalny nie istnieje, pobierz go
-            Timber.d("Plik lokalny nie istnieje, pobieram plik...")
-            downloadAndSaveFile(driveClient, newestFile.id, localFile)
+        // Jeśli prezent został już odebrany, nie pobieraj pliku ponownie
+        if (giftReceived && !appConfig.isTestMode()) {
+            Timber.d("Prezent został już odebrany, pomijam pobieranie")
             return
         }
 
-        // Sprawdź, czy zdalny plik jest nowszy - dodane dokładniejsze logowanie
-        val localModified = Date(localFile.lastModified())
-        Timber.d(
-            "Porównanie dat - Lokalny: ${TimeUtils.formatDate(localModified)} (${localFile.lastModified()}), " + "Zdalny: ${
-                TimeUtils.formatDate(
-                    newestFile.modifiedTime
-                )
-            } (${newestFile.modifiedTime.time})"
-        )
+        // Użyj nazwy pliku bezpośrednio z konfiguracji
+        val downloadFileName = fileName
 
-        // Usuń wymuszenie aktualizacji na podstawie rozmiaru pliku
-        // Teraz wymuszamy aktualizację tylko jeśli plik jest całkowicie pusty (0 bajtów)
-        val forceUpdate = (localFile.length() == 0L)
+        // Pobierz plik bezpośrednio do katalogu Pobrane
+        val result = downloadFileDirect(driveClient, newestFile.id, downloadFileName)
 
-        if (forceUpdate) {
-            Timber.d("Wymuszanie aktualizacji - lokalny plik ma rozmiar: ${localFile.length()} bajtów, zdalny: ${newestFile.size} bajtów")
-        }
+        if (result) {
+            // Powiadomienie o pobraniu pliku
+            NotificationHelper.showDownloadCompleteNotification(context, downloadFileName)
 
-        // Porównaj rzeczywiste daty modyfikacji - nie uznawaj pliku za nowszy tylko dlatego, że daty są zbliżone
-        // Plik jest nowszy tylko jeśli data modyfikacji jest WIĘKSZA, nie "bliska"
-        val isRemoteNewer = forceUpdate || newestFile.modifiedTime.time > localFile.lastModified()
-        Timber.d("Czy zdalny nowszy: $isRemoteNewer")
+            // Zapisz, że prezent został odebrany i przy okazji zapisz nazwę pliku
+            prefs.edit().putBoolean("gift_received", true)
+                .putString("downloaded_file_name", downloadFileName).apply()
 
-        if (isRemoteNewer) {
-            // Utwórz kopię zapasową lokalnego pliku przed usunięciem
-            createBackup(localFile)
-
-            // Usuń stary plik
-            Timber.d(
-                "Zdalny plik jest nowszy (lokalny: ${
-                    TimeUtils.formatDate(
-                        Date(
-                            localFile.lastModified()
-                        )
-                    )
-                }, zdalny: ${TimeUtils.formatDate(newestFile.modifiedTime)})"
-            )
-            localFile.delete()
-
-            // Pobierz nowy plik
-            downloadAndSaveFile(driveClient, newestFile.id, localFile)
-
-            Timber.d("Plik zaktualizowany pomyślnie")
+            Timber.d("Plik pobrany pomyślnie: $downloadFileName")
         } else {
-            Timber.d("Aktualny plik jest najnowszy, nie ma potrzeby aktualizacji")
+            Timber.e("Nieudane pobranie pliku")
+            throw IOException("Nieudane pobranie pliku")
         }
     }
 
     /**
-     * Tworzy kopię zapasową pliku przed jego nadpisaniem. To zapewnia, że w
-     * przypadku uszkodzenia pliku podczas pobierania będziemy mogli przywrócić
-     * poprzednią wersję.
+     * Pobiera plik z Google Drive i zapisuje go bezpośrednio w publicznym
+     * folderze Pobrane.
+     *
+     * @param client Klient DriveAPI
+     * @param fileId ID pliku Google Drive
+     * @param fileName Docelowa nazwa pliku
+     * @return true jeśli pobieranie się powiodło, false w przeciwnym razie
      */
-    private fun createBackup(file: File) {
-        try {
-            if (file.exists()) {
-                val backupFile = File("${file.absolutePath}.bak")
-
-                // Usuń starą kopię zapasową, jeśli istnieje
-                if (backupFile.exists()) {
-                    backupFile.delete()
-                }
-
-                // Skopiuj plik do pliku kopii zapasowej
-                file.copyTo(backupFile, overwrite = true)
-                Timber.d("Utworzono kopię zapasową pliku: ${backupFile.absolutePath}")
-            }
-        } catch (e: Exception) {
-            Timber.e(e, "Błąd podczas tworzenia kopii zapasowej pliku")
-            // Nie przerywamy operacji, jeśli utworzenie kopii nie powiodło się
-        }
-    }
-
-    private fun getLocalFile(context: Context, fileName: String): File {
-        val directory = android.os.Environment.DIRECTORY_DOWNLOADS
-        val file = File(context.getExternalFilesDir(directory), fileName)
-
-        // Upewnij się, że katalog istnieje
-        file.parentFile?.mkdirs()
-
-        return file
-    }
-
-    private fun isRemoteFileNewer(localFile: File, remoteModifiedTime: Date): Boolean {
-        val localModified = localFile.lastModified()
-
-        // Porównaj daty modyfikacji - plik zdalny jest nowszy TYLKO jeśli ma datę modyfikacji
-        // późniejszą niż plik lokalny
-        return remoteModifiedTime.time > localModified
-    }
-
-    private suspend fun downloadAndSaveFile(
+    private suspend fun downloadFileDirect(
         client: DriveApiClient,
         fileId: String,
-        localFile: File,
-    ) {
-        withContext(Dispatchers.IO) {
+        fileName: String,
+    ): Boolean {
+        return withContext(Dispatchers.IO) {
             try {
-                val fileContent = client.downloadFile(fileId)
+                // Pobierz zawartość pliku z Google Drive
+                val inputStream = client.downloadFile(fileId)
 
-                // Zapisz do pliku tymczasowego, aby uniknąć uszkodzenia w przypadku błędu
-                val tempFile = File("${localFile.absolutePath}.tmp")
+                // Utwórz referencję do katalogu Pobrane
+                val downloadsDir =
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
 
-                tempFile.outputStream().use { output ->
-                    fileContent.use { input ->
-                        input.copyTo(output)
+                // Upewnij się, że katalog istnieje
+                if (!downloadsDir.exists()) {
+                    downloadsDir.mkdirs()
+                }
+
+                // Utwórz plik docelowy
+                val destinationFile = File(downloadsDir, fileName)
+
+                // Kopiuj treść pliku
+                FileOutputStream(destinationFile).use { outputStream ->
+                    inputStream.use { input ->
+                        input.copyTo(outputStream)
                     }
                 }
 
-                // Kiedy pobieranie się powiedzie, zmień nazwę pliku tymczasowego na docelową
-                if (tempFile.exists() && tempFile.length() > 0) {
-                    if (tempFile.renameTo(localFile)) {
-                        Timber.d("Plik pobrany i zapisany pomyślnie: ${localFile.absolutePath}")
-
-                        // Pobierz informacje o pliku, aby ustawić prawidłową datę modyfikacji
-                        try {
-                            val fileInfo = client.getFileInfo(fileId)
-                            // Ustaw datę modyfikacji lokalnego pliku na taką samą jak zdalnego
-                            localFile.setLastModified(fileInfo.modifiedTime.time)
-                            Timber.d(
-                                "Ustawiono datę modyfikacji lokalnego pliku: ${
-                                    TimeUtils.formatDate(
-                                        fileInfo.modifiedTime
-                                    )
-                                }"
-                            )
-                        } catch (e: Exception) {
-                            Timber.e(e, "Nie udało się ustawić daty modyfikacji")
-                        }
-                    } else {
-                        throw IOException("Nie udało się zmienić nazwy pliku tymczasowego na docelową")
-                    }
+                // Sprawdź, czy plik został utworzony i ma poprawny rozmiar
+                if (destinationFile.exists() && destinationFile.length() > 0) {
+                    Timber.d("Plik zapisany do ${destinationFile.absolutePath}")
+                    return@withContext true
                 } else {
-                    throw IOException("Pobrany plik jest pusty lub nie istnieje")
+                    Timber.e("Plik nie został poprawnie zapisany")
+                    return@withContext false
                 }
-            } catch (e: IOException) {
-                Timber.e(e, "Błąd podczas pobierania pliku")
-
-                // Sprawdź, czy istnieje kopia zapasowa i przywróć ją w przypadku błędu
-                val backupFile = File("${localFile.absolutePath}.bak")
-                if (backupFile.exists() && !localFile.exists()) {
-                    Timber.d("Przywracanie kopii zapasowej pliku...")
-                    try {
-                        backupFile.copyTo(localFile, overwrite = true)
-                        Timber.d("Pomyślnie przywrócono kopię zapasową")
-                    } catch (backupException: Exception) {
-                        Timber.e(backupException, "Nie udało się przywrócić kopii zapasowej")
-                    }
-                }
-
-                throw e
+            } catch (e: Exception) {
+                Timber.e(e, "Błąd podczas pobierania pliku bezpośrednio do folderu Pobrane")
+                return@withContext false
             }
         }
     }

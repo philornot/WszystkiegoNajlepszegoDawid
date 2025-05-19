@@ -8,10 +8,19 @@
     <string name="no">Nie</string>
 
     <!-- Pobieranie -->
-    <string name="downloading_file">Pobieranie najnowszego prezentu</string>
+    <string name="downloading_file">Pobieranie…</string>
+    <string name="download_complete_toast">Prezent został pobrany: %1$s</string>
     <string name="open_with">Otwórz za pomocą</string>
+    <string name="view_downloads">Otwórz folder Pobrane</string>
 
-    <!-- Powiadomienia -->
+    <!-- Powiadomienia dla urodzin -->
     <string name="notification_channel_name">Powiadomienia urodzinowe</string>
     <string name="notification_channel_description">Powiadomienia o niespodziance urodzinowej</string>
+
+    <!-- Powiadomienia dla pobierania -->
+    <string name="download_notification_channel_name">Powiadomienia o pobraniu pliku</string>
+    <string name="download_notification_channel_description">Powiadomienia o zakończeniu pobierania pliku prezentu</string>
+    <string name="download_notification_title">Pobieranie zakończone!</string>
+    <string name="download_notification_text">Plik: %1$s - %2$s</string>
+    <string name="download_notification_big_text">Twój prezent został pobrany!\nPlik: %1$s\nLokalizacja: %2$s</string>
 </resources>

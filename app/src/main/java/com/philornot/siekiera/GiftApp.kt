@@ -3,6 +3,7 @@ package com.philornot.siekiera
 import android.app.Application
 import androidx.work.Configuration
 import com.philornot.siekiera.config.AppConfig
+import com.philornot.siekiera.notification.NotificationHelper
 import com.philornot.siekiera.notification.NotificationScheduler
 import com.philornot.siekiera.utils.TimeUtils
 import timber.log.Timber
@@ -21,6 +22,9 @@ class GiftApp : Application(), Configuration.Provider {
         // Inicjalizacja TimeUtils
         TimeUtils.initialize(applicationContext)
 
+        // Inicjalizacja kanałów powiadomień
+        NotificationHelper.initNotificationChannels(applicationContext)
+
         // Inicjalizacja Timber do logowania
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())
@@ -31,6 +35,15 @@ class GiftApp : Application(), Configuration.Provider {
     }
 
     private fun checkAndScheduleNotification() {
+        // Sprawdź czy prezent został już odebrany
+        val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
+        val giftReceived = prefs.getBoolean("gift_received", false)
+
+        if (giftReceived) {
+            Timber.d("Prezent został już odebrany, nie planuję powiadomienia")
+            return
+        }
+
         // Sprawdź czy powiadomienia są włączone w konfiguracji
         if (!appConfig.isBirthdayNotificationEnabled()) {
             Timber.d("Powiadomienia urodzinowe są wyłączone w konfiguracji")

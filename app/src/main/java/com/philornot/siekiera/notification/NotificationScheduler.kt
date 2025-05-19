@@ -1,77 +1,15 @@
 package com.philornot.siekiera.notification
 
 import android.app.AlarmManager
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.app.PendingIntent
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import androidx.core.app.NotificationCompat
-import androidx.core.content.ContextCompat
-import com.philornot.siekiera.MainActivity
-import com.philornot.siekiera.R
+import androidx.core.content.edit
 import com.philornot.siekiera.config.AppConfig
 import com.philornot.siekiera.utils.TimeUtils
 import timber.log.Timber
 import java.util.TimeZone
-import androidx.core.content.edit
-
-/** BroadcastReceiver, który odbiera powiadomienie o odsłonięciu prezentu. */
-class NotificationReceiver : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) {
-        Timber.d("Czas na odsłonięcie prezentu!")
-        showGiftRevealNotification(context)
-    }
-
-    private fun showGiftRevealNotification(context: Context) {
-        val notificationManager =
-            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-        // Utwórz kanał powiadomień dla Androida 8.0+
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                context.getString(R.string.notification_channel_name),
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = context.getString(R.string.notification_channel_description)
-                enableLights(true)
-                enableVibration(true)
-            }
-            notificationManager.createNotificationChannel(channel)
-        }
-
-        // Utwórz intent do otwarcia aplikacji
-        val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-        }
-
-        val pendingIntent = PendingIntent.getActivity(
-            context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        // Zbuduj powiadomienie
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setColor(ContextCompat.getColor(context, R.color.colorPrimary))
-            .setContentTitle("Wszystkiego najlepszego") // Tytuł zgodny z wymaganiem
-            .setContentText("Twój prezent jest gotowy do otwarcia") // Opis zgodny z wymaganiem
-            .setAutoCancel(true).setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_REMINDER)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC).setContentIntent(pendingIntent)
-            .build()
-
-        // Pokaż powiadomienie
-        notificationManager.notify(NOTIFICATION_ID, notification)
-    }
-
-    companion object {
-        private const val CHANNEL_ID = "gift_reveal_channel"
-        private const val NOTIFICATION_ID = 1001
-    }
-}
 
 /** Klasa do planowania powiadomienia o odsłonięciu prezentu. */
 object NotificationScheduler {
@@ -110,6 +48,15 @@ object NotificationScheduler {
      * @param appConfig Konfiguracja aplikacji z datą urodzin
      */
     fun scheduleGiftRevealNotification(context: Context, appConfig: AppConfig) {
+        // Sprawdź, czy prezent został już odebrany
+        val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        val giftReceived = prefs.getBoolean("gift_received", false)
+
+        if (giftReceived) {
+            Timber.d("Prezent został już odebrany, pomijam planowanie powiadomienia")
+            return
+        }
+
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val intent = Intent(context, NotificationReceiver::class.java)
 

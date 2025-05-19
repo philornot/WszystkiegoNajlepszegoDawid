@@ -17,6 +17,15 @@ class BootReceiver : BroadcastReceiver() {
         if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
             Timber.d("System uruchomiony, ponowne planowanie zadań")
 
+            // Sprawdź, czy prezent został już odebrany
+            val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+            val giftReceived = prefs.getBoolean("gift_received", false)
+
+            if (giftReceived) {
+                Timber.d("Prezent został już odebrany, pomijam planowanie powiadomień")
+                return
+            }
+
             // Pobierz instancję konfiguracji
             val appConfig = AppConfig.getInstance(context.applicationContext)
 
