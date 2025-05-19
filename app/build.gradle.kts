@@ -42,7 +42,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
 
-        // DODANE: Włączenie desugaring, konieczne dla Google Play Services
+        // Włączenie desugaring, konieczne dla Google Play Services
         isCoreLibraryDesugaringEnabled = true
     }
 

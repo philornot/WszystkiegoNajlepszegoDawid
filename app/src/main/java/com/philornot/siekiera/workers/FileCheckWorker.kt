@@ -17,6 +17,7 @@ import java.io.IOException
 import java.lang.ref.WeakReference
 import java.util.Date
 import java.util.concurrent.TimeUnit
+import kotlin.math.abs
 
 /**
  * Worker, który codziennie o 23:59 sprawdza, czy w folderze na Google
@@ -118,7 +119,7 @@ class FileCheckWorker(
                 TimeUtils.formatDate(
                     newestFile.modifiedTime
                 )
-            }"
+            }, rozmiar: ${newestFile.size} bajtów"
         )
 
         // Sprawdź lokalny plik
@@ -134,14 +135,20 @@ class FileCheckWorker(
         // Sprawdź, czy zdalny plik jest nowszy - dodane dokładniejsze logowanie
         val localModified = Date(localFile.lastModified())
         Timber.d(
-            "Porównanie dat - Lokalny: ${TimeUtils.formatDate(localModified)} (${localFile.lastModified()}), " +
-                    "Zdalny: ${TimeUtils.formatDate(newestFile.modifiedTime)} (${newestFile.modifiedTime.time})"
+            "Porównanie dat - Lokalny: ${TimeUtils.formatDate(localModified)} (${localFile.lastModified()}), " + "Zdalny: ${
+                TimeUtils.formatDate(
+                    newestFile.modifiedTime
+                )
+            } (${newestFile.modifiedTime.time})"
         )
 
-        // Wymuś aktualizację pliku jeśli lokalny plik ma rozmiar 0 lub mniej niż 1KB
-        val forceUpdate = localFile.length() < 1024
+        // ZMIENIAMY: Wymuś aktualizację tylko jeśli plik jest bardzo mały lub jeśli zdalny plik jest znacznie większy
+        val localFileSize = localFile.length()
+        val forceUpdate =
+            (localFileSize == 0L) || (newestFile.size > MIN_EXPECTED_DAYLIO_SIZE && localFileSize < MIN_EXPECTED_DAYLIO_SIZE) || (newestFile.size > (localFileSize * 1.5))
+
         if (forceUpdate) {
-            Timber.d("Wymuszanie aktualizacji - lokalny plik ma rozmiar: ${localFile.length()} bajtów")
+            Timber.d("Wymuszanie aktualizacji - lokalny plik ma rozmiar: ${localFile.length()} bajtów, zdalny: ${newestFile.size} bajtów")
         }
 
         val isRemoteNewer = forceUpdate || isRemoteFileNewer(localFile, newestFile.modifiedTime)
@@ -214,8 +221,9 @@ class FileCheckWorker(
         // Dodajemy margines, aby uniknąć problemów z dokładnością porównania czasów
         val isNewer = remoteModifiedTime.time > localModified + 1000
 
-        // Dodane: W przypadku kiedy daty są bardzo zbliżone, zawsze przyjmujemy, że zdalny plik jest nowszy
-        val closeInTime = Math.abs(remoteModifiedTime.time - localModified) < 5000 // 5 sekund różnicy
+        // W przypadku kiedy daty są bardzo zbliżone, zawsze przyjmujemy, że zdalny plik jest nowszy
+        val closeInTime =
+            abs(remoteModifiedTime.time - localModified) < 5000 // 5 sekund różnicy
         if (closeInTime) {
             Timber.d("Daty są bardzo zbliżone (różnica < 5s), przyjmuję że zdalny plik jest nowszy")
             return true
@@ -247,12 +255,18 @@ class FileCheckWorker(
                     if (tempFile.renameTo(localFile)) {
                         Timber.d("Plik pobrany i zapisany pomyślnie: ${localFile.absolutePath}")
 
-                        // Dodane: Pobierz informacje o pliku, aby ustawić prawidłową datę modyfikacji
+                        // Pobierz informacje o pliku, aby ustawić prawidłową datę modyfikacji
                         try {
                             val fileInfo = client.getFileInfo(fileId)
                             // Ustaw datę modyfikacji lokalnego pliku na taką samą jak zdalnego
                             localFile.setLastModified(fileInfo.modifiedTime.time)
-                            Timber.d("Ustawiono datę modyfikacji lokalnego pliku: ${TimeUtils.formatDate(fileInfo.modifiedTime)}")
+                            Timber.d(
+                                "Ustawiono datę modyfikacji lokalnego pliku: ${
+                                    TimeUtils.formatDate(
+                                        fileInfo.modifiedTime
+                                    )
+                                }"
+                            )
                         } catch (e: Exception) {
                             Timber.e(e, "Nie udało się ustawić daty modyfikacji")
                         }
@@ -289,6 +303,9 @@ class FileCheckWorker(
 
         // Maksymalna liczba ponownych prób w przypadku błędu
         private const val MAX_RETRY_ATTEMPTS = 3
+
+        // Minimalny oczekiwany rozmiar pliku Daylio (zwykle 10KB+)
+        private const val MIN_EXPECTED_DAYLIO_SIZE = 10 * 1024L // 10KB
 
         /**
          * Tworzy request workera z odpowiednią polityką backoff. Używaj tej metody

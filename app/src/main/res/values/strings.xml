@@ -3,7 +3,7 @@
     <string name="app_name">Wszystkiego Najlepszego Dawid!</string>
     <!-- Dialog -->
     <string name="download_dialog_title">Pobrać prezent?</string>
-    <string name="download_dialog_message">Czy chcesz pobrać swój prezent urodzinowy?</string>
+    <string name="download_dialog_message">Czy chcesz pobrać swój prezent urodzinowy?\nPamiętaj, żeby zrobić kopię zapasową swoich obecnych wpisów, jeśli chcesz je zachować.</string>
     <string name="yes">Tak</string>
     <string name="no">Nie</string>
 

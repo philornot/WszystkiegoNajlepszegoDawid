@@ -163,8 +163,8 @@ class DriveApiClient(context: Context) {
         // Używamy statycznych liczników aby zapewnić współdzielenie między instancjami
         val currentTime = System.currentTimeMillis()
 
-        // Reset licznika co minutę
-        if (currentTime - lastMinuteReset.get() > 60_000) {
+        // Reset licznika co 5 minut zamiast co 1 minutę
+        if (currentTime - lastMinuteReset.get() > RESET_INTERVAL_MS) {
             Timber.d("Resetuję licznik żądań API (było: ${requestCount.get()})")
             requestCount.set(0)
             lastMinuteReset.set(currentTime)
@@ -172,9 +172,9 @@ class DriveApiClient(context: Context) {
         }
 
         // Sprawdź czy nie przekraczamy limitu
-        if (requestCount.get() >= MAX_REQUESTS_PER_MINUTE) {
-            // Poczekaj do następnej minuty
-            val waitTime = 60_000 - (currentTime - lastMinuteReset.get())
+        if (requestCount.get() >= MAX_REQUESTS_PER_INTERVAL) {
+            // Poczekaj do następnego okresu resetowania
+            val waitTime = RESET_INTERVAL_MS - (currentTime - lastMinuteReset.get())
             if (waitTime > 0) {
                 Timber.w("Osiągnięto limit API (${requestCount.get()}) - opóźnienie kolejnego żądania o $waitTime ms")
                 delay(waitTime)
@@ -210,7 +210,7 @@ class DriveApiClient(context: Context) {
                     .execute()
 
             // Bezpieczne konwertowanie rozmiaru pliku
-            val fileSize = file.size.toLong()
+            @Suppress("UNNECESSARY_SAFE_CALL") val fileSize = file.size?.toLong() ?: 0L
 
             // Resetuj licznik ponownych prób po sukcesie
             retryCount = 0
@@ -300,7 +300,7 @@ class DriveApiClient(context: Context) {
 
             result.files.map { file ->
                 // Bezpieczne konwertowanie rozmiaru pliku
-                val fileSize = file.size.toLong()
+                @Suppress("UNNECESSARY_SAFE_CALL") val fileSize = file.size?.toLong() ?: 0L
 
                 FileInfo(
                     id = file.id,
@@ -417,7 +417,11 @@ class DriveApiClient(context: Context) {
         @Volatile
         private var lastMinuteReset = AtomicLong(System.currentTimeMillis())
 
-        private const val MAX_REQUESTS_PER_MINUTE = 20  // Ustalony bezpieczny limit
+        // Zmienione: Interwał resetowania licznika (5 minut zamiast 1 minuty)
+        private const val RESET_INTERVAL_MS = 5 * 60 * 1000L // 5 minut
+
+        // Zmienione: Zwiększony limit żądań na interwał
+        private const val MAX_REQUESTS_PER_INTERVAL = 40  // Limit na 5-minutowy interwał
 
         /**
          * Pobiera instancję klienta Drive API. W testach zwraca zaślepkę, w

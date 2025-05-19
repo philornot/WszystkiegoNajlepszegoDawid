@@ -124,7 +124,7 @@ fun Curtain(modifier: Modifier = Modifier) {
     }
 }
 
-/** Enhanced gift button with sparkle animation on hover and pulse effect */
+/** Gift button with sparkle animation on hover and pulse effect */
 @Composable
 fun GiftButton(
     modifier: Modifier = Modifier,

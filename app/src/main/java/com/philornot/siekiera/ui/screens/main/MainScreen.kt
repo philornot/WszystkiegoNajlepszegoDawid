@@ -277,7 +277,7 @@ fun BirthdayMessage(
                 // Spacer o zmiennej wysokości dla lepszego układu
                 Spacer(modifier = Modifier.weight(1f))
 
-                // Nowe elementy - tekst zachęcający do powrotu
+                // Tekst zachęcający do powrotu
                 Text(
                     text = "Nie odebrałeś prezentu?",
                     style = MaterialTheme.typography.titleMedium,
