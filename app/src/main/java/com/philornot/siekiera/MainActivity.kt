@@ -4,6 +4,7 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.app.AlarmManager
 import android.content.BroadcastReceiver
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -37,6 +38,8 @@ import androidx.work.WorkManager
 import com.philornot.siekiera.config.AppConfig
 import com.philornot.siekiera.notification.NotificationHelper
 import com.philornot.siekiera.notification.NotificationScheduler
+import com.philornot.siekiera.notification.TimerNotificationHelper
+import com.philornot.siekiera.notification.TimerScheduler
 import com.philornot.siekiera.ui.screens.main.MainScreen
 import com.philornot.siekiera.ui.theme.AppTheme
 import com.philornot.siekiera.utils.FileUtils
@@ -107,6 +110,9 @@ class MainActivity : ComponentActivity() {
 
     // Stan pobierania pliku
     private val isDownloadInProgress = mutableStateOf(false)
+
+    // Stan trybu timera
+    private val isTimerMode = mutableStateOf(false)
 
     // Launcher dla żądania uprawnień do dokładnych alarmów
     private val alarmPermissionLauncher = registerForActivityResult(
@@ -192,12 +198,19 @@ class MainActivity : ComponentActivity() {
         prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
         val isFirstRun = prefs.getBoolean("is_first_run", true)
 
+        // Sprawdź, czy prezent został odebrany
+        val giftReceived = prefs.getBoolean("gift_received", false)
+
         // Inicjalizacja kanałów powiadomień
         NotificationHelper.initNotificationChannels(this)
+
+        // Inicjalizacja kanału powiadomień dla timera
+        TimerNotificationHelper.initTimerNotificationChannel(this)
 
         if (appConfig.isVerboseLoggingEnabled()) {
             Timber.d("Konfiguracja załadowana: data urodzin ${TimeUtils.formatDate(appConfig.getBirthdayDate().time)}")
             Timber.d("Pierwsze uruchomienie aplikacji: $isFirstRun")
+            Timber.d("Prezent odebrany: $giftReceived")
 
             // Dodane: Wyświetl informację o trybie testowym
             if (appConfig.isTestMode()) {
@@ -211,9 +224,6 @@ class MainActivity : ComponentActivity() {
 
         // Sprawdź uprawnienia do przechowywania (dla starszych Androidów)
         requestStoragePermission()
-
-        // Sprawdź, czy prezent został już odebrany
-        val giftReceived = prefs.getBoolean("gift_received", false)
 
         // Zaplanuj powiadomienie na dzień urodzin
         if (appConfig.isBirthdayNotificationEnabled() && !giftReceived) {
@@ -230,6 +240,22 @@ class MainActivity : ComponentActivity() {
 
                 // Zapisz, że to już nie jest pierwsze uruchomienie
                 prefs.edit { putBoolean("is_first_run", false) }
+            }
+        }
+
+        // Przywróć timer po restarcie, jeśli był aktywny
+        if (TimerScheduler.isTimerSet(this)) {
+            Timber.d("Przywracanie timera po uruchomieniu aplikacji")
+            // Timer będzie przywrócony przez BootReceiver po restarcie urządzenia,
+            // ale też sprawdzamy jego stan przy uruchomieniu aplikacji
+
+            // Sprawdź, czy timer już się zakończył
+            val remainingMillis = TimerScheduler.getRemainingTimeMillis(this)
+            if (remainingMillis <= 0) {
+                // Timer już się zakończył, pokaż powiadomienie
+                val minutes = TimerScheduler.getTimerMinutes(this)
+                TimerNotificationHelper.showTimerCompletedNotification(this, minutes)
+                TimerScheduler.cancelTimer(this)
             }
         }
 
@@ -272,8 +298,12 @@ class MainActivity : ComponentActivity() {
                         targetDate = TimeUtils.getRevealDateMillis(appConfig),
                         currentTime = timeProvider.getCurrentTimeMillis(),
                         onGiftClicked = { showDialog.value = true },
-                        activity = this // Przekaż referencję do aktywności
-                    )
+                        activity = this, // Przekaż referencję do aktywności
+                        giftReceived = giftReceived,
+                        onTimerSet = { minutes ->
+                            // Ustaw timer na podaną ilość minut
+                            setTimer(minutes)
+                        })
 
                     // Dialog pobierania
                     if (showDialog.value) {
@@ -308,6 +338,101 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * Ustawia timer na określoną ilość minut. Planuje powiadomienie po upływie
+     * czasu i próbuje zmienić nazwę aplikacji.
+     *
+     * @param minutes Ilość minut do odliczania
+     */
+    private fun setTimer(minutes: Int) {
+        Timber.d("Ustawianie timera na $minutes minut")
+
+        if (TimerScheduler.scheduleTimer(this, minutes)) {
+            // Timer został ustawiony pomyślnie
+            Toast.makeText(
+                this, getString(R.string.timer_set_toast, minutes), Toast.LENGTH_SHORT
+            ).show()
+
+            // Próba zmiany nazwy aplikacji na "Lawendowy Timer"
+            tryChangeAppName(true)
+        } else {
+            // Wystąpił błąd podczas ustawiania timera
+            Toast.makeText(
+                this,
+                "Nie udało się ustawić timera. Sprawdź uprawnienia do alarmów.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    /** Anuluje aktywny timer, jeśli istnieje. */
+    fun cancelTimer() {
+        if (TimerScheduler.cancelTimer(this)) {
+            Toast.makeText(
+                this, getString(R.string.timer_cancelled_toast), Toast.LENGTH_SHORT
+            ).show()
+
+            // Przywróć oryginalną nazwę aplikacji
+            tryChangeAppName(false)
+        }
+    }
+
+    /**
+     * Próbuje zmienić nazwę aplikacji poprzez włączenie/wyłączenie
+     * activity-alias. UWAGA: Wymaga uprawnień CHANGE_COMPONENT_ENABLED_STATE,
+     * które zwykle są dostępne tylko dla aplikacji systemowych.
+     *
+     * @param enableTimerMode true, jeśli włączamy tryb timera, false dla
+     *    normalnego trybu
+     */
+    private fun tryChangeAppName(enableTimerMode: Boolean) {
+        try {
+            // Próba nie powiedzie się dla zwykłych aplikacji (wymaga uprawnień systemowych)
+            val packageManager = packageManager
+            val originalComponent = ComponentName(this, MainActivity::class.java)
+            val timerComponent = ComponentName(this, "com.philornot.siekiera.TimerActivityAlias")
+
+            if (enableTimerMode) {
+                // Włącz alias timera, wyłącz oryginalną aktywność
+                packageManager.setComponentEnabledSetting(
+                    originalComponent,
+                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                    PackageManager.DONT_KILL_APP
+                )
+                packageManager.setComponentEnabledSetting(
+                    timerComponent,
+                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                    PackageManager.DONT_KILL_APP
+                )
+                Timber.d("Zmieniono nazwę aplikacji na 'Lawendowy Timer'")
+            } else {
+                // Włącz oryginalną aktywność, wyłącz alias timera
+                packageManager.setComponentEnabledSetting(
+                    originalComponent,
+                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                    PackageManager.DONT_KILL_APP
+                )
+                packageManager.setComponentEnabledSetting(
+                    timerComponent,
+                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                    PackageManager.DONT_KILL_APP
+                )
+                Timber.d("Przywrócono oryginalną nazwę aplikacji")
+            }
+
+            // Zapisz aktualny tryb
+            prefs.edit { putBoolean("timer_mode", enableTimerMode) }
+            isTimerMode.value = enableTimerMode
+
+        } catch (e: SecurityException) {
+            // To oczekiwany błąd - aplikacja nie ma uprawnień do zmiany komponentów
+            Timber.w("Brak uprawnień do zmiany nazwy aplikacji: ${e.message}")
+        } catch (e: Exception) {
+            // Inny nieoczekiwany błąd
+            Timber.e(e, "Błąd podczas próby zmiany nazwy aplikacji")
         }
     }
 
@@ -558,6 +683,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    @Override
     public override fun onResume() {
         super.onResume()
         Timber.d("MainActivity onResume")
@@ -571,6 +697,19 @@ class MainActivity : ComponentActivity() {
             // Jeśli uprawnienia zostały przyznane poza normalnym flow (np. z ustawień)
             if (hasPermission && appConfig.isBirthdayNotificationEnabled()) {
                 scheduleRevealNotification()
+            }
+        }
+
+        // Sprawdź stan timera po wznowieniu aplikacji - użyj nowej metody zapobiegającej spamowaniu
+        if (TimerScheduler.checkAndCleanupTimer(this)) {
+            // Timer wciąż działa, sprawdź czy tryb timera jest włączony
+            if (!isTimerMode.value) {
+                tryChangeAppName(true)
+            }
+        } else {
+            // Nie ma aktywnego timera, przywróć normalny tryb
+            if (isTimerMode.value) {
+                tryChangeAppName(false)
             }
         }
     }

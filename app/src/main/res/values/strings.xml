@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Wszystkiego Najlepszego Dawid!</string>
+    <!-- Nowa nazwa dla trybu timera -->
+    <string name="app_name_timer">Lawendowy Timer</string>
+
     <!-- Dialog -->
     <string name="download_dialog_title">Pobrać prezent?</string>
     <string name="download_dialog_message">Czy chcesz pobrać swój prezent urodzinowy?\nPamiętaj, żeby zrobić kopię zapasową swoich obecnych wpisów, jeśli chcesz je zachować.</string>
@@ -23,4 +26,17 @@
     <string name="download_notification_title">Pobieranie zakończone!</string>
     <string name="download_notification_text">Plik: %1$s - %2$s</string>
     <string name="download_notification_big_text">Twój prezent został pobrany!\nPlik: %1$s\nLokalizacja: %2$s</string>
+
+    <!-- Timer -->
+    <string name="timer_notification_channel_name">Powiadomienia timera</string>
+    <string name="timer_notification_channel_description">Powiadomienia o zakończeniu odliczania timera</string>
+    <string name="timer_notification_title">Timer zakończony!</string>
+    <string name="timer_notification_text">Twoje odliczanie %1$d minut dobiegło końca</string>
+    <string name="timer_set_toast">Timer ustawiony na %1$d minut</string>
+    <string name="timer_cancelled_toast">Timer został anulowany</string>
+    <string name="timer_mode_title">Tryb timera</string>
+    <string name="timer_instructions">Przeciągnij w górę lub w dół, aby ustawić czas</string>
+    <string name="timer_set_button">Ustaw timer</string>
+    <string name="timer_back_button">Wróć</string>
+    <string name="timer_minutes">minut</string>
 </resources>

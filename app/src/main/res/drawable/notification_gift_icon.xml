@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!--
+    Minimalistyczna ikona prezentu z cienkimi konturami.
+    Nowoczesny wygląd oparty na liniach zamiast wypełnień.
+    -->
+
+    <!-- Kontur pudełka prezentu -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M5,8L5,20L19,20L19,8"
+        android:strokeWidth="1.5"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+
+    <!-- Górna część prezentu - kontur -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M3,6L3,8L21,8L21,6L3,6z"
+        android:strokeWidth="1.5"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+
+    <!-- Wstążka pionowa -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M12,4L12,20"
+        android:strokeWidth="1.5"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+
+    <!-- Wstążka pozioma -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M5,13L19,13"
+        android:strokeWidth="1.5"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+
+    <!-- Kokardka - minimalistyczny styl -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M12,4C10,2 8,3 9,5"
+        android:strokeWidth="1.5"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M12,4C14,2 16,3 15,5"
+        android:strokeWidth="1.5"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+
+</vector>

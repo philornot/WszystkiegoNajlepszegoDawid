@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -35,14 +36,15 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 
 /**
- * Main screen with a clean, lavender theme and minimal
- * animations.
+ * Main screen with a clean, lavender theme and minimal animations.
  *
  * @param modifier Modifier for the container
  * @param targetDate Birthday date in milliseconds
  * @param currentTime Current time (default is system time)
  * @param onGiftClicked Callback for when the gift is clicked
  * @param activity Reference to MainActivity for file checking
+ * @param giftReceived Whether the gift has been received already
+ * @param onTimerSet Callback when custom timer is set
  */
 @Composable
 fun MainScreen(
@@ -51,6 +53,8 @@ fun MainScreen(
     currentTime: Long = System.currentTimeMillis(),
     onGiftClicked: () -> Unit,
     activity: MainActivity? = null,
+    giftReceived: Boolean = false,
+    onTimerSet: (Int) -> Unit = {},
 ) {
     // Calculate if time is up
     var isTimeUp by remember { mutableStateOf(currentTime >= targetDate) }
@@ -73,6 +77,9 @@ fun MainScreen(
 
     // Track if we should show confetti explosion when gift is clicked
     var showConfettiExplosion by remember { mutableStateOf(false) }
+
+    // Track if timer screen should be shown
+    var showTimerScreen by remember { mutableStateOf(false) }
 
     // Remember the click position for confetti explosion
     var confettiCenterX by remember { mutableFloatStateOf(0.5f) }
@@ -147,24 +154,39 @@ fun MainScreen(
         // App background
         AppBackground(isTimeUp = isTimeUp)
 
-        // Main content
-        Box(modifier = Modifier.fillMaxSize()) {
-            // Regular screen with waiting/gift
-            AnimatedVisibility(
-                visible = !showCelebration, enter = fadeIn(), exit = fadeOut()
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    // Header with title
-                    HeaderSection()
+        // Timer Screen (shows on long press if gift received)
+        TimerScreen(
+            visible = showTimerScreen,
+            onBackPressed = { showTimerScreen = false },
+            onTimerSet = { minutes ->
+                // Hide timer screen
+                showTimerScreen = false
+                // Call the provided callback with the set time
+                onTimerSet(minutes)
+            })
 
-                    // Curtain or gift section
-                    CurtainSection(
-                        isTimeUp = isTimeUp, onGiftClicked = { centerX, centerY ->
+        // Regular content (only shown when timer screen is not visible)
+        AnimatedVisibility(
+            visible = !showTimerScreen, enter = fadeIn(), exit = fadeOut()
+        ) {
+            // Main content
+            Box(modifier = Modifier.fillMaxSize()) {
+                // Regular screen with waiting/gift
+                AnimatedVisibility(
+                    visible = !showCelebration, enter = fadeIn(), exit = fadeOut()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        // Header with title
+                        HeaderSection()
+
+                        // Curtain or gift section
+                        CurtainSection(
+                            isTimeUp = isTimeUp, onGiftClicked = { centerX, centerY ->
                             // When gift is clicked, show confetti explosion and then transition to celebration
                             if (isTimeUp) {
                                 // Record click position for confetti
@@ -181,50 +203,57 @@ fun MainScreen(
                                     onGiftClicked()
                                 }
                             }
-                        }, modifier = Modifier.weight(1f)
-                    )
+                        }, onGiftLongPressed = {
+                            // Show timer screen when gift is long-pressed
+                            Timber.d("Gift long pressed, showing timer screen")
+                            showTimerScreen = true
+                        }, giftReceived = giftReceived, modifier = Modifier.weight(1f)
+                        )
 
-                    // Countdown section
-                    CountdownSection(
-                        timeRemaining = timeRemaining,
-                        isTimeUp = isTimeUp,
-                        modifier = Modifier.padding(bottom = 24.dp)
+                        // Countdown section
+                        CountdownSection(
+                            timeRemaining = timeRemaining,
+                            isTimeUp = isTimeUp,
+                            modifier = Modifier.padding(bottom = 24.dp)
+                        )
+                    }
+                }
+
+                // Wyświetlaj fajerwerki natychmiast, gdy czas się skończy
+                AnimatedVisibility(
+                    visible = isTimeUp && !showCelebration && !showTimerScreen,
+                    enter = fadeIn(tween(300)),
+                    exit = fadeOut()
+                ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        ExplosiveFireworksDisplay()
+                    }
+                }
+
+                // Confetti explosion when gift is clicked or when time is up
+                AnimatedVisibility(
+                    visible = showConfettiExplosion && !showCelebration && !showTimerScreen,
+                    enter = fadeIn(tween(100)),
+                    exit = fadeOut()
+                ) {
+                    ConfettiExplosionEffect(
+                        centerX = confettiCenterX, centerY = confettiCenterY
                     )
                 }
-            }
 
-            // Wyświetlaj fajerwerki natychmiast, gdy czas się skończy
-            AnimatedVisibility(
-                visible = isTimeUp && !showCelebration,
-                enter = fadeIn(tween(300)),
-                exit = fadeOut()
-            ) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    ExplosiveFireworksDisplay()
+                // Celebration screen after clicking gift
+                AnimatedVisibility(
+                    visible = showCelebration && !showTimerScreen,
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                ) {
+                    BirthdayMessage(
+                        modifier = Modifier.fillMaxSize(), onBackClick = {
+                            // When returning to the main screen, reset the confetti explosion
+                            showConfettiExplosion = false
+                            showCelebration = false
+                        })
                 }
-            }
-
-            // Confetti explosion when gift is clicked or when time is up
-            AnimatedVisibility(
-                visible = showConfettiExplosion && !showCelebration,
-                enter = fadeIn(tween(100)),
-                exit = fadeOut()
-            ) {
-                ConfettiExplosionEffect(
-                    centerX = confettiCenterX, centerY = confettiCenterY
-                )
-            }
-
-            // Celebration screen after clicking gift
-            AnimatedVisibility(
-                visible = showCelebration, enter = fadeIn(), exit = fadeOut()
-            ) {
-                BirthdayMessage(
-                    modifier = Modifier.fillMaxSize(), onBackClick = {
-                        // When returning to the main screen, reset the confetti explosion
-                        showConfettiExplosion = false
-                        showCelebration = false
-                    })
             }
         }
     }
@@ -315,6 +344,17 @@ fun BirthdayMessage(
                     color = MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(top = 10.dp)
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "P.S. Przytrzymaj prezent dłużej, aby odkryć dodatkową funkcję...",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                    color = MaterialTheme.colorScheme.tertiary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 4.dp)
                 )
             }
         }

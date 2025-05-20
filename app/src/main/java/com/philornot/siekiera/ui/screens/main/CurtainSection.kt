@@ -10,7 +10,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,8 +26,10 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -35,11 +37,14 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * Redesigned curtain and gift section with a clean, lavender theme.
@@ -47,12 +52,18 @@ import androidx.compose.ui.unit.toSize
  * @param modifier Modifier for the container
  * @param isTimeUp Whether the time is up
  * @param onGiftClicked Callback for when the gift is clicked with position
+ * @param onGiftLongPressed Callback for when the gift is long-pressed to
+ *    enter timer mode
+ * @param giftReceived Whether the gift has been received, controls long
+ *    press behavior
  */
 @Composable
 fun CurtainSection(
     modifier: Modifier = Modifier,
     isTimeUp: Boolean,
     onGiftClicked: (centerX: Float, centerY: Float) -> Unit,
+    onGiftLongPressed: () -> Unit = {},
+    giftReceived: Boolean = false,
 ) {
     Box(
         modifier = modifier
@@ -84,8 +95,14 @@ fun CurtainSection(
         ) {
             GiftButton(
                 modifier = Modifier.size(200.dp), onClick = { centerX, centerY ->
-                    onGiftClicked(centerX, centerY)
-                })
+                onGiftClicked(centerX, centerY)
+            }, onLongPress = {
+                // Only enable long press functionality if the gift has been received
+                if (giftReceived) {
+                    onGiftLongPressed()
+                }
+            }, enableLongPress = giftReceived
+            )
         }
     }
 }
@@ -124,11 +141,19 @@ fun Curtain(modifier: Modifier = Modifier) {
     }
 }
 
-/** Gift button with sparkle animation on hover and pulse effect */
+/**
+ * Gift button with sparkle animation on hover, pulse effect, and long
+ * press detection.
+ *
+ * @param enableLongPress Controls whether long press functionality is
+ *    enabled
+ */
 @Composable
 fun GiftButton(
     modifier: Modifier = Modifier,
     onClick: (centerX: Float, centerY: Float) -> Unit,
+    onLongPress: () -> Unit = {},
+    enableLongPress: Boolean = false,
 ) {
     // Animated scale for a pulse effect
     val pulseScale = animateFloatAsState(
@@ -137,6 +162,9 @@ fun GiftButton(
             animation = tween(800), repeatMode = RepeatMode.Reverse
         ), label = "pulseAnimation"
     )
+
+    // Flag to track if long press is being handled
+    var isLongPressTriggered by remember { mutableStateOf(false) }
 
     // Keep track of this component's position in the layout
     val positionState = remember { mutableStateOf(Offset.Zero) }
@@ -160,15 +188,29 @@ fun GiftButton(
             modifier = modifier
                 .scale(pulseScale.value)  // Apply pulse animation
                 .clip(CircleShape)
-                .clickable {
-                    // Calculate center position as normalized coordinates (0.0 to 1.0)
-                    val centerX =
-                        (positionState.value.x + sizeState.value.width / 2) / (positionState.value.x + sizeState.value.width)
-                    val centerY =
-                        (positionState.value.y + sizeState.value.height / 2) / (positionState.value.y + sizeState.value.height + 1000f) // Adding padding to account for screen height
+                .pointerInput(Unit) {
+                    detectTapGestures(onTap = {
+                        // Only handle tap if long press wasn't just triggered
+                        if (!isLongPressTriggered) {
+                            // Calculate center position as normalized coordinates (0.0 to 1.0)
+                            val centerX =
+                                (positionState.value.x + sizeState.value.width / 2) / (positionState.value.x + sizeState.value.width)
+                            val centerY =
+                                (positionState.value.y + sizeState.value.height / 2) / (positionState.value.y + sizeState.value.height + 1000f)
 
-                    // Call the onClick handler with the center position of this component
-                    onClick(centerX, centerY)
+                            onClick(centerX, centerY)
+                        }
+                    }, onLongPress = {
+                        if (enableLongPress) {
+                            isLongPressTriggered = true
+                            onLongPress()
+                            // Reset flag after a short delay
+                            kotlinx.coroutines.MainScope().launch {
+                                delay(1000)
+                                isLongPressTriggered = false
+                            }
+                        }
+                    })
                 }
                 .onGloballyPositioned { coordinates ->
                     // Save the component position and size whenever layout changes
