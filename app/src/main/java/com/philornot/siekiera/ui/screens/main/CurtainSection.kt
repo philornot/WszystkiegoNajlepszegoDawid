@@ -5,6 +5,7 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -26,7 +27,9 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -37,25 +40,28 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 /**
- * Redesigned curtain and gift section with a clean, lavender theme.
+ * Sekcja z kurtyną i prezentem, obsługująca długie naciśnięcie dla
+ * aktywacji trybu timera.
  *
- * @param modifier Modifier for the container
- * @param isTimeUp Whether the time is up
- * @param onGiftClicked Callback for when the gift is clicked with position
- * @param onGiftLongPressed Callback for when the gift is long-pressed to
- *    enter timer mode
- * @param giftReceived Whether the gift has been received, controls long
- *    press behavior
+ * @param modifier Modifier dla kontenera
+ * @param isTimeUp Czy czas upłynął
+ * @param onGiftClicked Callback dla kliknięcia prezentu z pozycją
+ * @param onGiftLongPressed Callback dla długiego naciśnięcia prezentu
+ * @param giftReceived Czy prezent został odebrany, kontroluje działanie
+ *    długiego naciśnięcia
  */
 @Composable
 fun CurtainSection(
@@ -71,7 +77,7 @@ fun CurtainSection(
             .testTag("curtain_container"),
         contentAlignment = Alignment.Center
     ) {
-        // Clean curtain animation
+        // Animacja kurtyny
         AnimatedVisibility(
             visible = !isTimeUp, enter = fadeIn(), exit = fadeOut(
                 animationSpec = tween(
@@ -85,7 +91,7 @@ fun CurtainSection(
             Curtain(modifier = Modifier.fillMaxSize())
         }
 
-        // Clean gift animation
+        // Animacja prezentu
         AnimatedVisibility(
             visible = isTimeUp, enter = fadeIn(
                 animationSpec = tween(
@@ -97,7 +103,7 @@ fun CurtainSection(
                 modifier = Modifier.size(200.dp), onClick = { centerX, centerY ->
                 onGiftClicked(centerX, centerY)
             }, onLongPress = {
-                // Only enable long press functionality if the gift has been received
+                // Aktywuj długie naciśnięcie tylko jeśli prezent został odebrany
                 if (giftReceived) {
                     onGiftLongPressed()
                 }
@@ -107,10 +113,10 @@ fun CurtainSection(
     }
 }
 
-/** Simple, elegant curtain design with lavender theme. */
+/** Prosty, elegancki design kurtyny z lawendowym motywem. */
 @Composable
 fun Curtain(modifier: Modifier = Modifier) {
-    // Create a subtle lavender gradient for the curtain
+    // Utwórz subtelny lawendowy gradient dla kurtyny
     val curtainGradient = Brush.verticalGradient(
         colors = listOf(
             MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
@@ -124,7 +130,7 @@ fun Curtain(modifier: Modifier = Modifier) {
             .fillMaxSize()
             .background(curtainGradient)
     ) {
-        // Vertical divider in the center
+        // Pionowy separator na środku
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -142,11 +148,11 @@ fun Curtain(modifier: Modifier = Modifier) {
 }
 
 /**
- * Gift button with sparkle animation on hover, pulse effect, and long
- * press detection.
+ * Przycisk prezentu z animacją iskier przy najechaniu, efektem pulsowania
+ * i ulepszoną detekcją długiego naciśnięcia.
  *
- * @param enableLongPress Controls whether long press functionality is
- *    enabled
+ * @param enableLongPress Kontroluje czy funkcjonalność długiego
+ *    naciśnięcia jest włączona
  */
 @Composable
 fun GiftButton(
@@ -155,44 +161,114 @@ fun GiftButton(
     onLongPress: () -> Unit = {},
     enableLongPress: Boolean = false,
 ) {
-    // Animated scale for a pulse effect
+    // Animowany scale dla efektu pulsowania
     val pulseScale = animateFloatAsState(
-        targetValue = 1.05f,  // Subtle pulse
+        targetValue = 1.05f,  // Subtelne pulsowanie
         animationSpec = infiniteRepeatable(
             animation = tween(800), repeatMode = RepeatMode.Reverse
         ), label = "pulseAnimation"
     )
 
-    // Flag to track if long press is being handled
+    // Stan długiego naciśnięcia
+    var isLongPressing by remember { mutableStateOf(false) }
+    var longPressProgress by remember { mutableFloatStateOf(0f) }
+
+    // Feedback haptyczny
+    val haptic = LocalHapticFeedback.current
+
+    // Animacja skali dla długiego naciśnięcia
+    val longPressScale by animateFloatAsState(
+        targetValue = if (isLongPressing) 1.15f else 1.0f,
+        animationSpec = tween(500, easing = LinearEasing),
+        label = "longPressScale"
+    )
+
+    // Efekt drgania przy długim naciśnięciu
+    val vibrationOffset by animateFloatAsState(
+        targetValue = if (isLongPressing) 1f else 0f, animationSpec = infiniteRepeatable(
+            animation = keyframes {
+                durationMillis = 300
+                0f at 0
+                -1f at 75
+                1f at 150
+                -1f at 225
+                0f at 300
+            }, repeatMode = RepeatMode.Restart
+        ), label = "vibrationAnimation"
+    )
+
+    // Flaga do śledzenia czy długie naciśnięcie jest obsługiwane
     var isLongPressTriggered by remember { mutableStateOf(false) }
 
-    // Keep track of this component's position in the layout
+    // Efekt dla animacji długiego naciśnięcia
+    LaunchedEffect(isLongPressing) {
+        if (isLongPressing && enableLongPress) {
+            longPressProgress = 0f
+            // Animuj postęp długiego naciśnięcia
+            while (longPressProgress < 1f && isLongPressing) {
+                delay(16) // ~60fps
+                longPressProgress += 0.03f // Pełen postęp po około 0.5 sekundy
+
+                // Wibracja po osiągnięciu połowy postępu
+                if (longPressProgress >= 0.5f && longPressProgress < 0.53f) {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                }
+
+                // Wywołaj callback po osiągnięciu pełnego postępu
+                if (longPressProgress >= 1f) {
+                    isLongPressTriggered = true
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onLongPress()
+                    break
+                }
+            }
+
+            // Resetuj flagę po krótkim opóźnieniu
+            if (isLongPressTriggered) {
+                delay(1000)
+                isLongPressTriggered = false
+            }
+        }
+    }
+
+    // Śledź pozycję tego komponentu w layoutcie
     val positionState = remember { mutableStateOf(Offset.Zero) }
     val sizeState = remember { mutableStateOf(Size.Zero) }
 
     Box(
-        modifier = Modifier.size(220.dp),  // Slightly larger container for the effect
+        modifier = Modifier.size(220.dp),  // Nieco większy kontener dla efektu
         contentAlignment = Alignment.Center
     ) {
-        // Subtle sparkle effect around the gift
+        // Subtelny efekt iskrzenia wokół prezentu
         SparkleAnimation(
             modifier = Modifier.fillMaxSize()
         )
 
-        // Gift button with pulse animation
+        // Przycisk prezentu z animacjami
         Card(
             colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primary
         ),
             shape = CircleShape,
             modifier = modifier
-                .scale(pulseScale.value)  // Apply pulse animation
+                .scale(pulseScale.value * (if (isLongPressing) longPressScale else 1f))  // Zastosuj obie animacje skali
+                .graphicsLayer(
+                    transformOrigin = TransformOrigin.Center,
+                    translationX = if (isLongPressing) vibrationOffset * 3f else 0f, // Efekt drgania
+                )
                 .clip(CircleShape)
-                .pointerInput(Unit) {
-                    detectTapGestures(onTap = {
-                        // Only handle tap if long press wasn't just triggered
+                .pointerInput(enableLongPress) {
+                    detectTapGestures(onPress = { offset ->
+                        if (enableLongPress) {
+                            isLongPressing = true
+                            awaitRelease()
+                            isLongPressing = false
+                            longPressProgress = 0f
+                        }
+                    }, onTap = {
+                        // Obsługuj kliknięcie tylko jeśli długie naciśnięcie nie zostało właśnie wywołane
                         if (!isLongPressTriggered) {
-                            // Calculate center position as normalized coordinates (0.0 to 1.0)
+                            // Oblicz pozycję środka jako znormalizowane współrzędne (0.0 do 1.0)
                             val centerX =
                                 (positionState.value.x + sizeState.value.width / 2) / (positionState.value.x + sizeState.value.width)
                             val centerY =
@@ -200,20 +276,10 @@ fun GiftButton(
 
                             onClick(centerX, centerY)
                         }
-                    }, onLongPress = {
-                        if (enableLongPress) {
-                            isLongPressTriggered = true
-                            onLongPress()
-                            // Reset flag after a short delay
-                            kotlinx.coroutines.MainScope().launch {
-                                delay(1000)
-                                isLongPressTriggered = false
-                            }
-                        }
                     })
                 }
                 .onGloballyPositioned { coordinates ->
-                    // Save the component position and size whenever layout changes
+                    // Zapisz pozycję i rozmiar komponentu przy każdej zmianie layoutu
                     positionState.value = coordinates.positionInRoot()
                     sizeState.value = coordinates.size.toSize()
                 }
@@ -225,7 +291,7 @@ fun GiftButton(
                     .fillMaxSize()
                     .padding(16.dp)
             ) {
-                // Gift icon
+                // Ikona prezentu
                 Icon(
                     imageVector = Icons.Outlined.CardGiftcard,
                     contentDescription = "Gift",

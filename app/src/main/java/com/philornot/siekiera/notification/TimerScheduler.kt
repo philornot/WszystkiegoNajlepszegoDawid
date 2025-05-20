@@ -9,7 +9,7 @@ import androidx.core.content.edit
 import timber.log.Timber
 import java.util.Calendar
 
-/** Obsługuje planowanie i zarządzanie powiadomieniami timera. */
+/** Klasa do planowania i zarządzania powiadomieniami timera. */
 object TimerScheduler {
     // Identyfikator akcji dla broadcast receivera
     const val ACTION_TIMER_COMPLETE = "com.philornot.siekiera.ACTION_TIMER_COMPLETE"
@@ -22,16 +22,18 @@ object TimerScheduler {
     private const val KEY_TIMER_SET = "timer_set"
     private const val KEY_TIMER_END_TIME = "timer_end_time"
     private const val KEY_TIMER_MINUTES = "timer_minutes"
+    private const val KEY_TIMER_CHANGED_APP_NAME = "timer_changed_app_name"
 
     /**
      * Planuje timer na określoną liczbę minut od teraz.
      *
      * @param context Kontekst aplikacji
      * @param minutes Liczba minut do odliczenia
+     * @param changeAppName Czy zmienić nazwę aplikacji
      * @return true jeśli timer został zaplanowany pomyślnie, false w przypadku
      *    błędu
      */
-    fun scheduleTimer(context: Context, minutes: Int): Boolean {
+    fun scheduleTimer(context: Context, minutes: Int, changeAppName: Boolean = false): Boolean {
         try {
             val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
@@ -41,7 +43,7 @@ object TimerScheduler {
             val endTimeMillis = currentTimeMillis + (minutes * 60 * 1000L)
 
             // Zapisz informacje o timerze
-            saveTimerInfo(context, true, endTimeMillis, minutes)
+            saveTimerInfo(context, true, endTimeMillis, minutes, changeAppName)
 
             // Utwórz intent z informacją o czasie timera
             val intent = Intent(context, TimerReceiver::class.java).apply {
@@ -119,7 +121,7 @@ object TimerScheduler {
             alarmManager.cancel(pendingIntent)
 
             // Wyczyść informacje o timerze
-            saveTimerInfo(context, false, 0, 0)
+            saveTimerInfo(context, false, 0, 0, false)
 
             // Anuluj ewentualne aktywne powiadomienie
             TimerNotificationHelper.cancelTimerNotification(context)
@@ -130,6 +132,17 @@ object TimerScheduler {
             Timber.e(e, "Błąd podczas anulowania timera")
             return false
         }
+    }
+
+    /**
+     * Sprawdza, czy dla timera zmieniono nazwę aplikacji.
+     *
+     * @param context Kontekst aplikacji
+     * @return true jeśli zmieniono nazwę aplikacji, false w przeciwnym razie
+     */
+    fun wasAppNameChanged(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getBoolean(KEY_TIMER_CHANGED_APP_NAME, false)
     }
 
     /**
@@ -180,13 +193,21 @@ object TimerScheduler {
      * @param isSet Czy timer jest aktywny
      * @param endTimeMillis Czas zakończenia timera w milisekundach
      * @param minutes Liczba minut ustawiona dla timera
+     * @param changedAppName Czy zmieniono nazwę aplikacji dla tego timera
      */
-    private fun saveTimerInfo(context: Context, isSet: Boolean, endTimeMillis: Long, minutes: Int) {
+    private fun saveTimerInfo(
+        context: Context,
+        isSet: Boolean,
+        endTimeMillis: Long,
+        minutes: Int,
+        changedAppName: Boolean,
+    ) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit {
             putBoolean(KEY_TIMER_SET, isSet)
             putLong(KEY_TIMER_END_TIME, endTimeMillis)
             putInt(KEY_TIMER_MINUTES, minutes)
+            putBoolean(KEY_TIMER_CHANGED_APP_NAME, changedAppName)
         }
     }
 
@@ -202,12 +223,13 @@ object TimerScheduler {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val endTimeMillis = prefs.getLong(KEY_TIMER_END_TIME, 0)
         val minutes = prefs.getInt(KEY_TIMER_MINUTES, 0)
+        prefs.getBoolean(KEY_TIMER_CHANGED_APP_NAME, false)
 
         // Sprawdź, czy timer już się nie zakończył
         val currentTimeMillis = System.currentTimeMillis()
         if (endTimeMillis <= currentTimeMillis) {
             // Timer już się zakończył, wyczyść dane i pokaż powiadomienie
-            saveTimerInfo(context, false, 0, 0)
+            saveTimerInfo(context, false, 0, 0, false)
             TimerNotificationHelper.showTimerCompletedNotification(context, minutes)
             return false
         }
@@ -270,7 +292,10 @@ object TimerScheduler {
         if (remainingTimeMillis <= 0) {
             // Timer już się zakończył - anuluj go bez pokazywania powiadomienia
             val prefs = context.getSharedPreferences("timer_prefs", Context.MODE_PRIVATE)
-            prefs.edit { putBoolean("timer_set", false) }
+            prefs.edit {
+                putBoolean("timer_set", false)
+                putBoolean(KEY_TIMER_CHANGED_APP_NAME, false)
+            }
 
             // Anuluj potencjalne alarmy (to nie wyświetli powiadomienia)
             try {
@@ -294,5 +319,4 @@ object TimerScheduler {
 
         return true
     }
-
 }

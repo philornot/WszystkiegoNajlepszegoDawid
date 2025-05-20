@@ -38,9 +38,11 @@ object TimerNotificationHelper {
 
             // Kanał dla powiadomień timera
             val timerChannel = NotificationChannel(
-                CHANNEL_ID_TIMER, "Powiadomienia timera", NotificationManager.IMPORTANCE_HIGH
+                CHANNEL_ID_TIMER,
+                context.getString(R.string.timer_notification_channel_name),
+                NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Powiadomienia o zakończeniu odliczania timera"
+                description = context.getString(R.string.timer_notification_channel_description)
                 enableLights(true)
                 enableVibration(true)
             }
@@ -60,6 +62,8 @@ object TimerNotificationHelper {
         // Przygotowanie intencji do otwarcia aplikacji po kliknięciu powiadomienia
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra("SHOW_TIMER_FINISHED", true)
+            putExtra("TIMER_MINUTES", minutes)
         }
 
         val pendingIntent = PendingIntent.getActivity(
@@ -70,13 +74,12 @@ object TimerNotificationHelper {
         val notification = NotificationCompat.Builder(context, CHANNEL_ID_TIMER)
             .setSmallIcon(R.drawable.notification_timer_icon)
             .setColor(ContextCompat.getColor(context, R.color.colorPrimaryDark))
-            .setContentTitle("Lawendowy Timer")
-            .setContentText("Odliczanie $minutes minut zakończone!").setStyle(
+            .setContentTitle(context.getString(R.string.timer_notification_title))
+            .setContentText(context.getString(R.string.timer_notification_text, minutes)).setStyle(
                 NotificationCompat.BigTextStyle()
-                    .bigText("Twoje odliczanie $minutes minut zostało zakończone! Sprawdź, co dalej?")
-            ).setAutoCancel(true)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT) // Zmienione z HIGH na DEFAULT
-            .setCategory(NotificationCompat.CATEGORY_REMINDER) // Zmienione z ALARM na REMINDER
+                    .bigText(context.getString(R.string.timer_notification_text, minutes))
+            ).setAutoCancel(true).setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC).setContentIntent(pendingIntent)
             .build()
 

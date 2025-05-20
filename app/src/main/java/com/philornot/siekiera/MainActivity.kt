@@ -84,18 +84,30 @@ class MainActivity : ComponentActivity() {
                 if (FileUtils.isFileInPublicDownloads(fileName)) {
                     Timber.d("Plik $fileName został poprawnie pobrany")
 
+                    // Sprawdź czy już pokazaliśmy powiadomienie o pobraniu
+                    val firstDownloadNotified = prefs.getBoolean("first_download_notified", false)
+
                     // Oznacz prezent jako odebrany
-                    prefs.edit { putBoolean("gift_received", true) }
+                    prefs.edit {
+                        putBoolean("gift_received", true)
+
+                        // Jeśli to pierwsze pobranie, pokaż powiadomienie
+                        if (!firstDownloadNotified) {
+                            putBoolean("first_download_notified", true)
+                        }
+                    }
 
                     // Zaktualizuj stan pobierania
                     isDownloadInProgress.value = false
 
-                    // Pokaż informację o pobraniu pliku
-                    Toast.makeText(
-                        context,
-                        getString(R.string.download_complete_toast, fileName),
-                        Toast.LENGTH_LONG
-                    ).show()
+                    // Pokaż informację o pobraniu pliku tylko raz
+                    if (!firstDownloadNotified) {
+                        Toast.makeText(
+                            context,
+                            getString(R.string.download_complete_toast, fileName),
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
                 }
             }
         }
@@ -113,6 +125,12 @@ class MainActivity : ComponentActivity() {
 
     // Stan trybu timera
     private val isTimerMode = mutableStateOf(false)
+
+    // Stan odkrycia trybu timera
+    private val timerModeDiscovered = mutableStateOf(false)
+
+    // Aktywny czas timera (w milisekundach)
+    private val activeTimerRemainingTime = mutableStateOf(0L)
 
     // Launcher dla żądania uprawnień do dokładnych alarmów
     private val alarmPermissionLauncher = registerForActivityResult(
@@ -201,6 +219,10 @@ class MainActivity : ComponentActivity() {
         // Sprawdź, czy prezent został odebrany
         val giftReceived = prefs.getBoolean("gift_received", false)
 
+        // Sprawdź, czy tryb timera został odkryty
+        val timerModeEnabled = prefs.getBoolean("timer_mode_discovered", false)
+        timerModeDiscovered.value = timerModeEnabled
+
         // Inicjalizacja kanałów powiadomień
         NotificationHelper.initNotificationChannels(this)
 
@@ -211,6 +233,7 @@ class MainActivity : ComponentActivity() {
             Timber.d("Konfiguracja załadowana: data urodzin ${TimeUtils.formatDate(appConfig.getBirthdayDate().time)}")
             Timber.d("Pierwsze uruchomienie aplikacji: $isFirstRun")
             Timber.d("Prezent odebrany: $giftReceived")
+            Timber.d("Tryb timera odkryty: $timerModeEnabled")
 
             // Dodane: Wyświetl informację o trybie testowym
             if (appConfig.isTestMode()) {
@@ -246,12 +269,14 @@ class MainActivity : ComponentActivity() {
         // Przywróć timer po restarcie, jeśli był aktywny
         if (TimerScheduler.isTimerSet(this)) {
             Timber.d("Przywracanie timera po uruchomieniu aplikacji")
-            // Timer będzie przywrócony przez BootReceiver po restarcie urządzenia,
-            // ale też sprawdzamy jego stan przy uruchomieniu aplikacji
 
             // Sprawdź, czy timer już się zakończył
             val remainingMillis = TimerScheduler.getRemainingTimeMillis(this)
-            if (remainingMillis <= 0) {
+            if (remainingMillis > 0) {
+                // Timer wciąż aktywny, ustaw jego stan
+                activeTimerRemainingTime.value = remainingMillis
+                isTimerMode.value = true
+            } else {
                 // Timer już się zakończył, pokaż powiadomienie
                 val minutes = TimerScheduler.getTimerMinutes(this)
                 TimerNotificationHelper.showTimerCompletedNotification(this, minutes)
@@ -303,6 +328,22 @@ class MainActivity : ComponentActivity() {
                         onTimerSet = { minutes ->
                             // Ustaw timer na podaną ilość minut
                             setTimer(minutes)
+                        },
+                        timerModeEnabled = timerModeDiscovered.value,
+                        onTimerModeDiscovered = {
+                            // Zapisz, że tryb timera został odkryty
+                            timerModeDiscovered.value = true
+                            prefs.edit { putBoolean("timer_mode_discovered", true) }
+
+                            // Pokaż krótki komunikat o odkryciu nowej funkcji
+                            Toast.makeText(
+                                this@MainActivity, "Odkryto tryb timera!", Toast.LENGTH_SHORT
+                            ).show()
+                        },
+                        activeTimer = activeTimerRemainingTime.value,
+                        onCancelTimer = {
+                            // Anuluj aktywny timer
+                            cancelTimer()
                         })
 
                     // Dialog pobierania
@@ -343,7 +384,7 @@ class MainActivity : ComponentActivity() {
 
     /**
      * Ustawia timer na określoną ilość minut. Planuje powiadomienie po upływie
-     * czasu i próbuje zmienić nazwę aplikacji.
+     * czasu i zmienia nazwę aplikacji, jeśli jest to wymagane.
      *
      * @param minutes Ilość minut do odliczania
      */
@@ -355,6 +396,10 @@ class MainActivity : ComponentActivity() {
             Toast.makeText(
                 this, getString(R.string.timer_set_toast, minutes), Toast.LENGTH_SHORT
             ).show()
+
+            // Ustaw stan timera
+            activeTimerRemainingTime.value = minutes * 60 * 1000L
+            isTimerMode.value = true
 
             // Próba zmiany nazwy aplikacji na "Lawendowy Timer"
             tryChangeAppName(true)
@@ -374,6 +419,10 @@ class MainActivity : ComponentActivity() {
             Toast.makeText(
                 this, getString(R.string.timer_cancelled_toast), Toast.LENGTH_SHORT
             ).show()
+
+            // Zresetuj stan timera
+            activeTimerRemainingTime.value = 0L
+            isTimerMode.value = false
 
             // Przywróć oryginalną nazwę aplikacji
             tryChangeAppName(false)
@@ -702,13 +751,22 @@ class MainActivity : ComponentActivity() {
 
         // Sprawdź stan timera po wznowieniu aplikacji - użyj nowej metody zapobiegającej spamowaniu
         if (TimerScheduler.checkAndCleanupTimer(this)) {
-            // Timer wciąż działa, sprawdź czy tryb timera jest włączony
+            // Timer wciąż działa, aktualizuj czas pozostały
+            val remainingMillis = TimerScheduler.getRemainingTimeMillis(this)
+            if (remainingMillis > 0) {
+                activeTimerRemainingTime.value = remainingMillis
+                isTimerMode.value = true
+            }
+
+            // Sprawdź czy tryb timera jest włączony dla nazwy aplikacji
             if (!isTimerMode.value) {
                 tryChangeAppName(true)
             }
         } else {
             // Nie ma aktywnego timera, przywróć normalny tryb
             if (isTimerMode.value) {
+                isTimerMode.value = false
+                activeTimerRemainingTime.value = 0L
                 tryChangeAppName(false)
             }
         }

@@ -39,4 +39,17 @@
     <string name="timer_set_button">Ustaw timer</string>
     <string name="timer_back_button">Wróć</string>
     <string name="timer_minutes">minut</string>
+
+    <!-- Tryb timera - dodane -->
+    <string name="timer_mode_discovered">Odkryto tryb timera!</string>
+    <string name="changing_app_name">Zmieniam nazwę aplikacji…</string>
+    <string name="change_app_name_title">Zmieniam nazwę aplikacji</string>
+    <string name="change_app_name_text">Zmieniam nazwę aplikacji na \'Lawendowy Timer\'…</string>
+    <string name="timer_countdown_title">Timer: ustaw czas</string>
+    <string name="timer_drag_instruction">Przeciągnij w górę lub w dół, aby zmienić czas</string>
+    <string name="timer_change_app_name">Zmień nazwę aplikacji na \'Lawendowy Timer\'</string>
+    <string name="timer_finished_title">Czas minął!</string>
+    <string name="timer_finished_text">Twój timer na %1$d minut zakończył odliczanie.</string>
+    <string name="timer_finished_congratulations">Gratulacje! Możesz wrócić do trybu odliczania urodzin lub ustawić nowy timer.</string>
+    <string name="timer_return_to_countdown">Wróć do trybu odliczania</string>
 </resources>

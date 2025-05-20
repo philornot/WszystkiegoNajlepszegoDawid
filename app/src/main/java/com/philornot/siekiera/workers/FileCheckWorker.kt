@@ -1,8 +1,12 @@
 package com.philornot.siekiera.workers
 
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.os.Build
 import android.os.Environment
+import android.provider.MediaStore
 import androidx.work.BackoffPolicy
 import androidx.work.CoroutineWorker
 import androidx.work.OneTimeWorkRequestBuilder
@@ -16,7 +20,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
-import java.io.FileOutputStream
 import java.io.IOException
 import java.lang.ref.WeakReference
 import java.util.concurrent.TimeUnit
@@ -173,7 +176,8 @@ class FileCheckWorker(
 
     /**
      * Pobiera plik z Google Drive i zapisuje go bezpośrednio w publicznym
-     * folderze Pobrane.
+     * folderze Pobrane, używając nowoczesnego podejścia zgodnego z Scoped
+     * Storage.
      *
      * @param client Klient DriveAPI
      * @param fileId ID pliku Google Drive
@@ -189,33 +193,78 @@ class FileCheckWorker(
             try {
                 // Pobierz zawartość pliku z Google Drive
                 val inputStream = client.downloadFile(fileId)
+                val context = getContext() ?: throw IllegalStateException("Brak kontekstu")
+                var uri: Uri? = null
 
-                // Utwórz referencję do katalogu Pobrane
-                val downloadsDir =
-                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-
-                // Upewnij się, że katalog istnieje
-                if (!downloadsDir.exists()) {
-                    downloadsDir.mkdirs()
-                }
-
-                // Utwórz plik docelowy
-                val destinationFile = File(downloadsDir, fileName)
-
-                // Kopiuj treść pliku
-                FileOutputStream(destinationFile).use { outputStream ->
-                    inputStream.use { input ->
-                        input.copyTo(outputStream)
+                // Różne podejścia do zapisywania pliku w zależności od wersji Androida
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    // Android 10+ używa MediaStore
+                    val contentValues = ContentValues().apply {
+                        put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+                        put(MediaStore.Downloads.MIME_TYPE, "application/octet-stream")
+                        put(MediaStore.Downloads.IS_PENDING, 1)
                     }
-                }
 
-                // Sprawdź, czy plik został utworzony i ma poprawny rozmiar
-                if (destinationFile.exists() && destinationFile.length() > 0) {
-                    Timber.d("Plik zapisany do ${destinationFile.absolutePath}")
-                    return@withContext true
+                    val resolver = context.contentResolver
+                    uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+
+                    if (uri != null) {
+                        resolver.openOutputStream(uri)?.use { outputStream ->
+                            inputStream.use { input ->
+                                input.copyTo(outputStream)
+                            }
+                        }
+
+                        // Zakończ transakcję
+                        contentValues.clear()
+                        contentValues.put(MediaStore.Downloads.IS_PENDING, 0)
+                        resolver.update(uri, contentValues, null, null)
+
+                        Timber.d("Plik zapisany przez MediaStore: $uri")
+                        return@withContext true
+                    } else {
+                        Timber.e("Nie można utworzyć URI dla pliku")
+                        return@withContext false
+                    }
                 } else {
-                    Timber.e("Plik nie został poprawnie zapisany")
-                    return@withContext false
+                    // Dla starszych wersji Androida, korzystamy z External Storage
+                    try {
+                        val downloadsDir =
+                            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                        if (!downloadsDir.exists()) {
+                            downloadsDir.mkdirs()
+                        }
+
+                        val destinationFile = File(downloadsDir, fileName)
+                        java.io.FileOutputStream(destinationFile).use { outputStream ->
+                            inputStream.use { input ->
+                                input.copyTo(outputStream)
+                            }
+                        }
+
+                        Timber.d("Plik zapisany do ${destinationFile.absolutePath}")
+                        return@withContext destinationFile.exists() && destinationFile.length() > 0
+                    } catch (e: IOException) {
+                        // Jeśli metoda z External Storage nie zadziała, spróbuj użyć MediaStore
+                        Timber.w(
+                            "Nie udało się zapisać pliku bezpośrednio, próbuję przez MediaStore",
+                            e
+                        )
+
+                        // Alternatywne podejście: zapisz we własnym katalogu aplikacji
+                        val internalFile = File(
+                            context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
+                            fileName
+                        )
+                        java.io.FileOutputStream(internalFile).use { outputStream ->
+                            inputStream.use { input ->
+                                input.copyTo(outputStream)
+                            }
+                        }
+
+                        Timber.d("Plik zapisany do katalogu aplikacji: ${internalFile.absolutePath}")
+                        return@withContext internalFile.exists() && internalFile.length() > 0
+                    }
                 }
             } catch (e: Exception) {
                 Timber.e(e, "Błąd podczas pobierania pliku bezpośrednio do folderu Pobrane")

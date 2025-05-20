@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import com.philornot.siekiera.config.AppConfig
 import com.philornot.siekiera.notification.NotificationScheduler
 import com.philornot.siekiera.notification.TimerScheduler
@@ -67,18 +68,29 @@ class BootReceiver : BroadcastReceiver() {
             if (success) {
                 Timber.d("Timer został pomyślnie przywrócony")
 
-                // Spróbuj przywrócić alias aktywności dla trybu timera
-                try {
-                    val componentName =
-                        ComponentName(context, "com.philornot.siekiera.TimerActivityAlias")
-                    context.packageManager.setComponentEnabledSetting(
-                        componentName,
-                        android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                        android.content.pm.PackageManager.DONT_KILL_APP
-                    )
-                    Timber.d("Alias aktywności dla trybu timera został włączony")
-                } catch (e: Exception) {
-                    Timber.w("Nie udało się włączyć aliasu aktywności: ${e.message}")
+                // Sprawdź, czy dla timera była zmieniona nazwa aplikacji
+                if (TimerScheduler.wasAppNameChanged(context)) {
+                    // Spróbuj przywrócić alias aktywności dla trybu timera
+                    try {
+                        val originalComponent =
+                            ComponentName(context, "com.philornot.siekiera.MainActivity")
+                        val timerComponent =
+                            ComponentName(context, "com.philornot.siekiera.TimerActivityAlias")
+
+                        context.packageManager.setComponentEnabledSetting(
+                            originalComponent,
+                            PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                            PackageManager.DONT_KILL_APP
+                        )
+                        context.packageManager.setComponentEnabledSetting(
+                            timerComponent,
+                            PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                            PackageManager.DONT_KILL_APP
+                        )
+                        Timber.d("Alias aktywności dla trybu timera został włączony")
+                    } catch (e: Exception) {
+                        Timber.w("Nie udało się włączyć aliasu aktywności: ${e.message}")
+                    }
                 }
             } else {
                 Timber.d("Nie udało się przywrócić timera")
