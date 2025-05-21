@@ -17,6 +17,11 @@ ujawniając prezent - eksport pamiętnika z aplikacji Daylio.
 - **Automatyczne powiadomienie** w dniu urodzin
 - **Ukryty prezent** - plik z eksportem Daylio pobierany z Google Drive
 - **Automatyczna aktualizacja** prezentu, jeśli zostanie zaktualizowany na Google Drive
+- **Nawigacja boczna** dostępna po odebraniu prezentu, umożliwiająca przełączanie między:
+    - Odliczaniem do urodzin
+    - Trybem timera
+    - Dostępem do prezentu
+- **Timer** - aplikacja może służyć również jako zwykły timer do odliczania czasu
 
 ## 🛠️ Technologie
 
@@ -45,15 +50,20 @@ Aplikacja używa klasy `TimeProvider` do zarządzania czasem, co umożliwia:
 
 - W normalnym trybie: odliczanie do 24 sierpnia 2025
 - W trybie testowym: symulowanie różnych dat do testowania
+- W trybie timera: używanie aplikacji jako standardowego timera minutowego
 
 ## 📱 Główne Komponenty
 
 - **MainActivity** - główna aktywność aplikacji
 - **MainScreen** - ekran z kurtyną i odliczaniem
+- **NavigationDrawer** - szufladka nawigacyjna dostępna po odebraniu prezentu
+- **TimerScreen** - ekran trybu timera
+- **GiftScreen** - ekran dostępu do prezentu
 - **MainViewModel** - zarządzanie stanem UI
 - **FileCheckWorker** - worker sprawdzający aktualizacje pliku na Google Drive
 - **DriveApiClient** - klient API Google Drive używający konta usługi
 - **NotificationScheduler** - planowanie powiadomień urodzinowych
+- **TimerScheduler** - zarządzanie timerem
 
 ## 🧪 Testowanie
 

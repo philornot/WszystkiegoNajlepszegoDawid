@@ -4,10 +4,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -32,14 +30,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.philornot.siekiera.MainActivity
-import com.philornot.siekiera.ui.screens.main.gift.BirthdayMessage
-import com.philornot.siekiera.ui.screens.main.effects.ConfettiExplosionEffect
 import com.philornot.siekiera.ui.screens.main.countdown.CountdownSection
-import com.philornot.siekiera.ui.screens.main.curtain.CurtainSection
 import com.philornot.siekiera.ui.screens.main.countdown.ExplosiveFireworksDisplay
-import com.philornot.siekiera.ui.screens.main.timer.TimerFinishedMessage
+import com.philornot.siekiera.ui.screens.main.curtain.CurtainSection
+import com.philornot.siekiera.ui.screens.main.drawer.NavigationDrawer
+import com.philornot.siekiera.ui.screens.main.drawer.NavigationSection
+import com.philornot.siekiera.ui.screens.main.drawer.SwipeDetector.detectHorizontalSwipes
+import com.philornot.siekiera.ui.screens.main.effects.ConfettiExplosionEffect
 import com.philornot.siekiera.ui.screens.main.effects.flashEffect
 import com.philornot.siekiera.ui.screens.main.effects.shakeEffect
+import com.philornot.siekiera.ui.screens.main.gift.BirthdayMessage
+import com.philornot.siekiera.ui.screens.main.gift.GiftScreen
+import com.philornot.siekiera.ui.screens.main.timer.TimerFinishedMessage
+import com.philornot.siekiera.ui.screens.main.timer.TimerScreen
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -48,6 +51,7 @@ import timber.log.Timber
 /**
  * Główny ekran z czystym, lawendowym motywem i minimalnymi animacjami.
  * Teraz obsługuje zarówno tryb odliczania urodzin jak i tryb timera.
+ * Zawiera również szufladkę nawigacyjną po odebraniu prezentu.
  *
  * @param modifier Modifier dla kontenera
  * @param targetDate Data urodzin w milisekundach
@@ -63,6 +67,11 @@ import timber.log.Timber
  *    aktywnego timera)
  * @param onCancelTimer Callback do anulowania timera
  * @param onResetTimer Callback do resetowania timera
+ * @param isDrawerOpen Czy szufladka nawigacyjna jest otwarta
+ * @param onDrawerStateChange Callback wywoływany przy zmianie stanu
+ *    szufladki
+ * @param currentSection Obecnie wybrana sekcja nawigacyjna
+ * @param onSectionSelected Callback wywoływany przy wyborze sekcji
  */
 @Composable
 fun MainScreen(
@@ -78,6 +87,10 @@ fun MainScreen(
     activeTimer: Long = 0,
     onCancelTimer: () -> Unit = {},
     onResetTimer: () -> Unit = {},
+    isDrawerOpen: Boolean = false,
+    onDrawerStateChange: (Boolean) -> Unit = {},
+    currentSection: NavigationSection = NavigationSection.BIRTHDAY_COUNTDOWN,
+    onSectionSelected: (NavigationSection) -> Unit = {},
 ) {
     // Oblicz czy czas upłynął
     var isTimeUp by remember { mutableStateOf(currentTime >= targetDate) }
@@ -106,9 +119,8 @@ fun MainScreen(
     var confettiCenterY by remember { mutableFloatStateOf(0.5f) }
 
     // Stany dla trybu timera
-    var isTimerMode by remember { mutableStateOf(false) }
-    var timerMinutes by remember { mutableIntStateOf(5) }
     var changeAppName by remember { mutableStateOf(false) }
+    var timerMinutes by remember { mutableIntStateOf(5) }
 
     // Stan dla dialogu zmiany nazwy aplikacji
     var showProgressDialog by remember { mutableStateOf(false) }
@@ -121,11 +133,13 @@ fun MainScreen(
     var timerRemainingTime by remember { mutableLongStateOf(activeTimer) }
     var timerFinished by remember { mutableStateOf(false) }
 
+    // Czy aplikacja jest w trybie timera (kontrolowane teraz przez currentSection)
+    val isTimerMode = currentSection == NavigationSection.TIMER
+
     // Inicjalizacja - sprawdź czy timer jest aktywny
     LaunchedEffect(activeTimer) {
         if (activeTimer > 0) {
             timerRemainingTime = activeTimer
-            isTimerMode = true
             timerFinished = false
         }
     }
@@ -165,7 +179,7 @@ fun MainScreen(
 
                     // Nie pokazujemy fajerwerków w trybie timera
                 }
-            } else if (!isTimerMode) {
+            } else if (!isTimerMode && currentSection == NavigationSection.BIRTHDAY_COUNTDOWN) {
                 // W trybie odliczania urodzin aktualizuj pozostały czas
                 timeRemaining = (targetDate - currentTimeState).coerceAtLeast(0)
 
@@ -233,9 +247,28 @@ fun MainScreen(
             .fillMaxSize()
             .shakeEffect(timeRemaining = if (isTimerMode) timerRemainingTime else timeRemaining)
             .flashEffect(timeRemaining = if (isTimerMode) timerRemainingTime else timeRemaining)
-    ) {
+            // Add swipe detection if gift has been received
+        .then(
+            if (giftReceived) {
+                Modifier.detectHorizontalSwipes(
+                    onSwipeLeft = { onDrawerStateChange(false) },
+                    onSwipeRight = { onDrawerStateChange(true) })
+            } else {
+                Modifier
+            }
+        )) {
         // Tło aplikacji
         AppBackground(isTimeUp = isTimeUp || (isTimerMode && timerFinished))
+
+        // Navigation drawer (tylko jeśli prezent został odebrany)
+        if (giftReceived) {
+            NavigationDrawer(
+                isOpen = isDrawerOpen,
+                onOpenStateChange = onDrawerStateChange,
+                currentSection = currentSection,
+                onSectionSelected = onSectionSelected
+            )
+        }
 
         // Główna zawartość
         Box(modifier = Modifier.fillMaxSize()) {
@@ -251,111 +284,82 @@ fun MainScreen(
                         .padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Górny rząd z przełącznikiem trybów
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 8.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Przełącznik trybów - widoczny tylko po odkryciu trybu timera
-                        AnimatedVisibility(
-                            visible = timerModeEnabled || isTimerMode,
-                            enter = fadeIn(tween(500)),
-                            exit = fadeOut(tween(300))
-                        ) {
-                            ModeToggle(
-                                isTimerMode = isTimerMode, onModeChanged = { newTimerMode ->
-                                    isTimerMode = newTimerMode
+                    // Sprawdź aktualną sekcję i wyświetl odpowiednią zawartość
+                    when (currentSection) {
+                        NavigationSection.BIRTHDAY_COUNTDOWN -> {
+                            // Standardowy ekran odliczania urodzin
 
-                                    // Jeśli wychodzimy z trybu timera i był aktywny timer, anuluj go
-                                    if (!newTimerMode && timerRemainingTime > 0) {
-                                        onCancelTimer()
-                                        timerRemainingTime = 0
+                            // Nagłówek z tytułem
+                            HeaderSection()
+
+                            // Sekcja kurtyny lub prezentu
+                            CurtainSection(
+                                isTimeUp = isTimeUp,
+                                showGift = true,
+                                onGiftClicked = { centerX, centerY ->
+                                    // Zapisz pozycję kliknięcia i pokaż konfetti
+                                    confettiCenterX = centerX
+                                    confettiCenterY = centerY
+
+                                    // Pokaż wybuch konfetti
+                                    showConfettiExplosion = true
+
+                                    // Opóźnij pokazanie ekranu celebracji
+                                    MainScope().launch {
+                                        delay(1500) // Krótsze opóźnienie aby przejść po wybuchu konfetti
+                                        showCelebration = true
+                                        onGiftClicked()
                                     }
-
-                                    if (newTimerMode) {
-                                        // Przy wejściu w tryb timera inicjalizuj wartości
+                                },
+                                onGiftLongPressed = {
+                                    // Aktywuj tryb timera i powiadom, że został odkryty
+                                    Timber.d("Prezent długo naciśnięty, aktywuję tryb timera")
+                                    if (!timerModeEnabled) {
                                         timerMinutes = 5
                                         changeAppName = false
                                         timerFinished = false
+                                        onTimerModeDiscovered()
                                     }
-                                })
+                                },
+                                giftReceived = giftReceived || timerModeEnabled,
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            // Sekcja odliczania
+                            CountdownSection(
+                                timeRemaining = timeRemaining,
+                                isTimeUp = isTimeUp,
+                                isTimerMode = false,
+                                onTimerMinutesChanged = { /* Nie używane w trybie urodzin */ },
+                                onTimerSet = { /* Nie używane w trybie urodzin */ },
+                                timerMinutes = timerMinutes,
+                                modifier = Modifier.padding(bottom = 24.dp)
+                            )
+                        }
+
+                        NavigationSection.TIMER -> {
+                            // Użyj wydzielonego ekranu timera
+                            TimerScreen(
+                                timerRemainingTime = timerRemainingTime,
+                                timerFinished = timerFinished,
+                                onTimerSet = onTimerSet,
+                                onResetTimer = onResetTimer
+                            )
+                        }
+
+                        NavigationSection.GIFT -> {
+                            // Użyj wydzielonego ekranu prezentu
+                            GiftScreen(
+                                onGiftClicked = onGiftClicked, giftReceived = giftReceived
+                            )
                         }
                     }
-
-                    // Nagłówek z tytułem
-                    HeaderSection()
-
-                    // Sekcja kurtyny lub prezentu
-                    CurtainSection(
-                        isTimeUp = if (isTimerMode) true else isTimeUp, // Zawsze ukryj kurtynę w trybie timera
-                        showGift = !isTimerMode, // Nowy parametr - pokaż prezent tylko w trybie urodzinowym
-                        onGiftClicked = { centerX, centerY ->
-                            // Jeśli jesteśmy w trybie timera, to kliknięcie prezentu ustawia timer
-                            // (teraz niewidoczne w trybie timera, ale kod pozostanie dla kompatybilności)
-                            if (isTimerMode && !timerFinished) {
-                                if (changeAppName) {
-                                    // Pokaż dialog postępu przed ustawieniem timera
-                                    showProgressDialog = true
-                                } else {
-                                    // Od razu ustaw timer bez dialogu
-                                    onTimerSet(timerMinutes)
-                                }
-                            } else {
-                                // W trybie urodzinowym, zapisz pozycję kliknięcia i pokaż konfetti
-                                confettiCenterX = centerX
-                                confettiCenterY = centerY
-
-                                // Pokaż wybuch konfetti
-                                showConfettiExplosion = true
-
-                                // Opóźnij pokazanie ekranu celebracji
-                                MainScope().launch {
-                                    delay(1500) // Krótsze opóźnienie aby przejść po wybuchu konfetti
-                                    showCelebration = true
-                                    onGiftClicked()
-                                }
-                            }
-                        },
-                        onGiftLongPressed = {
-                            // Aktywuj tryb timera i powiadom, że został odkryty
-                            Timber.d("Prezent długo naciśnięty, aktywuję tryb timera")
-                            if (!isTimerMode) {
-                                isTimerMode = true
-                                timerMinutes = 5
-                                changeAppName = false
-                                timerFinished = false
-                                onTimerModeDiscovered()
-                            }
-                        },
-                        giftReceived = giftReceived || timerModeEnabled,
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    // Sekcja odliczania
-                    CountdownSection(
-                        timeRemaining = if (isTimerMode) timerRemainingTime else timeRemaining,
-                        isTimeUp = if (isTimerMode) timerFinished else isTimeUp,
-                        isTimerMode = isTimerMode,
-                        onTimerMinutesChanged = { minutes ->
-                            timerMinutes = minutes
-                        },
-                        timerMinutes = timerMinutes,
-                        changeAppName = changeAppName,
-                        onChangeAppNameChanged = { checked ->
-                            changeAppName = checked
-                        },
-                        onResetTimer = onResetTimer,
-                        modifier = Modifier.padding(bottom = 24.dp)
-                    )
                 }
             }
 
             // Wyświetlaj fajerwerki natychmiast, gdy czas się skończy, ale tylko w trybie urodzinowym
             AnimatedVisibility(
-                visible = (isTimeUp && !showCelebration && !isTimerMode),
+                visible = (isTimeUp && !showCelebration && currentSection == NavigationSection.BIRTHDAY_COUNTDOWN),
                 enter = fadeIn(tween(300)),
                 exit = fadeOut()
             ) {
@@ -366,7 +370,7 @@ fun MainScreen(
 
             // Wybuch konfetti gdy prezent jest kliknięty lub gdy czas upłynie (tylko w trybie urodzinowym)
             AnimatedVisibility(
-                visible = showConfettiExplosion && !showCelebration && !isTimerMode,
+                visible = showConfettiExplosion && !showCelebration && currentSection == NavigationSection.BIRTHDAY_COUNTDOWN,
                 enter = fadeIn(tween(100)),
                 exit = fadeOut()
             ) {
@@ -397,7 +401,7 @@ fun MainScreen(
                     onBackClick = {
                         // Przy powrocie do głównego ekranu
                         showTimerFinishedCelebration = false
-                        isTimerMode = false // Wróć do trybu urodzinowego
+                        onSectionSelected(NavigationSection.BIRTHDAY_COUNTDOWN)
                     },
                     onResetTimer = {
                         // Resetuj timer
@@ -436,4 +440,3 @@ fun MainScreen(
         }
     }
 }
-

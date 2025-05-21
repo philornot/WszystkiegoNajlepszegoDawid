@@ -26,6 +26,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -41,6 +43,7 @@ import com.philornot.siekiera.notification.NotificationScheduler
 import com.philornot.siekiera.notification.TimerNotificationHelper
 import com.philornot.siekiera.notification.TimerScheduler
 import com.philornot.siekiera.ui.screens.main.core.MainScreen
+import com.philornot.siekiera.ui.screens.main.drawer.NavigationSection
 import com.philornot.siekiera.ui.theme.AppTheme
 import com.philornot.siekiera.utils.FileUtils
 import com.philornot.siekiera.utils.RealTimeProvider
@@ -50,6 +53,8 @@ import com.philornot.siekiera.workers.FileCheckWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.util.Calendar
@@ -128,6 +133,14 @@ class MainActivity : ComponentActivity() {
 
     // Stan odkrycia trybu timera
     private val timerModeDiscovered = mutableStateOf(false)
+
+    // Stan szufladki nawigacyjnej
+    private val _isDrawerOpen = MutableStateFlow(false)
+    private val isDrawerOpen: StateFlow<Boolean> = _isDrawerOpen
+
+    // Aktualna sekcja nawigacji
+    private val _currentSection = MutableStateFlow(NavigationSection.BIRTHDAY_COUNTDOWN)
+    private val currentSection: StateFlow<NavigationSection> = _currentSection
 
     // Aktywny czas timera (w milisekundach)
     private val activeTimerRemainingTime = mutableStateOf(0L)
@@ -276,6 +289,8 @@ class MainActivity : ComponentActivity() {
                 // Timer wciąż aktywny, ustaw jego stan
                 activeTimerRemainingTime.value = remainingMillis
                 isTimerMode.value = true
+                // Ustaw odpowiednią sekcję w nawigacji
+                _currentSection.value = NavigationSection.TIMER
             } else {
                 // Timer już się zakończył, pokaż powiadomienie
                 val minutes = TimerScheduler.getTimerMinutes(this)
@@ -294,6 +309,10 @@ class MainActivity : ComponentActivity() {
                 ) {
                     // Stan dialogu
                     val showDialog = remember { mutableStateOf(false) }
+
+                    // Collect state flows
+                    val drawerOpen by isDrawerOpen.collectAsState()
+                    val navigationSection by currentSection.collectAsState()
 
                     // Prośba o uprawnienia do powiadomień w Compose UI
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -348,6 +367,34 @@ class MainActivity : ComponentActivity() {
                         onResetTimer = {
                             // Resetuj timer
                             resetTimer()
+                        },
+                        // Drawer parameters
+                        isDrawerOpen = drawerOpen,
+                        onDrawerStateChange = { isOpen ->
+                            _isDrawerOpen.value = isOpen
+                        },
+                        currentSection = navigationSection,
+                        onSectionSelected = { section ->
+                            _currentSection.value = section
+
+                            // Update app state based on section
+                            when (section) {
+                                NavigationSection.TIMER -> {
+                                    isTimerMode.value = true
+                                }
+
+                                NavigationSection.BIRTHDAY_COUNTDOWN -> {
+                                    isTimerMode.value = false
+                                }
+
+                                NavigationSection.GIFT -> {
+                                    isTimerMode.value = false
+                                    // If needed, automatically show download dialog
+                                    if (!giftReceived) {
+                                        showDialog.value = true
+                                    }
+                                }
+                            }
                         })
 
                     // Dialog pobierania
@@ -404,6 +451,7 @@ class MainActivity : ComponentActivity() {
             // Ustaw stan timera
             activeTimerRemainingTime.value = minutes * 60 * 1000L
             isTimerMode.value = true
+            _currentSection.value = NavigationSection.TIMER
 
             // Próba zmiany nazwy aplikacji na "Lawendowy Timer"
             tryChangeAppName(true)
@@ -445,6 +493,7 @@ class MainActivity : ComponentActivity() {
 
         // Zaktualizuj UI
         isTimerMode.value = true // Pozostań w trybie timera
+        _currentSection.value = NavigationSection.TIMER
 
         // Pokaż toast o zresetowaniu timera
         Toast.makeText(
@@ -808,6 +857,7 @@ class MainActivity : ComponentActivity() {
             if (remainingMillis > 0) {
                 activeTimerRemainingTime.value = remainingMillis
                 isTimerMode.value = true
+                _currentSection.value = NavigationSection.TIMER
             }
 
             // Sprawdź czy tryb timera jest włączony dla nazwy aplikacji

@@ -49,6 +49,7 @@ import com.philornot.siekiera.utils.TimeUtils
  * @param isTimeUp Czy czas upłynął
  * @param isTimerMode Czy jest aktywny tryb timera
  * @param onTimerMinutesChanged Wywołanie gdy zmieniają się minuty timera
+ * @param onTimerSet Wywołanie gdy timer powinien zostać uruchomiony
  * @param timerMinutes Aktualnie ustawione minuty w trybie timera
  * @param changeAppName Czy zmienić nazwę aplikacji w trybie timera
  * @param onChangeAppNameChanged Wywołanie gdy zmienia się opcja zmiany
@@ -63,6 +64,7 @@ fun CountdownSection(
     isTimeUp: Boolean,
     isTimerMode: Boolean = false,
     onTimerMinutesChanged: (Int) -> Unit = {},
+    onTimerSet: (Int) -> Unit = {},
     timerMinutes: Int = 5,
     changeAppName: Boolean = false,
     onChangeAppNameChanged: (Boolean) -> Unit = {},
@@ -70,12 +72,16 @@ fun CountdownSection(
 ) {
     // Format the time string
     val formattedTime = if (isTimerMode) {
-        // W trybie timera formatujemy czas na podstawie ustawionych minut
-        val hours = timerMinutes / 60
-        val minutes = timerMinutes % 60
-        "$timerMinutes dni, ${hours.toString().padStart(2, '0')}:${
-            minutes.toString().padStart(2, '0')
-        }:00"
+        // W trybie timera formatujemy czas na podstawie ustawionych minut lub pozostałego czasu
+        if (timeRemaining > 0) {
+            TimeUtils.formatRemainingTime(timeRemaining)
+        } else {
+            val hours = timerMinutes / 60
+            val minutes = timerMinutes % 60
+            "$timerMinutes dni, ${hours.toString().padStart(2, '0')}:${
+                minutes.toString().padStart(2, '0')
+            }:00"
+        }
     } else {
         // W trybie odliczania urodzin używamy standardowego formatowania
         TimeUtils.formatRemainingTime(timeRemaining)
@@ -97,11 +103,22 @@ fun CountdownSection(
     var dragStartY by remember { mutableFloatStateOf(0f) }
     var currentDragMinutes by remember { mutableIntStateOf(timerMinutes) }
 
+    // Track if timer needs to be auto-started after drag
+    var shouldStartTimer by remember { mutableStateOf(false) }
+
     // Odświeżanie UI co sekundę dla trybu timera
     LaunchedEffect(isTimerMode) {
         if (isTimerMode) {
             // Zainicjuj wartość minut
             currentDragMinutes = timerMinutes
+        }
+    }
+
+    // Auto-start timer after drag is completed
+    LaunchedEffect(shouldStartTimer) {
+        if (shouldStartTimer && isTimerMode && timeRemaining <= 0) {
+            onTimerSet(currentDragMinutes)
+            shouldStartTimer = false
         }
     }
 
@@ -128,6 +145,11 @@ fun CountdownSection(
                             isDragging = false
                             // Zatwierdź zmianę minut po zakończeniu przeciągania
                             onTimerMinutesChanged(currentDragMinutes)
+
+                            // Auto-start timer if not already running
+                            if (timeRemaining <= 0) {
+                                shouldStartTimer = true
+                            }
                         }, onDragCancel = {
                             isDragging = false
                         }, onVerticalDrag = { change, dragAmount ->
@@ -153,7 +175,8 @@ fun CountdownSection(
                 }) {
             // Tytuł
             Text(
-                text = if (isTimerMode) "Timer: ustaw czas" else "Czas do urodzin:",
+                text = if (isTimerMode) if (timeRemaining > 0) "Timer aktywny:" else "Timer: ustaw czas"
+                else "Czas do urodzin:",
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.SemiBold,
@@ -165,7 +188,8 @@ fun CountdownSection(
             if (isTimerMode) {
                 // W trybie timera pokazujemy minuty zamiast dni
                 TimerDaysCounter(
-                    minutes = currentDragMinutes, isDragging = isDragging
+                    minutes = if (timeRemaining > 0) (timeRemaining / 60000).toInt() else currentDragMinutes,
+                    isDragging = isDragging
                 )
             } else {
                 // W trybie odliczania do urodzin pokazujemy dni
@@ -236,38 +260,57 @@ fun CountdownSection(
                     )
                 }
 
-                // Przycisk resetowania timera
-                Spacer(modifier = Modifier.height(16.dp))
+                // Start timer button (show only if timer not running)
+                if (timeRemaining <= 0) {
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                Button(
-                    onClick = onResetTimer,
-                    modifier = Modifier.fillMaxWidth(0.7f),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.secondary
-                    )
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "Reset timera",
-                            modifier = Modifier.size(18.dp)
+                    Button(
+                        onClick = { onTimerSet(currentDragMinutes) },
+                        modifier = Modifier.fillMaxWidth(0.7f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Resetuj timer")
+                    ) {
+                        Text("Rozpocznij odliczanie")
                     }
                 }
 
-                // Instrukcja przeciągania
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Przeciągnij w górę lub w dół, aby zmienić czas",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
+                // Przycisk resetowania timera (show only if timer is running)
+                if (timeRemaining > 0) {
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Button(
+                        onClick = onResetTimer,
+                        modifier = Modifier.fillMaxWidth(0.7f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.secondary
+                        )
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Reset timera",
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Anuluj timer")
+                        }
+                    }
+                }
+
+                // Instrukcja przeciągania (show only if timer not running)
+                if (timeRemaining <= 0) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Przeciągnij w górę lub w dół, aby zmienić czas",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
         }
     }
@@ -329,4 +372,3 @@ fun CountdownSection(
         }
     }
 }
-
