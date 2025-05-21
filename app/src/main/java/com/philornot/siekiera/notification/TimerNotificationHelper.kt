@@ -36,15 +36,16 @@ object TimerNotificationHelper {
             val notificationManager =
                 context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-            // Kanał dla powiadomień timera
+            // Kanał dla powiadomień timera - z wysokim priorytetem
             val timerChannel = NotificationChannel(
                 CHANNEL_ID_TIMER,
                 context.getString(R.string.timer_notification_channel_name),
-                NotificationManager.IMPORTANCE_HIGH
+                NotificationManager.IMPORTANCE_HIGH // Zmienione na HIGH
             ).apply {
                 description = context.getString(R.string.timer_notification_channel_description)
                 enableLights(true)
                 enableVibration(true)
+                vibrationPattern = longArrayOf(0, 500, 250, 500) // Dodanie wibracji
             }
 
             notificationManager.createNotificationChannel(timerChannel)
@@ -70,7 +71,7 @@ object TimerNotificationHelper {
             context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Buduj powiadomienie
+        // Buduj powiadomienie z wyższym priorytetem i wibracją
         val notification = NotificationCompat.Builder(context, CHANNEL_ID_TIMER)
             .setSmallIcon(R.drawable.notification_timer_icon)
             .setColor(ContextCompat.getColor(context, R.color.colorPrimaryDark))
@@ -78,10 +79,12 @@ object TimerNotificationHelper {
             .setContentText(context.getString(R.string.timer_notification_text, minutes)).setStyle(
                 NotificationCompat.BigTextStyle()
                     .bigText(context.getString(R.string.timer_notification_text, minutes))
-            ).setAutoCancel(true).setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC).setContentIntent(pendingIntent)
-            .build()
+            ).setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH) // Zmienione z DEFAULT na HIGH
+            .setCategory(NotificationCompat.CATEGORY_ALARM) // Dodane
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setVibrate(longArrayOf(0, 500, 250, 500)) // Dodano wibracje
+            .setContentIntent(pendingIntent).build()
 
         // Wyświetl powiadomienie
         try {

@@ -25,9 +25,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -48,8 +54,8 @@ import androidx.compose.ui.unit.dp
 import kotlin.random.Random
 
 /**
- * Sekcja odliczania, która obsługuje zarówno tryb odliczania
- * do urodzin jak i tryb timera.
+ * Sekcja odliczania, która obsługuje zarówno tryb odliczania do urodzin
+ * jak i tryb timera.
  *
  * @param modifier Modifier dla kontenera
  * @param timeRemaining Pozostały czas w milisekundach
@@ -60,6 +66,7 @@ import kotlin.random.Random
  * @param changeAppName Czy zmienić nazwę aplikacji w trybie timera
  * @param onChangeAppNameChanged Wywołanie gdy zmienia się opcja zmiany
  *    nazwy
+ * @param onResetTimer Wywołanie gdy użytkownik resetuje timer
  */
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
@@ -72,6 +79,7 @@ fun CountdownSection(
     timerMinutes: Int = 5,
     changeAppName: Boolean = false,
     onChangeAppNameChanged: (Boolean) -> Unit = {},
+    onResetTimer: () -> Unit = {},
 ) {
     // Format the time string
     val formattedTime = if (isTimerMode) {
@@ -241,6 +249,30 @@ fun CountdownSection(
                     )
                 }
 
+                // Przycisk resetowania timera
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Button(
+                    onClick = onResetTimer,
+                    modifier = Modifier.fillMaxWidth(0.7f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondary
+                    )
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Reset timera",
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Resetuj timer")
+                    }
+                }
+
                 // Instrukcja przeciągania
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
@@ -281,6 +313,32 @@ fun CountdownSection(
                 color = MaterialTheme.colorScheme.secondary,
                 textAlign = TextAlign.Center
             )
+
+            // Dodaj przycisk resetowania timera również po zakończeniu
+            if (isTimerMode) {
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Button(
+                    onClick = onResetTimer,
+                    modifier = Modifier.fillMaxWidth(0.7f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondary
+                    )
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Reset timera",
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Ustaw nowy timer")
+                    }
+                }
+            }
         }
     }
 }

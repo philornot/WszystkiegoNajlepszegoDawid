@@ -58,6 +58,8 @@ import kotlinx.coroutines.delay
  *
  * @param modifier Modifier dla kontenera
  * @param isTimeUp Czy czas upłynął
+ * @param showGift Czy pokazać prezent (domyślnie true, false w trybie
+ *    timera)
  * @param onGiftClicked Callback dla kliknięcia prezentu z pozycją
  * @param onGiftLongPressed Callback dla długiego naciśnięcia prezentu
  * @param giftReceived Czy prezent został odebrany, kontroluje działanie
@@ -67,6 +69,7 @@ import kotlinx.coroutines.delay
 fun CurtainSection(
     modifier: Modifier = Modifier,
     isTimeUp: Boolean,
+    showGift: Boolean = true,
     onGiftClicked: (centerX: Float, centerY: Float) -> Unit,
     onGiftLongPressed: () -> Unit = {},
     giftReceived: Boolean = false,
@@ -91,9 +94,9 @@ fun CurtainSection(
             Curtain(modifier = Modifier.fillMaxSize())
         }
 
-        // Animacja prezentu
+        // Animacja prezentu - teraz z uwzględnieniem parametru showGift
         AnimatedVisibility(
-            visible = isTimeUp, enter = fadeIn(
+            visible = isTimeUp && showGift, enter = fadeIn(
                 animationSpec = tween(
                     durationMillis = 800, delayMillis = 200, easing = LinearEasing
                 )

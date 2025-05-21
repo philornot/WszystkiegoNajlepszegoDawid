@@ -15,9 +15,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -58,6 +60,7 @@ import timber.log.Timber
  * @param activeTimer Aktualnie aktywny timer w milisekundach (0 jeśli brak
  *    aktywnego timera)
  * @param onCancelTimer Callback do anulowania timera
+ * @param onResetTimer Callback do resetowania timera
  */
 @Composable
 fun MainScreen(
@@ -72,6 +75,7 @@ fun MainScreen(
     onTimerModeDiscovered: () -> Unit = {},
     activeTimer: Long = 0,
     onCancelTimer: () -> Unit = {},
+    onResetTimer: () -> Unit = {},
 ) {
     // Oblicz czy czas upłynął
     var isTimeUp by remember { mutableStateOf(currentTime >= targetDate) }
@@ -125,6 +129,7 @@ fun MainScreen(
     }
 
     // Reagowanie na zmianę stanu isTimeUp - automatyczne fajerwerki po zakończeniu odliczania
+    // (tylko w trybie urodzinowym)
     LaunchedEffect(isTimeUp) {
         if (isTimeUp && !isTimerMode) {
             Timber.d("Czas upłynął! Uruchamiam automatyczne fajerwerki!")
@@ -156,14 +161,7 @@ fun MainScreen(
                     timerFinished = true
                     showTimerFinishedCelebration = true
 
-                    // Uruchom fajerwerki
-                    showConfettiExplosion = true
-
-                    // Po 5 sekundach ukryj fajerwerki
-                    launch {
-                        delay(5000)
-                        showConfettiExplosion = false
-                    }
+                    // Nie pokazujemy fajerwerków w trybie timera
                 }
             } else if (!isTimerMode) {
                 // W trybie odliczania urodzin aktualizuj pozostały czas
@@ -290,9 +288,11 @@ fun MainScreen(
 
                     // Sekcja kurtyny lub prezentu
                     CurtainSection(
-                        isTimeUp = isTimeUp || (isTimerMode && timerFinished),
+                        isTimeUp = if (isTimerMode) true else isTimeUp, // Zawsze ukryj kurtynę w trybie timera
+                        showGift = !isTimerMode, // Nowy parametr - pokaż prezent tylko w trybie urodzinowym
                         onGiftClicked = { centerX, centerY ->
                             // Jeśli jesteśmy w trybie timera, to kliknięcie prezentu ustawia timer
+                            // (teraz niewidoczne w trybie timera, ale kod pozostanie dla kompatybilności)
                             if (isTimerMode && !timerFinished) {
                                 if (changeAppName) {
                                     // Pokaż dialog postępu przed ustawieniem timera
@@ -345,14 +345,15 @@ fun MainScreen(
                         onChangeAppNameChanged = { checked ->
                             changeAppName = checked
                         },
+                        onResetTimer = onResetTimer,
                         modifier = Modifier.padding(bottom = 24.dp)
                     )
                 }
             }
 
-            // Wyświetlaj fajerwerki natychmiast, gdy czas się skończy
+            // Wyświetlaj fajerwerki natychmiast, gdy czas się skończy, ale tylko w trybie urodzinowym
             AnimatedVisibility(
-                visible = (isTimeUp && !showCelebration) || (isTimerMode && timerFinished && !showTimerFinishedCelebration),
+                visible = (isTimeUp && !showCelebration && !isTimerMode),
                 enter = fadeIn(tween(300)),
                 exit = fadeOut()
             ) {
@@ -361,9 +362,9 @@ fun MainScreen(
                 }
             }
 
-            // Wybuch konfetti gdy prezent jest kliknięty lub gdy czas upłynie
+            // Wybuch konfetti gdy prezent jest kliknięty lub gdy czas upłynie (tylko w trybie urodzinowym)
             AnimatedVisibility(
-                visible = showConfettiExplosion && !showCelebration && !showTimerFinishedCelebration,
+                visible = showConfettiExplosion && !showCelebration && !isTimerMode,
                 enter = fadeIn(tween(100)),
                 exit = fadeOut()
             ) {
@@ -384,16 +385,22 @@ fun MainScreen(
                     })
             }
 
-            // Ekran po zakończeniu timera
+            // Ekran po zakończeniu timera - bez fajerwerków
             AnimatedVisibility(
                 visible = showTimerFinishedCelebration, enter = fadeIn(), exit = fadeOut()
             ) {
                 TimerFinishedMessage(
-                    minutes = timerMinutes, modifier = Modifier.fillMaxSize(), onBackClick = {
-                        // Przy powrocie do głównego ekranu resetuj fajerwerki
-                        showConfettiExplosion = false
+                    minutes = timerMinutes,
+                    modifier = Modifier.fillMaxSize(),
+                    onBackClick = {
+                        // Przy powrocie do głównego ekranu
                         showTimerFinishedCelebration = false
                         isTimerMode = false // Wróć do trybu urodzinowego
+                    },
+                    onResetTimer = {
+                        // Resetuj timer
+                        showTimerFinishedCelebration = false
+                        onResetTimer()
                     })
             }
 
@@ -434,6 +441,7 @@ fun TimerFinishedMessage(
     minutes: Int,
     modifier: Modifier = Modifier,
     onBackClick: () -> Unit = {},
+    onResetTimer: () -> Unit = {},
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier.padding(24.dp)
@@ -462,13 +470,27 @@ fun TimerFinishedMessage(
                     textAlign = TextAlign.Center
                 )
 
-                // Przykładowy tekst motywacyjny
-                Text(
-                    text = "Gratulacje! Możesz wrócić do trybu odliczania urodzin lub ustawić nowy timer.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    textAlign = TextAlign.Center
-                )
+                // Przycisk resetowania timera
+                androidx.compose.material3.Button(
+                    onClick = onResetTimer,
+                    modifier = Modifier.padding(vertical = 16.dp),
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondary
+                    )
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Ustaw nowy timer",
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Ustaw nowy timer")
+                    }
+                }
 
                 // Elastyczny odstęp dla lepszego układu
                 Spacer(modifier = Modifier.weight(1f))

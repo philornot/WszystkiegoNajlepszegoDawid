@@ -320,7 +320,7 @@ class MainActivity : ComponentActivity() {
 
                     // Główny ekran z kurtyną, licznikiem i prezentem
                     MainScreen(
-                        targetDate = TimeUtils.getRevealDateMillis(appConfig),
+                        targetDate = calculateNextBirthday(),
                         currentTime = timeProvider.getCurrentTimeMillis(),
                         onGiftClicked = { showDialog.value = true },
                         activity = this, // Przekaż referencję do aktywności
@@ -344,6 +344,10 @@ class MainActivity : ComponentActivity() {
                         onCancelTimer = {
                             // Anuluj aktywny timer
                             cancelTimer()
+                        },
+                        onResetTimer = {
+                            // Resetuj timer
+                            resetTimer()
                         })
 
                     // Dialog pobierania
@@ -427,6 +431,54 @@ class MainActivity : ComponentActivity() {
             // Przywróć oryginalną nazwę aplikacji
             tryChangeAppName(false)
         }
+    }
+
+    /** Resetuje aktywny timer i przywraca początkowy stan trybu timera. */
+    private fun resetTimer() {
+        Timber.d("Resetowanie timera")
+
+        // Anuluj aktywny timer
+        cancelTimer()
+
+        // Zresetuj stan trybu timera
+        activeTimerRemainingTime.value = 0L
+
+        // Zaktualizuj UI
+        isTimerMode.value = true // Pozostań w trybie timera
+
+        // Pokaż toast o zresetowaniu timera
+        Toast.makeText(
+            this, "Timer został zresetowany", Toast.LENGTH_SHORT
+        ).show()
+    }
+
+    /**
+     * Oblicza datę następnych urodzin w oparciu o aktualny czas. Jeśli bieżący
+     * czas jest po dacie urodzin w tym roku, zwraca datę urodzin w następnym
+     * roku.
+     */
+    private fun calculateNextBirthday(): Long {
+        val currentTime = System.currentTimeMillis()
+
+        // Pobierz datę urodzin skonfigurowaną w aplikacji
+        val birthdayCalendar = Calendar.getInstance(WARSAW_TIMEZONE)
+        val configCalendar = appConfig.getBirthdayDate()
+
+        // Ustaw datę urodzin w bieżącym roku
+        birthdayCalendar.set(Calendar.YEAR, birthdayCalendar.get(Calendar.YEAR))
+        birthdayCalendar.set(Calendar.MONTH, configCalendar.get(Calendar.MONTH))
+        birthdayCalendar.set(Calendar.DAY_OF_MONTH, configCalendar.get(Calendar.DAY_OF_MONTH))
+        birthdayCalendar.set(Calendar.HOUR_OF_DAY, configCalendar.get(Calendar.HOUR_OF_DAY))
+        birthdayCalendar.set(Calendar.MINUTE, configCalendar.get(Calendar.MINUTE))
+        birthdayCalendar.set(Calendar.SECOND, 0)
+        birthdayCalendar.set(Calendar.MILLISECOND, 0)
+
+        // Jeśli bieżący czas jest po dacie urodzin w tym roku, dodaj rok
+        if (currentTime > birthdayCalendar.timeInMillis) {
+            birthdayCalendar.add(Calendar.YEAR, 1)
+        }
+
+        return birthdayCalendar.timeInMillis
     }
 
     /**
