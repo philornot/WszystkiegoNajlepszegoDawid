@@ -1,26 +1,14 @@
 package com.philornot.siekiera.ui.screens.main
 
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalAnimationApi
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -30,8 +18,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -51,7 +37,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import kotlin.random.Random
 
 /**
  * Sekcja odliczania, która obsługuje zarówno tryb odliczania do urodzin
@@ -343,197 +328,3 @@ fun CountdownSection(
     }
 }
 
-/** Timer licznik dni/minut. Pokazuje minuty w trybie timera. */
-@Composable
-fun TimerDaysCounter(
-    modifier: Modifier = Modifier,
-    minutes: Int,
-    isDragging: Boolean = false,
-) {
-    // Animacja pulsowania podczas przeciągania
-    val scale by animateFloatAsState(
-        targetValue = if (isDragging) 1.05f else 1.0f, label = "drag_scale"
-    )
-
-    Card(
-        modifier = modifier.size(width = 160.dp, height = 160.dp * scale),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        ),
-        shape = MaterialTheme.shapes.medium,
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 32.dp, vertical = 16.dp)
-        ) {
-            // Liczba minut z wycentrowanym tekstem
-            Text(
-                text = minutes.toString(),
-                style = MaterialTheme.typography.displayLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-
-            // Etykieta minut z wycentrowanym tekstem
-            Text(
-                text = "minut",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-        }
-    }
-}
-
-/** Licznik dni z czystym designem */
-@Composable
-fun DaysCounter(
-    modifier: Modifier = Modifier,
-    days: String,
-) {
-    val dayText = days.split(" ")[0]
-    val daysLabel = days.replace(dayText, "").trim()
-
-    Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        ),
-        shape = MaterialTheme.shapes.medium,
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(horizontal = 32.dp, vertical = 16.dp)
-        ) {
-            // Liczba dni z wycentrowanym tekstem
-            Text(
-                text = dayText,
-                style = MaterialTheme.typography.displayLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-
-            // Etykieta dni z wycentrowanym tekstem
-            Text(
-                text = daysLabel,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-        }
-    }
-}
-
-/** Karta z cyframi czasu z animowanymi przejściami cyfr */
-@OptIn(ExperimentalAnimationApi::class)
-@Composable
-fun TimeDigitCard(
-    modifier: Modifier = Modifier,
-    digits: String,
-    label: String,
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-        modifier = modifier.padding(horizontal = 4.dp)
-    ) {
-        // Karta z animowanymi cyframi
-        Card(
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer
-            ),
-            shape = MaterialTheme.shapes.small,
-            modifier = Modifier.size(width = 56.dp, height = 72.dp)
-        ) {
-            Box(
-                contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    // Animuj każdą cyfrę osobno
-                    for (i in digits.indices) {
-                        AnimatedContent(
-                            targetState = digits[i], transitionSpec = {
-                                // Wybierz losowy typ animacji dla każdej zmiany cyfry
-                                val animationType = Random.nextInt(6)
-                                when (animationType) {
-                                    0 -> {
-                                        // Przesunięcie pionowe
-                                        val direction = if (Random.nextBoolean()) 1 else -1
-                                        slideInVertically { height -> direction * height } + fadeIn() togetherWith slideOutVertically { height -> -direction * height } + fadeOut()
-                                    }
-
-                                    1 -> {
-                                        // Przesunięcie poziome
-                                        val direction = if (Random.nextBoolean()) 1 else -1
-                                        slideInHorizontally { width -> direction * width } + fadeIn() togetherWith slideOutHorizontally { width -> -direction * width } + fadeOut()
-                                    }
-
-                                    2 -> {
-                                        // Animacja skalowania
-                                        scaleIn(initialScale = 0.8f) + fadeIn() togetherWith scaleOut(
-                                            targetScale = 1.2f
-                                        ) + fadeOut()
-                                    }
-
-                                    3 -> {
-                                        // Animacja odbicia (zamiast rotacji)
-                                        slideInVertically {
-                                            if (Random.nextBoolean()) it else -it
-                                        } + fadeIn() togetherWith slideOutVertically {
-                                            if (Random.nextBoolean()) -it else it
-                                        } + fadeOut()
-                                    }
-
-                                    4 -> {
-                                        // Przenikanie
-                                        fadeIn(animationSpec = tween(durationMillis = 200)) togetherWith fadeOut(
-                                            animationSpec = tween(durationMillis = 200)
-                                        )
-                                    }
-
-                                    else -> {
-                                        // Animacja łączona
-                                        (slideInVertically { it / 2 } + fadeIn() + scaleIn(
-                                            initialScale = 0.9f
-                                        )) togetherWith (slideOutVertically { -it / 2 } + fadeOut() + scaleOut(
-                                            targetScale = 1.1f
-                                        ))
-                                    }
-                                }
-                            }, label = "digitTransition"
-                        ) { digit ->
-                            Text(
-                                text = digit.toString(),
-                                style = MaterialTheme.typography.headlineLarge,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Center
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(4.dp))
-
-        // Etykieta
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-    }
-}
