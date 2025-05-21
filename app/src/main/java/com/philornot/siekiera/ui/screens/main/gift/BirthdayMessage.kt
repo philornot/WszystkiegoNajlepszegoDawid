@@ -1,4 +1,4 @@
-package com.philornot.siekiera.ui.screens.main
+package com.philornot.siekiera.ui.screens.main.gift
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.dp
 /** Prosta wiadomość urodzinowa pokazywana po kliknięciu prezentu. */
 @Composable
 fun BirthdayMessage(
-    modifier: Modifier = Modifier.Companion,
+    modifier: Modifier = Modifier,
     onBackClick: () -> Unit = {},
 ) {
     Column(

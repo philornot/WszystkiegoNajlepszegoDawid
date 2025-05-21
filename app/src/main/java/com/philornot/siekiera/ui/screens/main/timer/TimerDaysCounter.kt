@@ -1,4 +1,4 @@
-package com.philornot.siekiera.ui.screens.main
+package com.philornot.siekiera.ui.screens.main.timer
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -21,7 +21,7 @@ import androidx.compose.ui.unit.dp
 /** Timer licznik dni/minut. Pokazuje minuty w trybie timera. */
 @Composable
 fun TimerDaysCounter(
-    modifier: Modifier = Modifier.Companion,
+    modifier: Modifier = Modifier,
     minutes: Int,
     isDragging: Boolean = false,
 ) {

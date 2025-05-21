@@ -1,4 +1,4 @@
-package com.philornot.siekiera.ui.screens.main
+package com.philornot.siekiera.ui.screens.main.effects
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -14,7 +14,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.translate
 import com.philornot.siekiera.ui.theme.AccentMauve
@@ -122,7 +124,7 @@ fun ConfettiExplosionEffect(
                         ConfettiShape.RECTANGLE -> {
                             drawRect(
                                 color = particle.color.copy(alpha = alpha),
-                                size = androidx.compose.ui.geometry.Size(
+                                size = Size(
                                     particle.size * 2f * (1f - progress * 0.3f),
                                     particle.size * (1f - progress * 0.3f)
                                 ),
@@ -133,7 +135,7 @@ fun ConfettiExplosionEffect(
                             )
                         }
                         ConfettiShape.TRIANGLE -> {
-                            val path = androidx.compose.ui.graphics.Path()
+                            val path = Path()
                             val size = particle.size * (1f - progress * 0.3f)
                             path.moveTo(0f, -size)
                             path.lineTo(size, size)

@@ -40,7 +40,7 @@ import com.philornot.siekiera.notification.NotificationHelper
 import com.philornot.siekiera.notification.NotificationScheduler
 import com.philornot.siekiera.notification.TimerNotificationHelper
 import com.philornot.siekiera.notification.TimerScheduler
-import com.philornot.siekiera.ui.screens.main.MainScreen
+import com.philornot.siekiera.ui.screens.main.core.MainScreen
 import com.philornot.siekiera.ui.theme.AppTheme
 import com.philornot.siekiera.utils.FileUtils
 import com.philornot.siekiera.utils.RealTimeProvider

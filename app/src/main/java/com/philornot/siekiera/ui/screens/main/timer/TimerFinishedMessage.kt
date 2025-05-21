@@ -1,4 +1,4 @@
-package com.philornot.siekiera.ui.screens.main
+package com.philornot.siekiera.ui.screens.main.timer
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -30,7 +30,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun TimerFinishedMessage(
     minutes: Int,
-    modifier: Modifier = Modifier.Companion,
+    modifier: Modifier = Modifier,
     onBackClick: () -> Unit = {},
     onResetTimer: () -> Unit = {},
 ) {

@@ -1,4 +1,4 @@
-package com.philornot.siekiera.ui.screens.main
+package com.philornot.siekiera.ui.screens.main.countdown
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalAnimationApi
@@ -37,6 +37,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.philornot.siekiera.ui.screens.main.timer.TimerDaysCounter
+import com.philornot.siekiera.utils.TimeUtils
 
 /**
  * Sekcja odliczania, która obsługuje zarówno tryb odliczania do urodzin
@@ -76,7 +78,7 @@ fun CountdownSection(
         }:00"
     } else {
         // W trybie odliczania urodzin używamy standardowego formatowania
-        com.philornot.siekiera.utils.TimeUtils.formatRemainingTime(timeRemaining)
+        TimeUtils.formatRemainingTime(timeRemaining)
     }
 
     val (days, time) = if ("," in formattedTime) {

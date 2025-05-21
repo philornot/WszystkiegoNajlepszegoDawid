@@ -1,4 +1,4 @@
-package com.philornot.siekiera.ui.screens.main
+package com.philornot.siekiera.ui.screens.main.effects
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import kotlinx.coroutines.delay
@@ -146,7 +147,7 @@ fun Modifier.flashEffect(
         // Draw a white overlay with the current alpha
         if (flashAlpha.value > 0) {
             drawRect(
-                color = androidx.compose.ui.graphics.Color.White, alpha = flashAlpha.value
+                color = Color.White, alpha = flashAlpha.value
             )
         }
     }

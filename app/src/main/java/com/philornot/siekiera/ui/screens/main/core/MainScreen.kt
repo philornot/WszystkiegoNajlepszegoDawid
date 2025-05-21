@@ -1,4 +1,4 @@
-package com.philornot.siekiera.ui.screens.main
+package com.philornot.siekiera.ui.screens.main.core
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -32,6 +32,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.philornot.siekiera.MainActivity
+import com.philornot.siekiera.ui.screens.main.gift.BirthdayMessage
+import com.philornot.siekiera.ui.screens.main.effects.ConfettiExplosionEffect
+import com.philornot.siekiera.ui.screens.main.countdown.CountdownSection
+import com.philornot.siekiera.ui.screens.main.curtain.CurtainSection
+import com.philornot.siekiera.ui.screens.main.countdown.ExplosiveFireworksDisplay
+import com.philornot.siekiera.ui.screens.main.timer.TimerFinishedMessage
+import com.philornot.siekiera.ui.screens.main.effects.flashEffect
+import com.philornot.siekiera.ui.screens.main.effects.shakeEffect
+import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -131,7 +140,7 @@ fun MainScreen(
 
             // Po 5 sekundach automatycznie ukrywamy efekt konfetti
             // aby nie kolidował z innymi efektami
-            kotlinx.coroutines.MainScope().launch {
+            MainScope().launch {
                 delay(5000)
                 showConfettiExplosion = false
             }
@@ -303,7 +312,7 @@ fun MainScreen(
                                 showConfettiExplosion = true
 
                                 // Opóźnij pokazanie ekranu celebracji
-                                kotlinx.coroutines.MainScope().launch {
+                                MainScope().launch {
                                     delay(1500) // Krótsze opóźnienie aby przejść po wybuchu konfetti
                                     showCelebration = true
                                     onGiftClicked()

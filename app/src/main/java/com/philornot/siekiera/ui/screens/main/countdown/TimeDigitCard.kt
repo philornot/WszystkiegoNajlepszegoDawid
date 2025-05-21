@@ -1,4 +1,4 @@
-package com.philornot.siekiera.ui.screens.main
+package com.philornot.siekiera.ui.screens.main.countdown
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ExperimentalAnimationApi
@@ -37,7 +37,7 @@ import kotlin.random.Random
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun TimeDigitCard(
-    modifier: Modifier = Modifier.Companion,
+    modifier: Modifier = Modifier,
     digits: String,
     label: String,
 ) {

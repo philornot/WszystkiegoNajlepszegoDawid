@@ -1,4 +1,4 @@
-package com.philornot.siekiera.ui.screens.main
+package com.philornot.siekiera.ui.screens.main.curtain
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.philornot.siekiera.ui.screens.main.gift.GiftButton
 
 /**
  * Sekcja z kurtyną i prezentem, obsługująca długie naciśnięcie dla
@@ -68,13 +69,13 @@ fun CurtainSection(
         ) {
             GiftButton(
                 modifier = Modifier.size(200.dp), onClick = { centerX, centerY ->
-                onGiftClicked(centerX, centerY)
-            }, onLongPress = {
-                // Aktywuj długie naciśnięcie tylko jeśli prezent został odebrany
-                if (giftReceived) {
-                    onGiftLongPressed()
-                }
-            }, enableLongPress = giftReceived
+                    onGiftClicked(centerX, centerY)
+                }, onLongPress = {
+                    // Aktywuj długie naciśnięcie tylko jeśli prezent został odebrany
+                    if (giftReceived) {
+                        onGiftLongPressed()
+                    }
+                }, enableLongPress = giftReceived
             )
         }
     }

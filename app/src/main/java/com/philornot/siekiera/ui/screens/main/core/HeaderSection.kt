@@ -1,4 +1,4 @@
-package com.philornot.siekiera.ui.screens.main
+package com.philornot.siekiera.ui.screens.main.core
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column

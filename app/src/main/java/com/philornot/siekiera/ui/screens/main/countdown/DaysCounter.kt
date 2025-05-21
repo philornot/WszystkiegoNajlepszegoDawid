@@ -1,4 +1,4 @@
-package com.philornot.siekiera.ui.screens.main
+package com.philornot.siekiera.ui.screens.main.countdown
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -17,7 +17,7 @@ import androidx.compose.ui.unit.dp
 /** Licznik dni z czystym designem */
 @Composable
 fun DaysCounter(
-    modifier: Modifier = Modifier.Companion,
+    modifier: Modifier = Modifier,
     days: String,
 ) {
     val dayText = days.split(" ")[0]

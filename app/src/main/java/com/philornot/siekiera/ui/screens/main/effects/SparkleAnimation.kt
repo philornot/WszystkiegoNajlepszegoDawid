@@ -1,4 +1,4 @@
-package com.philornot.siekiera.ui.screens.main
+package com.philornot.siekiera.ui.screens.main.effects
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
