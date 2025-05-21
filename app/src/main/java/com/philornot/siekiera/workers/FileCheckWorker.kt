@@ -67,15 +67,19 @@ class FileCheckWorker(
         Timber.d("FileCheckWorker: Rozpoczynam workflow sprawdzania pliku")
 
         try {
+            // Sprawdź czy wymuszamy pobieranie
+            val forceDownload = inputData.getBoolean("force_download", false)
+
             // Najpierw sprawdź czy zadanie nie jest już uruchomione
-            if (isWorkAlreadyRunning()) {
+            // WAŻNE: Pozwól na wykonanie jeśli wymuszamy pobieranie
+            if (isWorkAlreadyRunning() && !forceDownload) {
                 Timber.d("FileCheckWorker: Inne zadanie sprawdzania pliku już działa - pomijam")
                 return@coroutineScope Result.success()
             }
-            Timber.d("FileCheckWorker: Brak innych uruchomionych zadań, kontynuuję sprawdzanie")
+            Timber.d("FileCheckWorker: Brak innych uruchomionych zadań lub wymuszono pobieranie, kontynuuję sprawdzanie")
 
             // Sprawdź czy już pobraliśmy plik
-            if (isFileAlreadyDownloaded()) {
+            if (isFileAlreadyDownloaded() && !forceDownload) {
                 Timber.d("FileCheckWorker: Plik już został pobrany - pomijam pobieranie")
                 return@coroutineScope Result.success()
             }
@@ -121,6 +125,13 @@ class FileCheckWorker(
     private fun isWorkAlreadyRunning(): Boolean {
         val context = getContext() ?: return false
         Timber.d("FileCheckWorker: Sprawdzam czy inne zadanie sprawdzania jest już uruchomione")
+
+        // Sprawdź czy wymuszamy pobieranie - NOWE
+        val forceDownload = inputData.getBoolean("force_download", false)
+        if (forceDownload) {
+            Timber.d("FileCheckWorker: Wymuszono pobieranie, ignoruję czas ostatniego sprawdzenia")
+            return false
+        }
 
         // Używamy shared preferences do synchronizacji między instancjami
         val prefs = context.getSharedPreferences("file_check_prefs", Context.MODE_PRIVATE)
@@ -271,9 +282,8 @@ class FileCheckWorker(
             // Zapisz, że prezent został odebrany i przy okazji zapisz nazwę pliku
             prefs.edit {
                 putBoolean("gift_received", true).putString(
-                        "downloaded_file_name",
-                        downloadFileName
-                    )
+                    "downloaded_file_name", downloadFileName
+                )
             }
             Timber.d("FileCheckWorker: Zaktualizowano preferencje: gift_received=true, downloaded_file_name=$downloadFileName")
 
@@ -306,11 +316,13 @@ class FileCheckWorker(
                 // Najpierw sprawdź, czy plik już istnieje
                 val context = getContext() ?: throw IllegalStateException("Brak kontekstu")
 
-                if (FileUtils.isFileInPublicDownloads(fileName)) {
+                // Sprawdź czy wymuszamy pobieranie - NOWE
+                val forceDownload = inputData.getBoolean("force_download", false)
+                if (FileUtils.isFileInPublicDownloads(fileName) && !forceDownload) {
                     Timber.d("FileCheckWorker: Plik $fileName już istnieje w folderze Pobrane - używam istniejącego pliku")
                     return@withContext true
                 }
-                Timber.d("FileCheckWorker: Plik nie istnieje lokalnie, będzie pobrany z Drive")
+                Timber.d("FileCheckWorker: Plik nie istnieje lokalnie lub wymuszono pobieranie, będzie pobrany z Drive")
 
                 // Pobierz zawartość pliku z Google Drive
                 Timber.d("FileCheckWorker: Pobieranie zawartości pliku z Google Drive")
@@ -383,8 +395,7 @@ class FileCheckWorker(
                     } catch (e: IOException) {
                         // Jeśli metoda z External Storage nie zadziała, spróbuj użyć MediaStore
                         Timber.w(
-                            "FileCheckWorker: Nie udało się zapisać pliku bezpośrednio, próbuję przez MediaStore\n" +
-                                    "wyjątek: $e"
+                            "FileCheckWorker: Nie udało się zapisać pliku bezpośrednio, próbuję przez MediaStore\n" + "wyjątek: $e"
                         )
 
                         // Alternatywne podejście: zapisz we własnym katalogu aplikacji
@@ -483,7 +494,7 @@ class FileCheckWorker(
             Timber.d("FileCheckWorker: Planowanie jednorazowego sprawdzenia pliku (forceDownload=$forceDownload)")
 
             // Sprawdź, czy można wykonać sprawdzenie (nie za często)
-            if (!canCheckFile(context)) {
+            if (!canCheckFile(context) && !forceDownload) {  // NOWE: Dodano warunek !forceDownload
                 Timber.d("FileCheckWorker: Zbyt częste próby sprawdzenia pliku - pomijam")
                 return
             }

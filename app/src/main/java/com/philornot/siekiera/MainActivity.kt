@@ -160,13 +160,6 @@ class MainActivity : ComponentActivity() {
             if (hasPermission) {
                 Timber.d("Uprawnienia do dokładnych alarmów przyznane, planuję powiadomienie")
                 scheduleRevealNotification()
-
-                // Pokaż potwierdzenie użytkownikowi
-                Toast.makeText(
-                    this,
-                    "Uprawnienia przyznane! Powiadomienie zostanie wyświetlone w dniu urodzin.",
-                    Toast.LENGTH_LONG
-                ).show()
             } else {
                 Timber.w("Uprawnienia do dokładnych alarmów nadal nie przyznane")
                 Toast.makeText(
