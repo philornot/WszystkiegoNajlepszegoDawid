@@ -111,6 +111,9 @@ fun MainScreen(
     // Śledź czy pokazać ekran celebracji po kliknięciu prezentu
     var showCelebration by remember { mutableStateOf(false) }
 
+    // Śledź czy prezent został kliknięty (lokalny stan dla pokazywania szufladki)
+    var giftWasClicked by remember { mutableStateOf(giftReceived) }
+
     // Śledź czy pokazać wybuch konfetti gdy prezent jest kliknięty lub gdy czas upłynie
     var showConfettiExplosion by remember { mutableStateOf(false) }
 
@@ -248,20 +251,21 @@ fun MainScreen(
             .shakeEffect(timeRemaining = if (isTimerMode) timerRemainingTime else timeRemaining)
             .flashEffect(timeRemaining = if (isTimerMode) timerRemainingTime else timeRemaining)
             // Add swipe detection if gift has been received
-        .then(
-            if (giftReceived) {
-                Modifier.detectHorizontalSwipes(
-                    onSwipeLeft = { onDrawerStateChange(false) },
-                    onSwipeRight = { onDrawerStateChange(true) })
-            } else {
-                Modifier
-            }
-        )) {
+            .then(
+                if (giftWasClicked) {
+                    Modifier.detectHorizontalSwipes(
+                        onSwipeLeft = { onDrawerStateChange(false) },
+                        onSwipeRight = { onDrawerStateChange(true) })
+                } else {
+                    Modifier
+                }
+            )
+    ) {
         // Tło aplikacji
         AppBackground(isTimeUp = isTimeUp || (isTimerMode && timerFinished))
 
-        // Navigation drawer (tylko jeśli prezent został odebrany)
-        if (giftReceived) {
+        // Navigation drawer (pokazuje się po kliknięciu prezentu)
+        if (giftWasClicked) {
             NavigationDrawer(
                 isOpen = isDrawerOpen,
                 onOpenStateChange = onDrawerStateChange,
@@ -306,6 +310,9 @@ fun MainScreen(
 
                                     // Opóźnij pokazanie ekranu celebracji
                                     MainScope().launch {
+                                        // Oznacz, że prezent został kliknięty, aby pokazać drawer
+                                        giftWasClicked = true
+
                                         delay(1500) // Krótsze opóźnienie aby przejść po wybuchu konfetti
                                         showCelebration = true
                                         onGiftClicked()

@@ -33,12 +33,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.content.edit
 import com.philornot.siekiera.ui.screens.main.timer.TimerDaysCounter
 import com.philornot.siekiera.utils.TimeUtils
+import kotlinx.coroutines.delay
 
 /**
  * Sekcja odliczania, która obsługuje zarówno tryb odliczania do urodzin
@@ -64,7 +67,7 @@ fun CountdownSection(
     isTimeUp: Boolean,
     isTimerMode: Boolean = false,
     onTimerMinutesChanged: (Int) -> Unit = {},
-    onTimerSet: (Int) -> Unit = {},
+    onTimerSet: (Int) -> Unit = {},  // Added parameter for starting the timer
     timerMinutes: Int = 5,
     changeAppName: Boolean = false,
     onChangeAppNameChanged: (Boolean) -> Unit = {},
@@ -114,11 +117,16 @@ fun CountdownSection(
         }
     }
 
-    // Auto-start timer after drag is completed
+    // Auto-start timer after drag is completed (with delay)
     LaunchedEffect(shouldStartTimer) {
         if (shouldStartTimer && isTimerMode && timeRemaining <= 0) {
-            onTimerSet(currentDragMinutes)
-            shouldStartTimer = false
+            // Add a 1.5 second delay before starting the timer
+            delay(1500)
+            // Check if user hasn't cancelled the auto-start in the meantime
+            if (shouldStartTimer) {
+                onTimerSet(currentDragMinutes)
+                shouldStartTimer = false
+            }
         }
     }
 
@@ -249,15 +257,32 @@ fun CountdownSection(
                         .fillMaxWidth()
                         .padding(horizontal = 32.dp)
                 ) {
-                    Checkbox(
-                        checked = changeAppName, onCheckedChange = { onChangeAppNameChanged(it) })
+                    // Pobierz kontekst w kontekście funkcji @Composable
+                    val context = LocalContext.current
 
-                    Text(
-                        text = "Zmień nazwę aplikacji na 'Lawendowy Timer'",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(start = 8.dp)
-                    )
+                    Checkbox(
+                        checked = changeAppName, onCheckedChange = {
+                            onChangeAppNameChanged(it)
+
+                            // Używamy pobranego wcześniej kontekstu
+                            context.getSharedPreferences(
+                                "timer_prefs", android.content.Context.MODE_PRIVATE
+                            ).edit { putBoolean("change_app_name", it) }
+                        })
+
+                    Column(modifier = Modifier.padding(start = 8.dp)) {
+                        Text(
+                            text = "Zmień nazwę aplikacji na 'Lawendowy Timer'",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+
+                        Text(
+                            text = "Uwaga: może wymagać zamknięcia aplikacji",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
+                        )
+                    }
                 }
 
                 // Start timer button (show only if timer not running)

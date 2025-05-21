@@ -13,6 +13,8 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -453,8 +455,16 @@ class MainActivity : ComponentActivity() {
             isTimerMode.value = true
             _currentSection.value = NavigationSection.TIMER
 
-            // Próba zmiany nazwy aplikacji na "Lawendowy Timer"
-            tryChangeAppName(true)
+            // Sprawdź, czy użytkownik chce zmienić nazwę aplikacji poprzez checkbox
+            val changeAppName = getSharedPreferences("timer_prefs", MODE_PRIVATE).getBoolean(
+                    "change_app_name",
+                    false
+                )
+
+            // Próba zmiany nazwy aplikacji na "Lawendowy Timer" tylko jeśli checkbox jest zaznaczony
+            if (changeAppName) {
+                tryChangeAppName(true)
+            }
         } else {
             // Wystąpił błąd podczas ustawiania timera
             Toast.makeText(
@@ -558,6 +568,21 @@ class MainActivity : ComponentActivity() {
                     PackageManager.DONT_KILL_APP
                 )
                 Timber.d("Zmieniono nazwę aplikacji na 'Lawendowy Timer'")
+
+                // Próba automatycznego ponownego uruchomienia aplikacji
+                try {
+                    val intent = packageManager.getLaunchIntentForPackage(packageName)
+                    intent?.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    intent?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+                    // Uruchom nową instancję aplikacji po krótkim opóźnieniu
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        startActivity(intent)
+                        finish() // Zakończ obecną aktywność
+                    }, 500)
+                } catch (e: Exception) {
+                    Timber.e(e, "Błąd podczas próby ponownego uruchomienia aplikacji")
+                }
             } else {
                 // Włącz oryginalną aktywność, wyłącz alias timera
                 packageManager.setComponentEnabledSetting(
@@ -571,6 +596,21 @@ class MainActivity : ComponentActivity() {
                     PackageManager.DONT_KILL_APP
                 )
                 Timber.d("Przywrócono oryginalną nazwę aplikacji")
+
+                // Próba automatycznego ponownego uruchomienia aplikacji
+                try {
+                    val intent = packageManager.getLaunchIntentForPackage(packageName)
+                    intent?.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    intent?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+                    // Uruchom nową instancję aplikacji po krótkim opóźnieniu
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        startActivity(intent)
+                        finish() // Zakończ obecną aktywność
+                    }, 500)
+                } catch (e: Exception) {
+                    Timber.e(e, "Błąd podczas próby ponownego uruchomienia aplikacji")
+                }
             }
 
             // Zapisz aktualny tryb
