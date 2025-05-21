@@ -457,9 +457,8 @@ class MainActivity : ComponentActivity() {
 
             // Sprawdź, czy użytkownik chce zmienić nazwę aplikacji poprzez checkbox
             val changeAppName = getSharedPreferences("timer_prefs", MODE_PRIVATE).getBoolean(
-                    "change_app_name",
-                    false
-                )
+                "change_app_name", false
+            )
 
             // Próba zmiany nazwy aplikacji na "Lawendowy Timer" tylko jeśli checkbox jest zaznaczony
             if (changeAppName) {
@@ -663,12 +662,8 @@ class MainActivity : ComponentActivity() {
     fun checkFileNow() {
         Timber.d("Wymuszam natychmiastowe sprawdzenie pliku")
 
-        // Wykorzystanie statycznej metody do tworzenia żądania
-        val oneTimeWorkRequest = FileCheckWorker.createOneTimeCheckRequest()
-            .addTag("file_check") // Dodajemy tag, aby można było śledzić stan zadania
-            .build()
-
-        WorkManager.getInstance(this).enqueue(oneTimeWorkRequest)
+        // Używamy zmodyfikowanej metody do planowania jednorazowego sprawdzenia
+        FileCheckWorker.planOneTimeCheck(this, forceDownload = false)
     }
 
     /** Planuje powiadomienie na dzień urodzin. */
@@ -684,11 +679,8 @@ class MainActivity : ComponentActivity() {
     private fun checkFileImmediately() {
         Timber.d("Wykonuję natychmiastowe sprawdzenie pliku przy pierwszym uruchomieniu")
 
-        // Wykorzystanie statycznej metody do tworzenia żądania
-        val oneTimeWorkRequest =
-            FileCheckWorker.createOneTimeCheckRequest().addTag("file_check").build()
-
-        WorkManager.getInstance(this).enqueue(oneTimeWorkRequest)
+        // Używamy zmodyfikowanej metody do planowania sprawdzenia
+        FileCheckWorker.planOneTimeCheck(this, forceDownload = false)
     }
 
     /** Planuje codzienne sprawdzanie aktualizacji pliku na Google Drive. */
@@ -737,22 +729,42 @@ class MainActivity : ComponentActivity() {
      * lokalny plik.
      */
     private fun downloadFile() {
-        // FileCheckWorker pobierze najnowszy plik z Google Drive bez względu na nazwę
-        // Tutaj zainicjujemy sprawdzenie, które pobierze najnowszy plik
+        // Sprawdź, czy jest włączony tryb testowy - tylko wtedy resetuj flagę gift_received
+        if (appConfig.isTestMode()) {
+            // W trybie testowym można resetować flagę gift_received
+            prefs.edit { putBoolean("gift_received", false) }
+            Timber.d("Tryb testowy: zresetowano flagę gift_received")
+        }
 
         Timber.d("Rozpoczynam pobieranie najnowszego pliku z Google Drive")
 
         // Oznacz jako rozpoczęcie pobierania
         isDownloadInProgress.value = true
 
-        if (appConfig.isTestMode()) {
-            // W trybie testowym resetujemy flagę gift_received, aby umożliwić ponowne pobranie
-            prefs.edit { putBoolean("gift_received", false) }
-            Timber.d("Tryb testowy: zresetowano flagę gift_received")
+        // Sprawdź, czy plik już istnieje w folderze Pobrane
+        val fileName = appConfig.getDaylioFileName()
+        if (FileUtils.isFileInPublicDownloads(fileName)) {
+            // Plik już istnieje - oznacz jako pobrany
+            Timber.d("Plik $fileName już istnieje w folderze Pobrane")
+
+            // Oznacz prezent jako odebrany
+            prefs.edit {
+                putBoolean("gift_received", true)
+                putString("downloaded_file_name", fileName)
+            }
+
+            // Wyświetl informację o istniejącym pliku
+            Toast.makeText(
+                this, "Plik $fileName został już pobrany wcześniej", Toast.LENGTH_SHORT
+            ).show()
+
+            // Zakończ pobieranie
+            isDownloadInProgress.value = false
+            return
         }
 
-        // Uruchom FileCheckWorker do pobrania najnowszego pliku
-        checkFileNow()
+        // Uruchom FileCheckWorker do pobrania najnowszego pliku z wymuszeniem
+        FileCheckWorker.planOneTimeCheck(this, forceDownload = true)
 
         // Pokaż informację o trwającym pobieraniu
         Toast.makeText(this, getString(R.string.downloading_file), Toast.LENGTH_SHORT).show()
@@ -765,8 +777,10 @@ class MainActivity : ComponentActivity() {
 
                     if (workInfo.state == WorkInfo.State.SUCCEEDED) {
                         Timber.d("Zadanie FileCheckWorker zakończone sukcesem")
+                        isDownloadInProgress.value = false
                     } else if (workInfo.state.isFinished) {
                         Timber.d("Zadanie FileCheckWorker zakończone (stan: ${workInfo.state})")
+                        isDownloadInProgress.value = false
                     }
                 }
             }
@@ -872,6 +886,7 @@ class MainActivity : ComponentActivity() {
             Timber.d("Android > P, uprawnienia do przechowywania nie są wymagane")
         }
     }
+
 
     @Override
     public override fun onResume() {

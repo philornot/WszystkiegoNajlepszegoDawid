@@ -43,6 +43,7 @@ import com.philornot.siekiera.ui.screens.main.gift.BirthdayMessage
 import com.philornot.siekiera.ui.screens.main.gift.GiftScreen
 import com.philornot.siekiera.ui.screens.main.timer.TimerFinishedMessage
 import com.philornot.siekiera.ui.screens.main.timer.TimerScreen
+import com.philornot.siekiera.workers.FileCheckWorker
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -164,7 +165,7 @@ fun MainScreen(
         }
     }
 
-    // Aktualizuj czas co sekundę i sprawdzaj aktualizacje pliku gdy czas zbliża się do końca
+// Aktualizuj czas co sekundę i sprawdzaj aktualizacje pliku gdy czas zbliża się do końca
     LaunchedEffect(Unit) {
         while (true) {
             delay(1000)
@@ -189,7 +190,6 @@ fun MainScreen(
                 // Sprawdzaj częściej gdy pozostało mało czasu
                 if (activity != null && timeRemaining > 0) {
                     val remainingMinutes = timeRemaining / 60000
-                    val currentTime = System.currentTimeMillis()
 
                     // Określ minimalny interwał między sprawdzeniami
                     val checkInterval = when {
@@ -197,11 +197,20 @@ fun MainScreen(
                         remainingMinutes <= 5 -> 60_000      // 1 minuta
                         remainingMinutes <= 15 -> 120_000    // 2 minuty
                         remainingMinutes <= 60 -> 300_000    // 5 minut
-                        else -> 900_000                      // 15 minut
+                        else -> 900_000                       // 15 minut
                     }
 
-                    // Sprawdź tylko jeśli minął wymagany czas od ostatniego sprawdzenia
-                    if (currentTime - lastCheckTime >= checkInterval) {
+                    val currentTime = System.currentTimeMillis()
+
+                    // Sprawdź tylko jeśli:
+                    // 1. Prezent nie został jeszcze odebrany (używamy giftReceived, które już jest parametrem)
+                    // 2. Minął odpowiedni czas od ostatniego sprawdzenia
+                    // 3. Sprawdzenie nie jest zablokowane przez inny worker
+                    if (!giftReceived && currentTime - lastCheckTime >= checkInterval && FileCheckWorker.canCheckFile(
+                            activity
+                        )
+                    ) {
+
                         Timber.d("Uruchamiam dodatkowe sprawdzenie pliku, pozostało $remainingMinutes minut (interwał: ${checkInterval / 1000}s)")
                         activity.checkFileNow()
                         lastCheckTime = currentTime

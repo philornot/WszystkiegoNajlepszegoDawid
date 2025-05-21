@@ -8,12 +8,18 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import androidx.work.BackoffPolicy
+import androidx.work.Constraints
 import androidx.work.CoroutineWorker
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.philornot.siekiera.config.AppConfig
 import com.philornot.siekiera.network.DriveApiClient
 import com.philornot.siekiera.notification.NotificationHelper
+import com.philornot.siekiera.utils.FileUtils
 import com.philornot.siekiera.utils.TimeUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
@@ -23,6 +29,7 @@ import java.io.File
 import java.io.IOException
 import java.lang.ref.WeakReference
 import java.util.concurrent.TimeUnit
+import androidx.core.content.edit
 
 /**
  * Worker, który codziennie o 23:59 sprawdza, czy w folderze na Google
@@ -30,6 +37,9 @@ import java.util.concurrent.TimeUnit
  *
  * Dodano mechanizm pobierania pliku do publicznego folderu Pobrane oraz
  * wysyłanie powiadomień o pobraniu pliku.
+ *
+ * Zawiera mechanizmy zapobiegające wielokrotnemu pobieraniu tego samego
+ * pliku.
  */
 class FileCheckWorker(
     context: Context,
@@ -57,6 +67,18 @@ class FileCheckWorker(
         Timber.d("Rozpoczynam sprawdzanie aktualizacji pliku...")
 
         try {
+            // Najpierw sprawdź czy zadanie nie jest już uruchomione
+            if (isWorkAlreadyRunning()) {
+                Timber.d("Inne zadanie sprawdzania pliku już działa - pomijam")
+                return@coroutineScope Result.success()
+            }
+
+            // Sprawdź czy już pobraliśmy plik
+            if (isFileAlreadyDownloaded()) {
+                Timber.d("Plik już został pobrany - pomijam pobieranie")
+                return@coroutineScope Result.success()
+            }
+
             withContext(Dispatchers.IO) {
                 checkForFileUpdate()
             }
@@ -83,6 +105,46 @@ class FileCheckWorker(
                 Result.failure()
             }
         }
+    }
+
+    /** Sprawdza, czy już istnieje uruchomione zadanie sprawdzania pliku */
+    private fun isWorkAlreadyRunning(): Boolean {
+        val context = getContext() ?: return false
+
+        // Używamy shared preferences do synchronizacji między instancjami
+        val prefs = context.getSharedPreferences("file_check_prefs", Context.MODE_PRIVATE)
+        val lastCheckTime = prefs.getLong("last_check_time", 0)
+        val currentTime = System.currentTimeMillis()
+
+        // Jeśli od ostatniego sprawdzenia minęło mniej niż 5 sekund, zakładamy że już działa
+        if (currentTime - lastCheckTime < 5000) {
+            return true
+        }
+
+        // Zapisz aktualny czas sprawdzenia
+        prefs.edit { putLong("last_check_time", currentTime) }
+        return false
+    }
+
+    /** Sprawdza, czy plik został już pobrany i jest w folderze Pobrane */
+    private fun isFileAlreadyDownloaded(): Boolean {
+        val context = getContext() ?: return false
+        val appConfig = getAppConfig() ?: return false
+
+        // Sprawdź, czy prezent został już odebrany (ale tylko gdy nie jesteśmy w trybie wymuszania)
+        val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        val giftReceived = prefs.getBoolean("gift_received", false)
+        val forceDownload = inputData.getBoolean("force_download", false)
+
+        if (giftReceived && !forceDownload) {
+            // Dodatkowo sprawdź, czy plik istnieje w folderze Pobrane
+            val fileName = appConfig.getDaylioFileName()
+            if (FileUtils.isFileInPublicDownloads(fileName)) {
+                return true
+            }
+        }
+
+        return false
     }
 
     /**
@@ -113,6 +175,18 @@ class FileCheckWorker(
 
         if (appConfig.isVerboseLoggingEnabled()) {
             Timber.d("Sprawdzanie aktualizacji pliku w folderze: $folderId, plik: $fileName")
+        }
+
+        // Sprawdź czy plik już istnieje w folderze Pobrane
+        val forceDownload = inputData.getBoolean("force_download", false)
+        if (FileUtils.isFileInPublicDownloads(fileName) && !forceDownload) {
+            Timber.d("Plik $fileName już istnieje w folderze Pobrane - pomijam pobieranie")
+
+            // Oznacz prezent jako odebrany, nawet jeśli już wcześniej istniał
+            val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+            prefs.edit { putBoolean("gift_received", true) }
+
+            return
         }
 
         // Get the Drive client using the testable method
@@ -147,8 +221,8 @@ class FileCheckWorker(
         val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
         val giftReceived = prefs.getBoolean("gift_received", false)
 
-        // Jeśli prezent został już odebrany, nie pobieraj pliku ponownie
-        if (giftReceived && !appConfig.isTestMode()) {
+        // Jeśli prezent został już odebrany i nie wymuszamy pobrania, nie pobieraj pliku ponownie
+        if (giftReceived && !forceDownload) {
             Timber.d("Prezent został już odebrany, pomijam pobieranie")
             return
         }
@@ -160,12 +234,19 @@ class FileCheckWorker(
         val result = downloadFileDirect(driveClient, newestFile.id, downloadFileName)
 
         if (result) {
-            // Powiadomienie o pobraniu pliku
-            NotificationHelper.showDownloadCompleteNotification(context, downloadFileName)
+            // Powiadomienie o pobraniu pliku - tylko jeśli to pierwsze powiadomienie
+            val firstDownloadNotified = prefs.getBoolean("first_download_notified", false)
+
+            if (!firstDownloadNotified) {
+                NotificationHelper.showDownloadCompleteNotification(context, downloadFileName)
+                prefs.edit { putBoolean("first_download_notified", true) }
+            }
 
             // Zapisz, że prezent został odebrany i przy okazji zapisz nazwę pliku
-            prefs.edit().putBoolean("gift_received", true)
-                .putString("downloaded_file_name", downloadFileName).apply()
+            prefs.edit {
+                putBoolean("gift_received", true)
+                    .putString("downloaded_file_name", downloadFileName)
+            }
 
             Timber.d("Plik pobrany pomyślnie: $downloadFileName")
         } else {
@@ -191,9 +272,16 @@ class FileCheckWorker(
     ): Boolean {
         return withContext(Dispatchers.IO) {
             try {
+                // Najpierw sprawdź, czy plik już istnieje
+                val context = getContext() ?: throw IllegalStateException("Brak kontekstu")
+
+                if (FileUtils.isFileInPublicDownloads(fileName)) {
+                    Timber.d("Plik $fileName już istnieje w folderze Pobrane - używam istniejącego pliku")
+                    return@withContext true
+                }
+
                 // Pobierz zawartość pliku z Google Drive
                 val inputStream = client.downloadFile(fileId)
-                val context = getContext() ?: throw IllegalStateException("Brak kontekstu")
                 var uri: Uri? = null
 
                 // Różne podejścia do zapisywania pliku w zależności od wersji Androida
@@ -247,14 +335,12 @@ class FileCheckWorker(
                     } catch (e: IOException) {
                         // Jeśli metoda z External Storage nie zadziała, spróbuj użyć MediaStore
                         Timber.w(
-                            "Nie udało się zapisać pliku bezpośrednio, próbuję przez MediaStore",
-                            e
+                            "Nie udało się zapisać pliku bezpośrednio, próbuję przez MediaStore", e
                         )
 
                         // Alternatywne podejście: zapisz we własnym katalogu aplikacji
                         val internalFile = File(
-                            context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
-                            fileName
+                            context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), fileName
                         )
                         java.io.FileOutputStream(internalFile).use { outputStream ->
                             inputStream.use { input ->
@@ -281,26 +367,79 @@ class FileCheckWorker(
         // Maksymalna liczba ponownych prób w przypadku błędu
         private const val MAX_RETRY_ATTEMPTS = 3
 
+        // Stałe dla WorkManager
+        private const val FILE_CHECK_WORK_TAG = "file_check"
+        private const val ONE_TIME_WORK_NAME = "one_time_file_check"
+
         /**
          * Tworzy request workera z odpowiednią polityką backoff. Używaj tej metody
          * w MainActivity zamiast bezpośrednio tworzyć request.
          */
-        fun createWorkRequest(intervalHours: Long) =
-            androidx.work.PeriodicWorkRequestBuilder<FileCheckWorker>(
-                intervalHours, TimeUnit.HOURS
-            ).setBackoffCriteria(
-                BackoffPolicy.EXPONENTIAL, 30, // Minimalne opóźnienie to 30 minut
-                TimeUnit.MINUTES
-            )
+        fun createWorkRequest(intervalHours: Long) = PeriodicWorkRequestBuilder<FileCheckWorker>(
+            intervalHours, TimeUnit.HOURS
+        ).setBackoffCriteria(
+            BackoffPolicy.EXPONENTIAL, 30, // Minimalne opóźnienie to 30 minut
+            TimeUnit.MINUTES
+        ).addTag(FILE_CHECK_WORK_TAG)
 
         /**
          * Tworzy jednorazowy request sprawdzający aktualizacje pliku. Użyteczne
          * przy częstszym sprawdzaniu gdy licznik dobiega końca.
+         *
+         * @param forceDownload Czy wymusić pobieranie pliku nawet jeśli prezent
+         *    został już odebrany
          */
-        fun createOneTimeCheckRequest() =
+        fun createOneTimeCheckRequest(forceDownload: Boolean = false) =
             OneTimeWorkRequestBuilder<FileCheckWorker>().setConstraints(
-                androidx.work.Constraints.Builder()
-                    .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED).build()
+                    Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+                ).addTag(FILE_CHECK_WORK_TAG).setInputData(
+                    androidx.work.Data.Builder().putBoolean("force_download", forceDownload).build()
+                )
+
+        /**
+         * Sprawdza, czy można uruchomić sprawdzenie pliku, aby uniknąć zbyt
+         * częstego wywoływania.
+         *
+         * @param context Kontekst aplikacji
+         * @return true jeśli można wykonać sprawdzenie, false jeśli należy
+         *    poczekać
+         */
+        fun canCheckFile(context: Context): Boolean {
+            val prefs = context.getSharedPreferences("file_check_prefs", Context.MODE_PRIVATE)
+            val lastCheckTime = prefs.getLong("last_check_time", 0)
+            val currentTime = System.currentTimeMillis()
+
+            // Jeśli od ostatniego sprawdzenia minęło mniej niż 2 sekundy, pomijamy
+            return currentTime - lastCheckTime > 2000
+        }
+
+        /**
+         * Planuje jednorazowe sprawdzenie pliku z ochroną przed duplikatami.
+         *
+         * @param context Kontekst aplikacji
+         * @param forceDownload Czy wymusić pobieranie pliku
+         */
+        fun planOneTimeCheck(context: Context, forceDownload: Boolean = false) {
+            // Sprawdź, czy można wykonać sprawdzenie (nie za często)
+            if (!canCheckFile(context)) {
+                Timber.d("Zbyt częste próby sprawdzenia pliku - pomijam")
+                return
+            }
+
+            // Zbuduj żądanie jednorazowego sprawdzenia
+            val request = createOneTimeCheckRequest(forceDownload).build()
+
+            // Użyj REPLACE aby zastąpić inne oczekujące zadania
+            WorkManager.getInstance(context).enqueueUniqueWork(
+                ONE_TIME_WORK_NAME, ExistingWorkPolicy.REPLACE, request
             )
+
+            // Aktualizuj czas ostatniego sprawdzenia
+            context.getSharedPreferences("file_check_prefs", Context.MODE_PRIVATE).edit {
+                putLong("last_check_time", System.currentTimeMillis())
+            }
+
+            Timber.d("Zaplanowano jednorazowe sprawdzenie pliku (forceDownload=$forceDownload)")
+        }
     }
 }
