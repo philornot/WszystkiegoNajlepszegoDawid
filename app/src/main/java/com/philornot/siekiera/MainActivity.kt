@@ -729,6 +729,9 @@ class MainActivity : ComponentActivity() {
      * lokalny plik.
      */
     private fun downloadFile() {
+        // Log rozpoczęcia procesu
+        Timber.d("Użytkownik rozpoczął proces pobierania pliku - inicjuję workflow pobierania")
+
         // Sprawdź, czy jest włączony tryb testowy - tylko wtedy resetuj flagę gift_received
         if (appConfig.isTestMode()) {
             // W trybie testowym można resetować flagę gift_received
@@ -736,22 +739,21 @@ class MainActivity : ComponentActivity() {
             Timber.d("Tryb testowy: zresetowano flagę gift_received")
         }
 
-        Timber.d("Rozpoczynam pobieranie najnowszego pliku z Google Drive")
-
-        // Oznacz jako rozpoczęcie pobierania
-        isDownloadInProgress.value = true
+        // Szczegółowe logi przed sprawdzeniem pliku
+        Timber.d("Sprawdzam czy plik już istnieje lokalnie przed próbą pobrania")
 
         // Sprawdź, czy plik już istnieje w folderze Pobrane
         val fileName = appConfig.getDaylioFileName()
         if (FileUtils.isFileInPublicDownloads(fileName)) {
             // Plik już istnieje - oznacz jako pobrany
-            Timber.d("Plik $fileName już istnieje w folderze Pobrane")
+            Timber.d("Plik $fileName już istnieje w folderze Pobrane - nie trzeba pobierać ponownie")
 
             // Oznacz prezent jako odebrany
             prefs.edit {
                 putBoolean("gift_received", true)
                 putString("downloaded_file_name", fileName)
             }
+            Timber.d("Zaktualizowano preferencje: gift_received=true, downloaded_file_name=$fileName")
 
             // Wyświetl informację o istniejącym pliku
             Toast.makeText(
@@ -763,24 +765,33 @@ class MainActivity : ComponentActivity() {
             return
         }
 
+        // Oznacz jako rozpoczęcie pobierania
+        isDownloadInProgress.value = true
+        Timber.d("Nie znaleziono lokalnego pliku, oznaczono pobieranie jako w trakcie, uruchomienie workera")
+
         // Uruchom FileCheckWorker do pobrania najnowszego pliku z wymuszeniem
+        Timber.d("Uruchamiam FileCheckWorker z forceDownload=true dla pobrania najnowszego pliku")
         FileCheckWorker.planOneTimeCheck(this, forceDownload = true)
 
         // Pokaż informację o trwającym pobieraniu
         Toast.makeText(this, getString(R.string.downloading_file), Toast.LENGTH_SHORT).show()
+        Timber.d("Wyświetlono toast o pobieraniu, rejestruję obserwatora zakończenia pracy")
 
         // Rejestrujemy observer na WorkManager, aby monitorować zakończenie pobierania
         WorkManager.getInstance(this).getWorkInfosByTagLiveData("file_check")
             .observe(this) { workInfoList ->
                 if (workInfoList != null && workInfoList.isNotEmpty()) {
                     val workInfo = workInfoList[0]
+                    Timber.d("Aktualizacja WorkManager: stan pracy to ${workInfo.state}")
 
                     if (workInfo.state == WorkInfo.State.SUCCEEDED) {
                         Timber.d("Zadanie FileCheckWorker zakończone sukcesem")
                         isDownloadInProgress.value = false
+                        Timber.d("Zresetowano flagę pobierania w trakcie")
                     } else if (workInfo.state.isFinished) {
                         Timber.d("Zadanie FileCheckWorker zakończone (stan: ${workInfo.state})")
                         isDownloadInProgress.value = false
+                        Timber.d("Zresetowano flagę pobierania w trakcie z powodu zakończenia workera (niekoniecznie sukcesu)")
                     }
                 }
             }
