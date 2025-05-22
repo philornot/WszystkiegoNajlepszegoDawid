@@ -13,7 +13,10 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Cake
@@ -37,9 +40,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 
 /**
- * Navigation drawer for the app that slides in from the left.
- * Contains options for gift, timer, and countdown to next birthday.
- * Only accessible after the gift has been opened at least once.
+ * Navigation drawer for the app that slides in from the left. Contains
+ * options for gift, timer, and countdown to next birthday. Only accessible
+ * after the gift has been opened at least once.
+ *
+ * Updated with improved hamburger menu positioning to avoid text
+ * collision.
  */
 @Composable
 fun NavigationDrawer(
@@ -47,32 +53,30 @@ fun NavigationDrawer(
     onOpenStateChange: (Boolean) -> Unit,
     currentSection: NavigationSection,
     onSectionSelected: (NavigationSection) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val drawerWidth = 280.dp
     val animatedWidth by animateDpAsState(
-        targetValue = if (isOpen) drawerWidth else 0.dp,
-        label = "drawerWidth"
+        targetValue = if (isOpen) drawerWidth else 0.dp, label = "drawerWidth"
     )
     val animatedAlpha by animateFloatAsState(
-        targetValue = if (isOpen) 1f else 0f,
-        label = "drawerAlpha"
+        targetValue = if (isOpen) 1f else 0f, label = "drawerAlpha"
     )
     val hamburgerRotation by animateFloatAsState(
-        targetValue = if (isOpen) 90f else 0f,
-        label = "hamburgerRotation"
+        targetValue = if (isOpen) 90f else 0f, label = "hamburgerRotation"
     )
 
     // Drawer system with overlay
-    Box(modifier = modifier.fillMaxSize().zIndex(10f)) {
+    Box(modifier = modifier
+        .fillMaxSize()
+        .zIndex(10f)) {
         // Scrim (dimming overlay when drawer is open)
         if (isOpen) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.Black.copy(alpha = 0.5f))
-                    .clickable { onOpenStateChange(false) }
-            )
+                    .clickable { onOpenStateChange(false) })
         }
 
         // Drawer content
@@ -88,16 +92,18 @@ fun NavigationDrawer(
                             onOpenStateChange(false)
                         }
                     }
-                }
-        ) {
+                }) {
             // Drawer items
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .statusBarsPadding() // Respect system status bar
                     .padding(16.dp)
                     .alpha(animatedAlpha)
             ) {
-                // Header
+                // Header with extra top spacing
+                Spacer(modifier = Modifier.padding(top = 26.dp))
+
                 Text(
                     text = "Menu",
                     style = MaterialTheme.typography.headlineMedium,
@@ -113,8 +119,7 @@ fun NavigationDrawer(
                     onClick = {
                         onSectionSelected(NavigationSection.GIFT)
                         onOpenStateChange(false)
-                    }
-                )
+                    })
 
                 DrawerItem(
                     icon = Icons.Default.AccessTime,
@@ -123,8 +128,7 @@ fun NavigationDrawer(
                     onClick = {
                         onSectionSelected(NavigationSection.TIMER)
                         onOpenStateChange(false)
-                    }
-                )
+                    })
 
                 DrawerItem(
                     icon = Icons.Default.Cake,
@@ -133,38 +137,45 @@ fun NavigationDrawer(
                     onClick = {
                         onSectionSelected(NavigationSection.BIRTHDAY_COUNTDOWN)
                         onOpenStateChange(false)
-                    }
-                )
+                    })
             }
         }
 
-        // Hamburger menu icon that rotates when drawer opens
-        IconButton(
-            onClick = { onOpenStateChange(!isOpen) },
+        // Improved hamburger menu icon positioning
+        Surface(
             modifier = Modifier
-                .padding(16.dp)
-                .align(Alignment.TopStart)
+                .statusBarsPadding() // Respect system status bar
+                .padding(12.dp) // Reduced padding for better positioning
+                .align(Alignment.TopStart),
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f), // Semi-transparent background
+            shadowElevation = 4.dp // Subtle shadow for better visibility
         ) {
-            Icon(
-                imageVector = Icons.Default.Menu,
-                contentDescription = "Menu",
-                tint = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.rotate(hamburgerRotation)
-            )
+            IconButton(
+                onClick = { onOpenStateChange(!isOpen) },
+                modifier = Modifier.size(48.dp) // Consistent size
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Menu,
+                    contentDescription = "Menu",
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                        .size(24.dp)
+                        .rotate(hamburgerRotation)
+                )
+            }
         }
     }
 }
 
-/**
- * Individual drawer item with icon and title.
- */
+/** Individual drawer item with icon and title. */
 @Composable
 private fun DrawerItem(
     icon: ImageVector,
     title: String,
     isSelected: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val backgroundColor = if (isSelected) {
         MaterialTheme.colorScheme.primaryContainer
@@ -193,25 +204,17 @@ private fun DrawerItem(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = contentColor
+                imageVector = icon, contentDescription = null, tint = contentColor
             )
             Spacer(modifier = Modifier.width(16.dp))
             Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                color = contentColor
+                text = title, style = MaterialTheme.typography.bodyLarge, color = contentColor
             )
         }
     }
 }
 
-/**
- * Navigation sections available in the drawer.
- */
+/** Navigation sections available in the drawer. */
 enum class NavigationSection {
-    GIFT,
-    TIMER,
-    BIRTHDAY_COUNTDOWN
+    GIFT, TIMER, BIRTHDAY_COUNTDOWN
 }

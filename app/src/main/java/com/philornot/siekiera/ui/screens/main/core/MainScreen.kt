@@ -302,8 +302,8 @@ fun MainScreen(
                         NavigationSection.BIRTHDAY_COUNTDOWN -> {
                             // Standardowy ekran odliczania urodzin
 
-                            // Nagłówek z tytułem
-                            HeaderSection()
+                            // Nagłówek z tytułem - przekaż informację o dostępności drawera
+                            HeaderSection(hasDrawer = giftWasClicked)
 
                             // Sekcja kurtyny lub prezentu
                             CurtainSection(

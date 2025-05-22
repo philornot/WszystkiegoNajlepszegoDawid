@@ -15,19 +15,29 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
-/** Clean, lavender-themed header section. */
+/**
+ * Clean, lavender-themed header section with proper spacing to avoid collision
+ * with navigation drawer hamburger menu icon.
+ */
 @Composable
 fun HeaderSection(
     modifier: Modifier = Modifier,
+    hasDrawer: Boolean = false // Parametr informujący czy drawer jest dostępny
 ) {
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(top = 16.dp, bottom = 8.dp),
+            .padding(
+                top = if (hasDrawer) 24.dp else 16.dp, // Subtelnie większy top padding gdy drawer jest aktywny
+                bottom = 8.dp,
+                start = if (hasDrawer) 32.dp else 16.dp, // Trochę więcej miejsca dla ikony menu
+                end = 16.dp
+            ),
         contentAlignment = Alignment.Center
     ) {
         Column(
-            horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxWidth()
         ) {
             // Title text
             Text(
