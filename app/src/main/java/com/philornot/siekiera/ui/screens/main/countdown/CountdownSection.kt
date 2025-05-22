@@ -72,6 +72,9 @@ fun CountdownSection(
     changeAppName: Boolean = false,
     onChangeAppNameChanged: (Boolean) -> Unit = {},
     onResetTimer: () -> Unit = {},
+    isTimerPaused: Boolean, // todo
+    onPauseTimer: () -> Unit, // todo
+    onResumeTimer: () -> Unit, // todo
 ) {
     // Format the time string
     val formattedTime = if (isTimerMode) {

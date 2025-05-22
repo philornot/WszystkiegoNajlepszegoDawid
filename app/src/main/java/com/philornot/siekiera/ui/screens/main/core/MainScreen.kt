@@ -66,8 +66,11 @@ import timber.log.Timber
  *    odkryty
  * @param activeTimer Aktualnie aktywny timer w milisekundach (0 jeśli brak
  *    aktywnego timera)
+ * @param isTimerPaused Czy timer jest spauzowany
  * @param onCancelTimer Callback do anulowania timera
  * @param onResetTimer Callback do resetowania timera
+ * @param onPauseTimer Callback do pauzowania timera
+ * @param onResumeTimer Callback do wznawiania timera
  * @param isDrawerOpen Czy szufladka nawigacyjna jest otwarta
  * @param onDrawerStateChange Callback wywoływany przy zmianie stanu
  *    szufladki
@@ -86,8 +89,11 @@ fun MainScreen(
     timerModeEnabled: Boolean = false,
     onTimerModeDiscovered: () -> Unit = {},
     activeTimer: Long = 0,
+    isTimerPaused: Boolean = false,
     onCancelTimer: () -> Unit = {},
     onResetTimer: () -> Unit = {},
+    onPauseTimer: () -> Unit = {},
+    onResumeTimer: () -> Unit = {},
     isDrawerOpen: Boolean = false,
     onDrawerStateChange: (Boolean) -> Unit = {},
     currentSection: NavigationSection = NavigationSection.BIRTHDAY_COUNTDOWN,
@@ -141,7 +147,7 @@ fun MainScreen(
     val isTimerMode = currentSection == NavigationSection.TIMER
 
     // Inicjalizacja - sprawdź czy timer jest aktywny
-    LaunchedEffect(activeTimer) {
+    LaunchedEffect(activeTimer, isTimerPaused) {
         if (activeTimer > 0) {
             timerRemainingTime = activeTimer
             timerFinished = false
@@ -171,8 +177,8 @@ fun MainScreen(
             delay(1000)
             currentTimeState = System.currentTimeMillis()
 
-            if (isTimerMode && timerRemainingTime > 0) {
-                // W trybie timera aktualizuj pozostały czas
+            if (isTimerMode && timerRemainingTime > 0 && !isTimerPaused) {
+                // W trybie timera aktualizuj pozostały czas tylko jeśli nie jest spauzowany
                 timerRemainingTime -= 1000
 
                 if (timerRemainingTime <= 0) {
@@ -343,13 +349,15 @@ fun MainScreen(
 
                             // Sekcja odliczania
                             CountdownSection(
+                                modifier = Modifier.padding(bottom = 24.dp),
                                 timeRemaining = timeRemaining,
                                 isTimeUp = isTimeUp,
-                                isTimerMode = false,
                                 onTimerMinutesChanged = { /* Nie używane w trybie urodzin */ },
                                 onTimerSet = { /* Nie używane w trybie urodzin */ },
                                 timerMinutes = timerMinutes,
-                                modifier = Modifier.padding(bottom = 24.dp)
+                                isTimerPaused = isTimerPaused,
+                                onPauseTimer = onPauseTimer,
+                                onResumeTimer = onResumeTimer
                             )
                         }
 
@@ -358,7 +366,10 @@ fun MainScreen(
                             TimerScreen(
                                 timerRemainingTime = timerRemainingTime,
                                 timerFinished = timerFinished,
+                                isTimerPaused = isTimerPaused,
                                 onTimerSet = onTimerSet,
+                                onPauseTimer = onPauseTimer,
+                                onResumeTimer = onResumeTimer,
                                 onResetTimer = onResetTimer
                             )
                         }

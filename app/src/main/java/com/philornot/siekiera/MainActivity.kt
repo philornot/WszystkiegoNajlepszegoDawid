@@ -30,6 +30,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -145,7 +146,10 @@ class MainActivity : ComponentActivity() {
     private val currentSection: StateFlow<NavigationSection> = _currentSection
 
     // Aktywny czas timera (w milisekundach)
-    private val activeTimerRemainingTime = mutableStateOf(0L)
+    private val activeTimerRemainingTime = mutableLongStateOf(0L)
+
+    // Stan pauzy timera
+    private val isTimerPaused = mutableStateOf(false)
 
     // Launcher dla żądania uprawnień do dokładnych alarmów
     private val alarmPermissionLauncher = registerForActivityResult(
@@ -280,9 +284,12 @@ class MainActivity : ComponentActivity() {
 
             // Sprawdź, czy timer już się zakończył
             val remainingMillis = TimerScheduler.getRemainingTimeMillis(this)
-            if (remainingMillis > 0) {
-                // Timer wciąż aktywny, ustaw jego stan
+            val isPaused = TimerScheduler.isTimerPaused(this)
+
+            if (remainingMillis > 0 || isPaused) {
+                // Timer wciąż aktywny lub spauzowany, ustaw jego stan
                 activeTimerRemainingTime.value = remainingMillis
+                isTimerPaused.value = isPaused
                 isTimerMode.value = true
                 // Ustaw odpowiednią sekcję w nawigacji
                 _currentSection.value = NavigationSection.TIMER
@@ -355,6 +362,7 @@ class MainActivity : ComponentActivity() {
                             ).show()
                         },
                         activeTimer = activeTimerRemainingTime.value,
+                        isTimerPaused = isTimerPaused.value,
                         onCancelTimer = {
                             // Anuluj aktywny timer
                             cancelTimer()
@@ -362,6 +370,14 @@ class MainActivity : ComponentActivity() {
                         onResetTimer = {
                             // Resetuj timer
                             resetTimer()
+                        },
+                        onPauseTimer = {
+                            // Pauzuj timer
+                            pauseTimer()
+                        },
+                        onResumeTimer = {
+                            // Wznów timer
+                            resumeTimer()
                         },
                         // Drawer parameters
                         isDrawerOpen = drawerOpen,
@@ -445,6 +461,7 @@ class MainActivity : ComponentActivity() {
 
             // Ustaw stan timera
             activeTimerRemainingTime.value = minutes * 60 * 1000L
+            isTimerPaused.value = false
             isTimerMode.value = true
             _currentSection.value = NavigationSection.TIMER
 
@@ -467,8 +484,40 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** Pauzuje aktywny timer, jeśli istnieje. */
+    private fun pauseTimer() {
+        if (TimerScheduler.pauseTimer(this)) {
+            Toast.makeText(
+                this, "Timer został spauzowany", Toast.LENGTH_SHORT
+            ).show()
+
+            // Zaktualizuj stan timera
+            isTimerPaused.value = true
+        } else {
+            Toast.makeText(
+                this, "Nie można spauzować timera", Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    /** Wznawia spauzowany timer. */
+    private fun resumeTimer() {
+        if (TimerScheduler.resumeTimer(this)) {
+            Toast.makeText(
+                this, "Timer został wznowiony", Toast.LENGTH_SHORT
+            ).show()
+
+            // Zaktualizuj stan timera
+            isTimerPaused.value = false
+        } else {
+            Toast.makeText(
+                this, "Nie można wznowić timera", Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
     /** Anuluje aktywny timer, jeśli istnieje. */
-    fun cancelTimer() {
+    private fun cancelTimer() {
         if (TimerScheduler.cancelTimer(this)) {
             Toast.makeText(
                 this, getString(R.string.timer_cancelled_toast), Toast.LENGTH_SHORT
@@ -476,6 +525,7 @@ class MainActivity : ComponentActivity() {
 
             // Zresetuj stan timera
             activeTimerRemainingTime.value = 0L
+            isTimerPaused.value = false
             isTimerMode.value = false
 
             // Przywróć oryginalną nazwę aplikacji
@@ -492,6 +542,7 @@ class MainActivity : ComponentActivity() {
 
         // Zresetuj stan trybu timera
         activeTimerRemainingTime.value = 0L
+        isTimerPaused.value = false
 
         // Zaktualizuj UI
         isTimerMode.value = true // Pozostań w trybie timera
@@ -913,8 +964,11 @@ class MainActivity : ComponentActivity() {
         if (TimerScheduler.checkAndCleanupTimer(this)) {
             // Timer wciąż działa, aktualizuj czas pozostały
             val remainingMillis = TimerScheduler.getRemainingTimeMillis(this)
-            if (remainingMillis > 0) {
+            val isPaused = TimerScheduler.isTimerPaused(this)
+
+            if (remainingMillis > 0 || isPaused) {
                 activeTimerRemainingTime.value = remainingMillis
+                isTimerPaused.value = isPaused
                 isTimerMode.value = true
                 _currentSection.value = NavigationSection.TIMER
             }
@@ -928,6 +982,7 @@ class MainActivity : ComponentActivity() {
             if (isTimerMode.value) {
                 isTimerMode.value = false
                 activeTimerRemainingTime.value = 0L
+                isTimerPaused.value = false
                 tryChangeAppName(false)
             }
         }
