@@ -4,7 +4,9 @@ A birthday Android app that reveals a gift on a desired date.
 
 ## Overview
 
-This app displays an animated curtain that automatically opens on the specified date and time, revealing a downloadable gift - a Daylio diary export file automatically synced from Google Drive. The app includes a hidden timer mode activated by long-pressing the gift.
+This app displays an animated curtain that automatically opens on the specified date and time,
+revealing a downloadable gift - a Daylio diary export file automatically synced from Google Drive.
+The app includes a hidden timer mode activated by long-pressing the gift.
 
 ## Features
 
@@ -60,19 +62,22 @@ Data Layer
 ### Configuration
 
 1. Create `local.properties` file:
+
 ```properties
 gdrive.folder.id=YOUR_GOOGLE_DRIVE_FOLDER_ID
 ```
 
-2. Add Service Account key:
+1. Add Service Account key:
+
 ```
 app/src/main/res/raw/service_account.json
 ```
 
-3. Configure Google Drive folder:
-  - Create folder on Google Drive
-  - Share with Service Account email
-  - Copy folder ID from URL
+1. Configure Google Drive folder:
+
+- Create folder on Google Drive
+- Share with Service Account email
+- Copy folder ID from URL
 
 ### Build
 
@@ -98,6 +103,7 @@ app/src/main/res/raw/service_account.json
 ```
 
 The project includes comprehensive tests for:
+
 - Time calculations and state management
 - Google Drive API integration
 - UI components and animations
@@ -106,6 +112,7 @@ The project includes comprehensive tests for:
 ## Configuration
 
 Main configuration in `app/src/main/res/values/config.xml`:
+
 - Birthday date and time
 - File check intervals
 - Notification settings
@@ -134,7 +141,9 @@ Aplikacja urodzinowa na Androida, która odsłania prezent określonego dnia.
 
 ## Opis
 
-Aplikacja wyświetla animowaną kurtynę, która automatycznie otwiera się w określonym dniu i czasie, odsłaniając prezent do pobrania - eksport pamiętnika z Daylio automatycznie synchronizowany z Google Drive. Aplikacja zawiera ukryty tryb timera aktywowany przez długie naciśnięcie prezentu.
+Aplikacja wyświetla animowaną kurtynę, która automatycznie otwiera się w określonym dniu i czasie,
+odsłaniając prezent do pobrania - eksport pamiętnika z Daylio automatycznie synchronizowany z Google
+Drive. Aplikacja zawiera ukryty tryb timera aktywowany przez długie naciśnięcie prezentu.
 
 ## Funkcje
 
@@ -170,19 +179,22 @@ Aplikacja wyświetla animowaną kurtynę, która automatycznie otwiera się w ok
 ### Ustawienia
 
 1. Utwórz plik `local.properties`:
+
 ```properties
 gdrive.folder.id=TWOJE_ID_FOLDERU_GOOGLE_DRIVE
 ```
 
-2. Dodaj klucz Service Account:
+1. Dodaj klucz Service Account:
+
 ```
 app/src/main/res/raw/service_account.json
 ```
 
-3. Skonfiguruj folder Google Drive:
-  - Utwórz folder na Google Drive
-  - Udostępnij dla email Service Account
-  - Skopiuj ID folderu z URL
+1. Skonfiguruj folder Google Drive:
+
+- Utwórz folder na Google Drive
+- Udostępnij dla email Service Account
+- Skopiuj ID folderu z URL
 
 ### Budowanie
 
@@ -208,6 +220,7 @@ app/src/main/res/raw/service_account.json
 ```
 
 Projekt zawiera kompleksowe testy dla:
+
 - Obliczeń czasowych i zarządzania stanem
 - Integracji z Google Drive API
 - Komponentów UI i animacji
