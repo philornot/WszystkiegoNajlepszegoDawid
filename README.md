@@ -1,85 +1,227 @@
 # Wszystkiego Najlepszego Dawid
 
-Aplikacja na 18. urodziny Dawida, zaprojektowana jako wyjątkowy prezent urodzinowy.
+A birthday Android app that reveals a gift on August 24, 2025, at exactly 8:24 AM Warsaw time.
 
-## 📱 O Aplikacji
+## Overview
 
-Wszystkiego Najlepszego Dawid to prosta aplikacja na Androida stworzona specjalnie na 18. urodziny
-Dawida.
-Głównym elementem aplikacji jest kurtyna, która automatycznie odsłoni się dokładnie w dniu 24
-sierpnia 2025 roku,
-ujawniając prezent - eksport pamiętnika z aplikacji Daylio.
+This app displays an animated curtain that automatically opens on the specified date and time, revealing a downloadable gift - a Daylio diary export file automatically synced from Google Drive. The app includes a hidden timer mode activated by long-pressing the gift.
 
-### Główne funkcje
+## Features
 
-- **Animowana kurtyna** zakrywająca prezent aż do dnia urodzin
-- **Odmierzanie czasu** pokazujące, ile dni pozostało do urodzin
-- **Automatyczne powiadomienie** w dniu urodzin
-- **Ukryty prezent** - plik z eksportem Daylio pobierany z Google Drive
-- **Automatyczna aktualizacja** prezentu, jeśli zostanie zaktualizowany na Google Drive
-- **Nawigacja boczna** dostępna po odebraniu prezentu, umożliwiająca przełączanie między:
-    - Odliczaniem do urodzin
-    - Trybem timera
-    - Dostępem do prezentu
-- **Timer** - aplikacja może służyć również jako zwykły timer do odliczania czasu
+- Precise countdown to birthday with animated digits
+- Animated curtain that reveals automatically at the target time
+- Automatic file download from Google Drive using Service Account
+- Background sync with WorkManager for file updates
+- Notification system for birthday alerts
+- Hidden timer functionality
+- Navigation drawer with multiple sections
+- Material Design 3 with custom lavender theme
 
-## 🛠️ Technologie
+## Technical Stack
 
-- **Kotlin** - główny język programowania
-- **Jetpack Compose** - nowoczesny framework UI
-- **WorkManager** - do planowania zadań w tle
-- **Google Drive API** - do pobierania i aktualizacji pliku prezentu
-- **Service Account** - do bezobsługowego dostępu do Google Drive bez logowania użytkownika
+- **Language**: Kotlin 100%
+- **UI Framework**: Jetpack Compose
+- **Architecture**: MVVM + Clean Architecture
+- **Background Processing**: WorkManager
+- **Cloud Integration**: Google Drive API v3
+- **Authentication**: Service Account (no user login required)
+- **Notifications**: AlarmManager + NotificationManager
+- **Testing**: JUnit, Espresso, MockK, Robolectric
 
-### Konfiguracja Google Drive
+## Architecture
 
-Szczegółowa instrukcja konfiguracji Google Drive znajduje się w
-pliku [KonfiguracjaGDrive.md](KonfiguracjaGDrive.md).
+```
+UI Layer (Compose)
+├── MainActivity
+├── MainScreen with ViewModels
+└── Theme & Resources
 
-### Budowanie Projektu
+Domain Layer
+├── AppConfig for centralized configuration
+├── TimeProvider for testable time management
+└── Use cases for business logic
 
-1. Sklonuj repozytorium
-2. Stwórz konto usługi Google i pobierz klucz JSON
-3. Umieść plik klucza jako `app/src/main/res/raw/service_account.json`
-4. Zaktualizuj `FOLDER_ID` w klasie `FileCheckWorker` na ID twojego folderu Google Drive
-5. Zbuduj i uruchom aplikację
+Data Layer
+├── DriveApiClient for Google Drive integration
+├── FileCheckWorker for background sync
+├── NotificationScheduler for alerts
+└── Local storage with SharedPreferences
+```
 
-## 📅 Logika Timera
+## Setup
 
-Aplikacja używa klasy `TimeProvider` do zarządzania czasem, co umożliwia:
+### Prerequisites
 
-- W normalnym trybie: odliczanie do 24 sierpnia 2025
-- W trybie testowym: symulowanie różnych dat do testowania
-- W trybie timera: używanie aplikacji jako standardowego timera minutowego
+- Android Studio Arctic Fox or newer
+- Android SDK 24+ (Android 7.0)
+- Google Cloud Project with Drive API enabled
+- Service Account with JSON key file
 
-## 📱 Główne Komponenty
+### Configuration
 
-- **MainActivity** - główna aktywność aplikacji
-- **MainScreen** - ekran z kurtyną i odliczaniem
-- **NavigationDrawer** - szufladka nawigacyjna dostępna po odebraniu prezentu
-- **TimerScreen** - ekran trybu timera
-- **GiftScreen** - ekran dostępu do prezentu
-- **MainViewModel** - zarządzanie stanem UI
-- **FileCheckWorker** - worker sprawdzający aktualizacje pliku na Google Drive
-- **DriveApiClient** - klient API Google Drive używający konta usługi
-- **NotificationScheduler** - planowanie powiadomień urodzinowych
-- **TimerScheduler** - zarządzanie timerem
+1. Create `local.properties` file:
+```properties
+gdrive.folder.id=YOUR_GOOGLE_DRIVE_FOLDER_ID
+```
 
-## 🧪 Testowanie
+2. Add Service Account key:
+```
+app/src/main/res/raw/service_account.json
+```
 
-Projekt zawiera kompleksowe testy:
+3. Configure Google Drive folder:
+  - Create folder on Google Drive
+  - Share with Service Account email
+  - Copy folder ID from URL
 
-- **Testy jednostkowe** dla logiki biznesowej
-- **Testy UI** dla ekranu głównego z kurtyną
-- **Testy integracyjne** dla komunikacji z Google Drive
+### Build
 
-Do testowania różnych scenariuszy czasowych użyj klasy `TimeSimulator`.
+```bash
+# Debug build with test mode enabled
+./gradlew assembleDebug
 
-## 📝 Uwagi
+# Release build with optimizations
+./gradlew assembleRelease
+```
 
-Ta aplikacja jest prywatnym projektem, stworzonym specjalnie dla Dawida na jego 18. urodziny.
-Nie jest przeznaczona do użytku komercyjnego ani dystrybucji.
+## Testing
 
-## 📄 Licencja
+```bash
+# Unit tests
+./gradlew test
 
-Ten projekt jest własnością prywatną i nie jest objęty licencją open source.
+# Integration tests
+./gradlew connectedAndroidTest
+
+# All tests
+./gradlew check
+```
+
+The project includes comprehensive tests for:
+- Time calculations and state management
+- Google Drive API integration
+- UI components and animations
+- Background workers and notifications
+
+## Configuration
+
+Main configuration in `app/src/main/res/values/config.xml`:
+- Birthday date and time
+- File check intervals
+- Notification settings
+- Debug/test mode flags
+
+Sensitive data handled via BuildConfig and local.properties to avoid hardcoding secrets.
+
+## Key Components
+
+- **MainViewModel**: State management and time calculations
+- **DriveApiClient**: Google Drive integration with retry mechanisms
+- **FileCheckWorker**: Background file synchronization
+- **AppConfig**: Centralized configuration management
+- **TimeProvider**: Abstraction for testable time operations
+
+## Build Variants
+
+- **Debug**: Test mode enabled, verbose logging, development settings
+- **Release**: Optimized with ProGuard, production configuration required
+
+---
+
+# Wszystkiego Najlepszego Dawid (Polski)
+
+Aplikacja urodzinowa na Androida, która odsłania prezent 24 sierpnia 2025 roku o dokładnie 8:24 czasu warszawskiego.
+
+## Opis
+
+Aplikacja wyświetla animowaną kurtynę, która automatycznie otwiera się w określonym dniu i czasie, odsłaniając prezent do pobrania - eksport pamiętnika z Daylio automatycznie synchronizowany z Google Drive. Aplikacja zawiera ukryty tryb timera aktywowany przez długie naciśnięcie prezentu.
+
+## Funkcje
+
+- Precyzyjne odliczanie do urodzin z animowanymi cyframi
+- Animowana kurtyna odsłaniająca się automatycznie w docelowym czasie
+- Automatyczne pobieranie pliku z Google Drive za pomocą Service Account
+- Synchronizacja w tle przez WorkManager dla aktualizacji pliku
+- System powiadomień o urodzinach
+- Ukryta funkcjonalność timera
+- Szufladka nawigacyjna z wieloma sekcjami
+- Material Design 3 z niestandardowym motywem lawendowym
+
+## Stack Technologiczny
+
+- **Język**: Kotlin 100%
+- **Framework UI**: Jetpack Compose
+- **Architektura**: MVVM + Clean Architecture
+- **Przetwarzanie w tle**: WorkManager
+- **Integracja z chmurą**: Google Drive API v3
+- **Uwierzytelnianie**: Service Account (bez logowania użytkownika)
+- **Powiadomienia**: AlarmManager + NotificationManager
+- **Testowanie**: JUnit, Espresso, MockK, Robolectric
+
+## Konfiguracja
+
+### Wymagania
+
+- Android Studio Arctic Fox lub nowsze
+- Android SDK 24+ (Android 7.0)
+- Projekt Google Cloud z włączonym Drive API
+- Service Account z plikiem klucza JSON
+
+### Ustawienia
+
+1. Utwórz plik `local.properties`:
+```properties
+gdrive.folder.id=TWOJE_ID_FOLDERU_GOOGLE_DRIVE
+```
+
+2. Dodaj klucz Service Account:
+```
+app/src/main/res/raw/service_account.json
+```
+
+3. Skonfiguruj folder Google Drive:
+  - Utwórz folder na Google Drive
+  - Udostępnij dla email Service Account
+  - Skopiuj ID folderu z URL
+
+### Budowanie
+
+```bash
+# Build debug z włączonym trybem testowym
+./gradlew assembleDebug
+
+# Build release z optymalizacjami
+./gradlew assembleRelease
+```
+
+## Testowanie
+
+```bash
+# Testy jednostkowe
+./gradlew test
+
+# Testy integracyjne
+./gradlew connectedAndroidTest
+
+# Wszystkie testy
+./gradlew check
+```
+
+Projekt zawiera kompleksowe testy dla:
+- Obliczeń czasowych i zarządzania stanem
+- Integracji z Google Drive API
+- Komponentów UI i animacji
+- Workerów w tle i powiadomień
+
+## Główne Komponenty
+
+- **MainViewModel**: Zarządzanie stanem i obliczenia czasowe
+- **DriveApiClient**: Integracja z Google Drive z mechanizmami ponownych prób
+- **FileCheckWorker**: Synchronizacja plików w tle
+- **AppConfig**: Scentralizowane zarządzanie konfiguracją
+- **TimeProvider**: Abstrakcja dla testowalnych operacji czasowych
+
+## Warianty Budowania
+
+- **Debug**: Tryb testowy włączony, szczegółowe logowanie, ustawienia rozwojowe
+- **Release**: Zoptymalizowany z ProGuard, wymagana konfiguracja produkcyjna
