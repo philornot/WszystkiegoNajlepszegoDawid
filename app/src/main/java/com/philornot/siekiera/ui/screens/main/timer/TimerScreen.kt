@@ -22,7 +22,10 @@ import com.philornot.siekiera.ui.screens.main.countdown.CountdownSection
  *
  * @param timerRemainingTime Pozostały czas timera w milisekundach
  * @param timerFinished Czy timer zakończył odliczanie
+ * @param isTimerPaused Czy timer jest spauzowany
  * @param onTimerSet Callback wywoływany po ustawieniu timera
+ * @param onPauseTimer Callback wywoływany po spauzowaniu timera
+ * @param onResumeTimer Callback wywoływany po wznowieniu timera
  * @param onResetTimer Callback wywoływany po resetowaniu timera
  * @param modifier Modyfikator dla całego ekranu
  */
@@ -30,7 +33,10 @@ import com.philornot.siekiera.ui.screens.main.countdown.CountdownSection
 fun TimerScreen(
     timerRemainingTime: Long,
     timerFinished: Boolean,
+    isTimerPaused: Boolean = false,
     onTimerSet: (Int) -> Unit,
+    onPauseTimer: () -> Unit = {},
+    onResumeTimer: () -> Unit = {},
     onResetTimer: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -46,7 +52,12 @@ fun TimerScreen(
     ) {
         // Nagłówek dla trybu timera
         Text(
-            text = if (timerRemainingTime > 0) "Timer aktywny" else "Tryb Timera",
+            text = when {
+                timerFinished -> "Timer zakończony"
+                timerRemainingTime > 0 && isTimerPaused -> "Timer spauzowany"
+                timerRemainingTime > 0 -> "Timer aktywny"
+                else -> "Tryb Timera"
+            },
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(top = 16.dp, bottom = 24.dp)
@@ -60,6 +71,7 @@ fun TimerScreen(
             timeRemaining = timerRemainingTime,
             isTimeUp = timerFinished,
             isTimerMode = true,
+            isTimerPaused = isTimerPaused,
             onTimerMinutesChanged = { minutes ->
                 timerMinutes = minutes
             },
@@ -71,6 +83,8 @@ fun TimerScreen(
             onChangeAppNameChanged = { checked ->
                 changeAppName = checked
             },
+            onPauseTimer = onPauseTimer,
+            onResumeTimer = onResumeTimer,
             onResetTimer = onResetTimer,
             modifier = Modifier.padding(bottom = 24.dp)
         )
