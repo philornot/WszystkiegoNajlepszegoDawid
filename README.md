@@ -1,6 +1,6 @@
 # Wszystkiego Najlepszego Dawid
 
-A birthday Android app that reveals a gift on August 24, 2025, at exactly 8:24 AM Warsaw time.
+A birthday Android app that reveals a gift on a desired date.
 
 ## Overview
 
@@ -130,7 +130,7 @@ Sensitive data handled via BuildConfig and local.properties to avoid hardcoding 
 
 # Wszystkiego Najlepszego Dawid (Polski)
 
-Aplikacja urodzinowa na Androida, która odsłania prezent 24 sierpnia 2025 roku o dokładnie 8:24 czasu warszawskiego.
+Aplikacja urodzinowa na Androida, która odsłania prezent określonego dnia.
 
 ## Opis
 
