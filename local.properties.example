@@ -1,0 +1,14 @@
+# Konfiguracja lokalna - skopiuj ten plik do local.properties i uzupe?nij warto?ci
+
+# Android SDK path (zazwyczaj automatycznie ustawiane przez Android Studio)
+sdk.dir=C\:\\Users\\YOUR_USERNAME\\AppData\\Local\\Android\\Sdk
+
+# Konfiguracja Google Drive
+# Podaj ID folderu Google Drive gdzie znajduje si? plik .daylio
+gdrive.folder.id=YOUR_GOOGLE_DRIVE_FOLDER_ID_HERE
+
+# Przyk?ad: gdrive.folder.id=1owefweghy5567j9HJF82h7
+
+# Dodatkowa konfiguracja (opcjonalna)
+# W??cz dodatkowe logowanie w debug buildach
+debug.extra.logging=true

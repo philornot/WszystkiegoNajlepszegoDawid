@@ -1,6 +1,9 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("kotlin-parcelize")
 }
 
 android {
@@ -18,38 +21,77 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        // Bezpieczne domyślne wartości
+        buildConfigField("String", "GDRIVE_FOLDER_ID", "\"\"")
+        buildConfigField("boolean", "DEBUG_LOGGING", "false")
+        buildConfigField("boolean", "TEST_MODE", "false")
     }
 
     buildTypes {
-        release {
-            isMinifyEnabled = true
-            isShrinkResources = true
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
-            )
-            // Włącz obfuskację kodu
-            isPseudoLocalesEnabled = true
-        }
-
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
             isDebuggable = true
+            isMinifyEnabled = false
+
+            // Włącz debugowanie i tryb testowy w debug
+            buildConfigField("boolean", "DEBUG_LOGGING", "true")
+            buildConfigField("boolean", "TEST_MODE", "true")
+
+            // Użyj lokalnego pliku z konfiguracją jeśli istnieje
+            val localProperties = project.rootProject.file("local.properties")
+            if (localProperties.exists()) {
+                val properties = Properties()
+                properties.load(localProperties.inputStream())
+                val gdriveId = properties.getProperty("gdrive.folder.id", "")
+                if (gdriveId.isNotEmpty()) {
+                    buildConfigField("String", "GDRIVE_FOLDER_ID", "\"$gdriveId\"")
+                }
+            }
+        }
+
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+
+            // Wyłącz debugowanie i tryb testowy w release
+            buildConfigField("boolean", "DEBUG_LOGGING", "false")
+            buildConfigField("boolean", "TEST_MODE", "false")
+
+            // W release musi być ustawione przez CI/CD lub local.properties
+            val localProperties = project.rootProject.file("local.properties")
+            if (localProperties.exists()) {
+                val properties = Properties()
+                properties.load(localProperties.inputStream())
+                val gdriveId = properties.getProperty("gdrive.folder.id", "")
+                if (gdriveId.isNotEmpty()) {
+                    buildConfigField("String", "GDRIVE_FOLDER_ID", "\"$gdriveId\"")
+                } else {
+                    throw GradleException("gdrive.folder.id must be set in local.properties for release builds")
+                }
+            } else {
+                throw GradleException("local.properties file is required for release builds")
+            }
         }
     }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-
-        // Włączenie desugaring, konieczne dla Google Play Services
         isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
         jvmTarget = "17"
-        // Dodaj opcję, która pozwoli na tymczasowe pominięcie błędów niezgodności wersji
-        freeCompilerArgs = listOf("-Xskip-metadata-version-check")
+        freeCompilerArgs = listOf(
+            "-Xskip-metadata-version-check",
+            "-opt-in=androidx.compose.animation.ExperimentalAnimationApi"
+        )
     }
 
     buildFeatures {
@@ -66,6 +108,17 @@ android {
             isIncludeAndroidResources = true
             isReturnDefaultValues = true
         }
+
+        // Dodaj wsparcie dla testów instrumentalnych z większym timeoutem
+        managedDevices {
+            allDevices {
+                maybeCreate<com.android.build.api.dsl.ManagedVirtualDevice>("pixel6api33").apply {
+                    device = "Pixel 6"
+                    apiLevel = 33
+                    systemImageSource = "aosp"
+                }
+            }
+        }
     }
 
     packaging {
@@ -75,13 +128,9 @@ android {
             excludes += "/META-INF/ASL2.0"
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
             excludes += "/META-INF/DEPENDENCIES"
-            excludes += "/META-INF/LICENSE"
-            excludes += "/META-INF/LICENSE-notice.md"
-            excludes += "/META-INF/LICENSE.md"
-            excludes += "/META-INF/LICENSE.txt"
+            excludes += "/META-INF/LICENSE*"
             excludes += "/META-INF/license.txt"
-            excludes += "/META-INF/NOTICE"
-            excludes += "/META-INF/NOTICE.txt"
+            excludes += "/META-INF/NOTICE*"
             excludes += "/META-INF/notice.txt"
             excludes += "META-INF/MANIFEST.MF"
             excludes += "META-INF/maven/**"
@@ -91,7 +140,7 @@ android {
 }
 
 dependencies {
-    // Biblioteka do desugaring - potrzebna dla Google Play Services
+    // Biblioteka do desugaring
     coreLibraryDesugaring(libs.desugar.jdk.libs)
 
     // Podstawowe zależności Androida
@@ -105,20 +154,18 @@ dependencies {
     implementation(libs.ui.graphics)
     implementation(libs.ui.tooling.preview)
     implementation(libs.material3)
-
-    // Ikony z biblioteki Material
     implementation(libs.androidx.material.icons.extended)
 
-    // WorkManager - do planowania zadań
+    // WorkManager
     implementation(libs.androidx.work.runtime.ktx)
 
-    // OkHttp - klient HTTP
+    // Network
     implementation(libs.okhttp)
 
-    // Timber - do logowania
+    // Logging
     implementation(libs.timber)
 
-    // Google Drive API i zależności
+    // Google Drive API
     implementation(libs.google.api.client.android)
     implementation(libs.google.http.client.gson)
     implementation(libs.google.api.services.drive)
@@ -126,44 +173,40 @@ dependencies {
     implementation(libs.google.oauth.client.jetty)
     implementation(libs.kotlinx.coroutines.play.services)
 
-    // Do pracy z JSON
+    // JSON
     implementation(libs.gson)
     implementation(libs.androidx.junit.ktx)
 
-    // Dla testów jednostkowych (folder 'test')
+    // Testy jednostkowe
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.androidx.core.testing)
-    testImplementation(libs.mockito.kotlin) // Możesz rozważyć usunięcie, jeśli używasz tylko MockK
+    testImplementation(libs.mockito.kotlin)
     testImplementation(libs.robolectric)
     testImplementation(libs.turbine)
     testImplementation(libs.androidx.core)
     testImplementation(libs.androidx.work.testing)
-
-    // Dodatkowe zależności MockK dla testów
     testImplementation(libs.mockk)
-    testImplementation(libs.mockk.agent) // Potrzebne do mockowania statycznych metod
-    testImplementation(libs.mockk.android) // dla wsparcia Android
+    testImplementation(libs.mockk.agent)
+    testImplementation(libs.mockk.android)
     testImplementation(libs.kotlin.test.junit)
 
-    // Dla testów instrumentalnych (folder 'androidTest')
+    // Testy instrumentalne
     androidTestImplementation(libs.androidx.junit.v121)
     androidTestImplementation(libs.androidx.espresso.core.v361)
     androidTestImplementation(libs.ui.test.junit4)
     androidTestImplementation(libs.androidx.core)
     androidTestImplementation(libs.androidx.work.testing)
-
-    // MockK dla testów instrumentalnych
     androidTestImplementation(libs.mockk.android)
     androidTestImplementation(libs.mockk.agent)
 
-    // Dla debugowania Compose
+    // Debug
     debugImplementation(libs.ui.tooling)
     debugImplementation(libs.ui.test.manifest)
 
-    // Google Tasks API dla operacji na Future
+    // Google Tasks API
     implementation(libs.play.services.tasks)
 
-    // Dodatkowe narzędzia do testów z Compose
+    // Testy Compose
     testImplementation(libs.ui.test.junit4)
 }
