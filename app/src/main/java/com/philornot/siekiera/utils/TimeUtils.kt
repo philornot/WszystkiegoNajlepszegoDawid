@@ -89,6 +89,49 @@ object TimeUtils {
     }
 
     /**
+     * Zwraca datę następnych urodzin w milisekundach. Jeśli bieżąca data jest
+     * po dacie urodzin w tym roku, zwraca datę urodzin w następnym roku.
+     *
+     * @param appConfig Instancja konfiguracji aplikacji
+     * @return Czas w milisekundach
+     */
+    fun getNextBirthdayDateMillis(appConfig: AppConfig): Long {
+        val currentTime = System.currentTimeMillis()
+        val birthdayTime = getBirthdayTimeForCurrentYear(appConfig)
+
+        return if (currentTime > birthdayTime) {
+            // Jeśli bieżąca data jest po urodzinach w tym roku, oblicz datę na następny rok
+            getBirthdayTimeForYear(appConfig, Calendar.getInstance().get(Calendar.YEAR) + 1)
+        } else {
+            // W przeciwnym przypadku użyj daty z tego roku
+            birthdayTime
+        }
+    }
+
+    /**
+     * Pobiera datę urodzin dla bieżącego roku.
+     *
+     * @param appConfig Instancja konfiguracji aplikacji
+     * @return Czas w milisekundach
+     */
+    private fun getBirthdayTimeForCurrentYear(appConfig: AppConfig): Long {
+        return getBirthdayTimeForYear(appConfig, Calendar.getInstance().get(Calendar.YEAR))
+    }
+
+    /**
+     * Pobiera datę urodzin dla określonego roku.
+     *
+     * @param appConfig Instancja konfiguracji aplikacji
+     * @param year Rok
+     * @return Czas w milisekundach
+     */
+    private fun getBirthdayTimeForYear(appConfig: AppConfig, year: Int): Long {
+        val birthday = appConfig.getBirthdayDate()
+        birthday.set(Calendar.YEAR, year)
+        return birthday.timeInMillis
+    }
+
+    /**
      * Formatuje pozostały czas do wskazanej daty w postaci czytelnej dla
      * użytkownika.
      *

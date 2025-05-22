@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Legacy colors - zachowane dla kompatybilności -->
     <color name="purple_200">#FFBB86FC</color>
     <color name="purple_500">#FF6200EE</color>
     <color name="purple_700">#FF3700B3</color>
@@ -7,5 +8,31 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
-    <color name="colorPrimary">#B00B69</color>
+
+    <!-- Zaktualizowane kolory, zsynchronizowane z Color.kt -->
+    <!-- Lavender-focused color palette -->
+    <color name="colorPrimary">#9D7CD8</color>         <!-- LavenderPrimary -->
+    <color name="colorPrimaryDark">#6D5BA8</color>     <!-- LavenderDark -->
+    <color name="colorPrimaryLight">#BDA5F5</color>    <!-- LavenderLight -->
+    <color name="colorPrimaryPastel">#E2D9FC</color>   <!-- LavenderPastel -->
+
+    <!-- Accent colors -->
+    <color name="colorAccentMauve">#CA98E8</color>     <!-- AccentMauve -->
+    <color name="colorAccentBlue">#8B91E0</color>      <!-- AccentBlueishLavender -->
+    <color name="colorAccentPeriwinkle">#A2BBF8</color><!-- AccentPeriwinkle -->
+
+    <!-- Neutral colors -->
+    <color name="colorBlack">#121212</color>
+    <color name="colorDarkGray">#2D2D2D</color>
+    <color name="colorLightGray">#E8E8EC</color>
+    <color name="colorWhite">#FAFAFA</color>
+
+    <!-- Functional colors -->
+    <color name="colorError">#DB5461</color>           <!-- ErrorRed -->
+    <color name="colorSuccess">#4CAF92</color>         <!-- SuccessGreen -->
+    <color name="colorWarning">#FFC857</color>         <!-- WarningAmber -->
+
+    <!-- Curtain colors -->
+    <color name="colorCurtainPrimary">#BDA5F5</color>  <!-- CurtainPrimary -->
+    <color name="colorCurtainSecondary">#E2D9FC</color><!-- CurtainSecondary -->
 </resources>

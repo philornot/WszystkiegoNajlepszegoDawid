@@ -190,7 +190,7 @@ object NotificationHelper {
 
         // Zbuduj powiadomienie
         val notification = NotificationCompat.Builder(context, CHANNEL_ID_BIRTHDAY)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setSmallIcon(R.drawable.notification_gift_icon)
             .setColor(ContextCompat.getColor(context, R.color.colorPrimary))
             .setContentTitle("Wszystkiego najlepszego") // Tytuł zgodny z wymaganiem
             .setContentText("Twój prezent jest gotowy do otwarcia") // Opis zgodny z wymaganiem
