@@ -15,7 +15,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
@@ -41,22 +44,24 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import com.philornot.siekiera.ui.screens.main.timer.TimerDaysCounter
 import com.philornot.siekiera.utils.TimeUtils
-import kotlinx.coroutines.delay
 
 /**
  * Sekcja odliczania, która obsługuje zarówno tryb odliczania do urodzin
- * jak i tryb timera.
+ * jak i tryb timera z przyciskami kontroli.
  *
  * @param modifier Modifier dla kontenera
  * @param timeRemaining Pozostały czas w milisekundach
  * @param isTimeUp Czy czas upłynął
  * @param isTimerMode Czy jest aktywny tryb timera
+ * @param isTimerPaused Czy timer jest spauzowany
  * @param onTimerMinutesChanged Wywołanie gdy zmieniają się minuty timera
  * @param onTimerSet Wywołanie gdy timer powinien zostać uruchomiony
  * @param timerMinutes Aktualnie ustawione minuty w trybie timera
  * @param changeAppName Czy zmienić nazwę aplikacji w trybie timera
  * @param onChangeAppNameChanged Wywołanie gdy zmienia się opcja zmiany
  *    nazwy
+ * @param onPauseTimer Wywołanie gdy użytkownik pauzuje timer
+ * @param onResumeTimer Wywołanie gdy użytkownik wznawia timer
  * @param onResetTimer Wywołanie gdy użytkownik resetuje timer
  */
 @OptIn(ExperimentalAnimationApi::class)
@@ -66,15 +71,15 @@ fun CountdownSection(
     timeRemaining: Long,
     isTimeUp: Boolean,
     isTimerMode: Boolean = false,
+    isTimerPaused: Boolean = false,
     onTimerMinutesChanged: (Int) -> Unit = {},
-    onTimerSet: (Int) -> Unit = {},  // Added parameter for starting the timer
+    onTimerSet: (Int) -> Unit = {},
     timerMinutes: Int = 5,
     changeAppName: Boolean = false,
     onChangeAppNameChanged: (Boolean) -> Unit = {},
+    onPauseTimer: () -> Unit = {},
+    onResumeTimer: () -> Unit = {},
     onResetTimer: () -> Unit = {},
-    isTimerPaused: Boolean, // todo
-    onPauseTimer: () -> Unit, // todo
-    onResumeTimer: () -> Unit, // todo
 ) {
     // Format the time string
     val formattedTime = if (isTimerMode) {
@@ -104,32 +109,24 @@ fun CountdownSection(
     val minutesPart = if (time.length >= 5) time.substring(3, 5) else "00"
     val secondsPart = if (time.length >= 8) time.substring(6, 8) else "00"
 
-    // Drag state dla trybu timera
+    // Drag state dla trybu timera - tylko do zmiany wartości
     var isDragging by remember { mutableStateOf(false) }
-    var dragStartY by remember { mutableFloatStateOf(0f) }
     var currentDragMinutes by remember { mutableIntStateOf(timerMinutes) }
 
-    // Track if timer needs to be auto-started after drag
-    var shouldStartTimer by remember { mutableStateOf(false) }
+    // Dodane: Stan dla inteligentnego przeciągania
+    var lastDragTime by remember { mutableStateOf(0L) }
+    var lastDragPosition by remember { mutableFloatStateOf(0f) }
+    var dragVelocity by remember { mutableFloatStateOf(0f) }
+    var accumulatedDrag by remember { mutableFloatStateOf(0f) }
+
+    // Stan czy timer jest aktywny (ma pozostały czas)
+    val isTimerActive = isTimerMode && timeRemaining > 0
 
     // Odświeżanie UI co sekundę dla trybu timera
     LaunchedEffect(isTimerMode) {
         if (isTimerMode) {
             // Zainicjuj wartość minut
             currentDragMinutes = timerMinutes
-        }
-    }
-
-    // Auto-start timer after drag is completed (with delay)
-    LaunchedEffect(shouldStartTimer) {
-        if (shouldStartTimer && isTimerMode && timeRemaining <= 0) {
-            // Add a 1.5 second delay before starting the timer
-            delay(1500)
-            // Check if user hasn't cancelled the auto-start in the meantime
-            if (shouldStartTimer) {
-                onTimerSet(currentDragMinutes)
-                shouldStartTimer = false
-            }
         }
     }
 
@@ -148,46 +145,92 @@ fun CountdownSection(
             modifier = Modifier
                 .padding(16.dp)
                 .pointerInput(isTimerMode) {
-                    if (isTimerMode) {
+                    if (isTimerMode && !isTimerActive) {
+                        // Przeciąganie działa tylko gdy timer nie jest aktywny
                         detectVerticalDragGestures(onDragStart = { offset ->
                             isDragging = true
-                            dragStartY = offset.y
+                            lastDragTime = System.currentTimeMillis()
+                            lastDragPosition = offset.y
+                            dragVelocity = 0f
+                            accumulatedDrag = 0f
                         }, onDragEnd = {
                             isDragging = false
                             // Zatwierdź zmianę minut po zakończeniu przeciągania
                             onTimerMinutesChanged(currentDragMinutes)
 
-                            // Auto-start timer if not already running
-                            if (timeRemaining <= 0) {
-                                shouldStartTimer = true
-                            }
+                            // Reset wartości
+                            accumulatedDrag = 0f
+                            dragVelocity = 0f
                         }, onDragCancel = {
                             isDragging = false
+                            accumulatedDrag = 0f
+                            dragVelocity = 0f
                         }, onVerticalDrag = { change, dragAmount ->
+                            val currentTime = System.currentTimeMillis()
+                            val timeDelta = (currentTime - lastDragTime).coerceAtLeast(1L)
+
+                            // Oblicz prędkość przeciągania (piksele na milisekundę)
+                            val instantVelocity = kotlin.math.abs(dragAmount) / timeDelta.toFloat()
+
+                            // Wygładź prędkość używając prostego filtra
+                            dragVelocity = dragVelocity * 0.7f + instantVelocity * 0.3f
+
+                            // Akumuluj przeciągnięcie
+                            accumulatedDrag += dragAmount
+
+                            // Oblicz czułość na podstawie prędkości i akumulacji
+                            val baseMultiplier = 0.15f // Podstawowa czułość (większa niż wcześniej)
+
+                            // Mnożnik prędkości - im szybciej przeciągamy, tym większe zmiany
+                            val velocityMultiplier = when {
+                                dragVelocity > 2.0f -> 4.0f      // Bardzo szybkie przeciąganie
+                                dragVelocity > 1.0f -> 2.5f      // Szybkie przeciąganie
+                                dragVelocity > 0.5f -> 1.5f      // Średnie przeciąganie
+                                else -> 1.0f                     // Wolne, precyzyjne przeciąganie
+                            }
+
+                            // Mnożnik akceleracji - im dłużej przeciągamy w jedną stronę, tym szybciej
+                            val accumulationAmount = kotlin.math.abs(accumulatedDrag)
+                            val accelerationMultiplier = when {
+                                accumulationAmount > 200f -> 2.0f   // Długie przeciąganie
+                                accumulationAmount > 100f -> 1.5f   // Średnie przeciąganie
+                                else -> 1.0f                        // Krótkie przeciąganie
+                            }
+
+                            // Finalna czułość to kombinacja wszystkich czynników
+                            val finalSensitivity =
+                                baseMultiplier * velocityMultiplier * accelerationMultiplier
+
                             // Konwersja przeciągnięcia na minuty (ujemne przeciągnięcie = zwiększenie)
-                            if (isTimerMode) {
-                                val dragSensitivity = 0.05f
-                                val minuteChange = (-dragAmount * dragSensitivity).toInt()
+                            val minuteChange = (-dragAmount * finalSensitivity).toInt()
 
-                                if (minuteChange != 0) {
-                                    // Aktualizuj minuty z ograniczeniami
-                                    currentDragMinutes =
-                                        (currentDragMinutes + minuteChange).coerceIn(
-                                            1, 60
-                                        ) // 1 min do 60 min
+                            if (minuteChange != 0) {
+                                // Aktualizuj minuty z ograniczeniami
+                                val newMinutes = (currentDragMinutes + minuteChange).coerceIn(1, 60)
 
-                                    // Powiadom o zmianie
+                                if (newMinutes != currentDragMinutes) {
+                                    currentDragMinutes = newMinutes
+                                    // Powiadom o zmianie dla natychmiastowej aktualizacji UI
                                     onTimerMinutesChanged(currentDragMinutes)
                                 }
                             }
+
+                            // Aktualizuj stan dla następnej iteracji
+                            lastDragTime = currentTime
+                            lastDragPosition = change.position.y
+
                             change.consume()
                         })
                     }
                 }) {
             // Tytuł
             Text(
-                text = if (isTimerMode) if (timeRemaining > 0) "Timer aktywny:" else "Timer: ustaw czas"
-                else "Czas do urodzin:",
+                text = when {
+                    isTimerMode && isTimerActive && isTimerPaused -> "Timer spauzowany:"
+                    isTimerMode && isTimerActive -> "Timer aktywny:"
+                    isTimerMode -> "Timer: ustaw czas"
+                    else -> "Czas do urodzin:"
+                },
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.SemiBold,
@@ -199,8 +242,13 @@ fun CountdownSection(
             if (isTimerMode) {
                 // W trybie timera pokazujemy minuty zamiast dni
                 TimerDaysCounter(
-                    minutes = if (timeRemaining > 0) (timeRemaining / 60000).toInt() else currentDragMinutes,
-                    isDragging = isDragging
+                    minutes = if (isTimerActive) {
+                        // Jeśli timer jest aktywny, pokazuj pozostały czas w minutach
+                        (timeRemaining / 60000).toInt()
+                    } else {
+                        // Jeśli timer nie jest aktywny, pokazuj ustawioną wartość
+                        currentDragMinutes
+                    }, isDragging = isDragging && !isTimerActive
                 )
             } else {
                 // W trybie odliczania do urodzin pokazujemy dni
@@ -253,85 +301,144 @@ fun CountdownSection(
             if (isTimerMode) {
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Opcja zmiany nazwy aplikacji
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 32.dp)
-                ) {
-                    // Pobierz kontekst w kontekście funkcji @Composable
-                    val context = LocalContext.current
-
-                    Checkbox(
-                        checked = changeAppName, onCheckedChange = {
-                            onChangeAppNameChanged(it)
-
-                            // Używamy pobranego wcześniej kontekstu
-                            context.getSharedPreferences(
-                                "timer_prefs", android.content.Context.MODE_PRIVATE
-                            ).edit { putBoolean("change_app_name", it) }
-                        })
-
-                    Column(modifier = Modifier.padding(start = 8.dp)) {
-                        Text(
-                            text = "Zmień nazwę aplikacji na 'Lawendowy Timer'",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-
-                        Text(
-                            text = "Uwaga: może wymagać zamknięcia aplikacji",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
-                        )
-                    }
-                }
-
-                // Start timer button (show only if timer not running)
-                if (timeRemaining <= 0) {
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Button(
-                        onClick = { onTimerSet(currentDragMinutes) },
-                        modifier = Modifier.fillMaxWidth(0.7f),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
-                        )
+                // Opcja zmiany nazwy aplikacji (tylko gdy timer nie jest aktywny)
+                if (!isTimerActive) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 32.dp)
                     ) {
-                        Text("Rozpocznij odliczanie")
-                    }
-                }
+                        // Pobierz kontekst w kontekście funkcji @Composable
+                        val context = LocalContext.current
 
-                // Przycisk resetowania timera (show only if timer is running)
-                if (timeRemaining > 0) {
-                    Spacer(modifier = Modifier.height(16.dp))
+                        Checkbox(
+                            checked = changeAppName, onCheckedChange = {
+                                onChangeAppNameChanged(it)
 
-                    Button(
-                        onClick = onResetTimer,
-                        modifier = Modifier.fillMaxWidth(0.7f),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.secondary
-                        )
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = "Reset timera",
-                                modifier = Modifier.size(18.dp)
+                                // Używamy pobranego wcześniej kontekstu
+                                context.getSharedPreferences(
+                                    "timer_prefs", android.content.Context.MODE_PRIVATE
+                                ).edit { putBoolean("change_app_name", it) }
+                            })
+
+                        Column(modifier = Modifier.padding(start = 8.dp)) {
+                            Text(
+                                text = "Zmień nazwę aplikacji na 'Lawendowy Timer'",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Anuluj timer")
+
+                            Text(
+                                text = "Uwaga: może wymagać zamknięcia aplikacji",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
+                // Przyciski kontroli timera
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (!isTimerActive) {
+                        // Przycisk START (tylko gdy timer nie jest aktywny)
+                        Button(
+                            onClick = { onTimerSet(currentDragMinutes) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            ),
+                            modifier = Modifier.width(120.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PlayArrow,
+                                    contentDescription = "Start",
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Start")
+                            }
+                        }
+                    } else {
+                        // Przyciski gdy timer jest aktywny
+                        if (isTimerPaused) {
+                            // Przycisk WZNÓW
+                            Button(
+                                onClick = onResumeTimer, colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary
+                                ), modifier = Modifier.width(120.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.PlayArrow,
+                                        contentDescription = "Wznów",
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Wznów")
+                                }
+                            }
+                        } else {
+                            // Przycisk PAUZA
+                            Button(
+                                onClick = onPauseTimer, colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.secondary
+                                ), modifier = Modifier.width(120.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Pause,
+                                        contentDescription = "Pauza",
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Pauza")
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(16.dp))
+
+                        // Przycisk STOP/RESET
+                        Button(
+                            onClick = onResetTimer, colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error
+                            ), modifier = Modifier.width(120.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Stop,
+                                    contentDescription = "Stop",
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Stop")
+                            }
                         }
                     }
                 }
 
-                // Instrukcja przeciągania (show only if timer not running)
-                if (timeRemaining <= 0) {
-                    Spacer(modifier = Modifier.height(8.dp))
+                // Instrukcja przeciągania (tylko gdy timer nie jest aktywny)
+                if (!isTimerActive) {
+                    Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         text = "Przeciągnij w górę lub w dół, aby zmienić czas",
                         style = MaterialTheme.typography.bodySmall,
@@ -377,9 +484,7 @@ fun CountdownSection(
                 Spacer(modifier = Modifier.height(24.dp))
 
                 Button(
-                    onClick = onResetTimer,
-                    modifier = Modifier.fillMaxWidth(0.7f),
-                    colors = ButtonDefaults.buttonColors(
+                    onClick = onResetTimer, colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.secondary
                     )
                 ) {
