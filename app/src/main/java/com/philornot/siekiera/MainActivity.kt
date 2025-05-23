@@ -30,7 +30,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -146,7 +145,7 @@ class MainActivity : ComponentActivity() {
     private val currentSection: StateFlow<NavigationSection> = _currentSection
 
     // Aktywny czas timera (w milisekundach)
-    private val activeTimerRemainingTime = mutableLongStateOf(0L)
+    private val activeTimerRemainingTime = mutableStateOf(0L)
 
     // Stan pauzy timera
     private val isTimerPaused = mutableStateOf(false)
@@ -488,14 +487,14 @@ class MainActivity : ComponentActivity() {
     private fun pauseTimer() {
         if (TimerScheduler.pauseTimer(this)) {
             Toast.makeText(
-                this, "Timer został spauzowany", Toast.LENGTH_SHORT
+                this, getString(R.string.timer_paused_toast), Toast.LENGTH_SHORT
             ).show()
 
             // Zaktualizuj stan timera
             isTimerPaused.value = true
         } else {
             Toast.makeText(
-                this, "Nie można spauzować timera", Toast.LENGTH_SHORT
+                this, getString(R.string.timer_cannot_pause), Toast.LENGTH_SHORT
             ).show()
         }
     }
@@ -504,14 +503,14 @@ class MainActivity : ComponentActivity() {
     private fun resumeTimer() {
         if (TimerScheduler.resumeTimer(this)) {
             Toast.makeText(
-                this, "Timer został wznowiony", Toast.LENGTH_SHORT
+                this, getString(R.string.timer_resumed_toast), Toast.LENGTH_SHORT
             ).show()
 
             // Zaktualizuj stan timera
             isTimerPaused.value = false
         } else {
             Toast.makeText(
-                this, "Nie można wznowić timera", Toast.LENGTH_SHORT
+                this, getString(R.string.timer_cannot_resume), Toast.LENGTH_SHORT
             ).show()
         }
     }

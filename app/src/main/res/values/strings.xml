@@ -34,9 +34,16 @@
     <string name="timer_notification_text">Twoje odliczanie %1$d minut dobiegło końca</string>
     <string name="timer_set_toast">Timer ustawiony na %1$d minut</string>
     <string name="timer_cancelled_toast">Timer został anulowany</string>
+    <string name="timer_paused_toast">Timer został spauzowany</string>
+    <string name="timer_resumed_toast">Timer został wznowiony</string>
     <string name="timer_mode_title">Tryb timera</string>
     <string name="timer_instructions">Przeciągnij w górę lub w dół, aby ustawić czas</string>
     <string name="timer_set_button">Ustaw timer</string>
+    <string name="timer_start_button">Start</string>
+    <string name="timer_pause_button">Pauza</string>
+    <string name="timer_resume_button">Wznów</string>
+    <string name="timer_stop_button">Stop</string>
+    <string name="timer_reset_button">Reset</string>
     <string name="timer_back_button">Wróć</string>
     <string name="timer_minutes">minut</string>
 
@@ -52,4 +59,16 @@
     <string name="timer_finished_text">Twój timer na %1$d minut zakończył odliczanie.</string>
     <string name="timer_finished_congratulations">Gratulacje! Możesz wrócić do trybu odliczania urodzin lub ustawić nowy timer.</string>
     <string name="timer_return_to_countdown">Wróć do trybu odliczania</string>
+
+    <!-- Nowe teksty dla przycisków kontroli timera -->
+    <string name="timer_active_title">Timer aktywny</string>
+    <string name="timer_paused_title">Timer spauzowany</string>
+    <string name="timer_setup_title">Timer: ustaw czas</string>
+    <string name="timer_control_start">Start</string>
+    <string name="timer_control_pause">Pauza</string>
+    <string name="timer_control_resume">Wznów</string>
+    <string name="timer_control_stop">Stop</string>
+    <string name="timer_cannot_pause">Nie można spauzować timera</string>
+    <string name="timer_cannot_resume">Nie można wznowić timera</string>
+    <string name="timer_drag_to_change">Przeciągnij w górę lub w dół, aby zmienić czas</string>
 </resources>
