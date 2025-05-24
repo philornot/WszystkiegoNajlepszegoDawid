@@ -48,10 +48,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import androidx.core.content.edit
 
 /**
  * Ekran ustawień aplikacji zawierający opcje zmiany nazwy aplikacji,
- * motywu i informację o najnowszym pliku Daylio.
+ * motywu i informację o najnowszym pliku Daylio z 5-minutowym cache'em.
  *
  * @param modifier Modifier dla całego ekranu
  * @param currentAppName Aktualna nazwa aplikacji
@@ -80,7 +84,6 @@ fun SettingsScreen(
     // Stany dla informacji o pliku
     var fileInfo by remember { mutableStateOf("Sprawdzanie...") }
     var isRefreshing by remember { mutableStateOf(false) }
-    var lastCheckTime by remember { mutableStateOf(0L) }
 
     // Domyślna nazwa aplikacji
     val defaultAppName = stringResource(R.string.app_name)
@@ -89,20 +92,62 @@ fun SettingsScreen(
     // Sprawdź czy nazwa aplikacji jest domyślna
     val isDefaultName = currentAppName == defaultAppName
 
+    // Klucze dla SharedPreferences
+    val PREF_LAST_CHECK_TIME = "file_sync_last_check_time"
+    val PREF_LAST_FILE_INFO = "file_sync_last_file_info"
+    val PREF_LAST_SYNC_TIME_DISPLAY = "file_sync_last_sync_time_display"
+
+    // Limit sprawdzania - 5 minut
+    val CHECK_LIMIT_MS = 5 * 60 * 1000L
+
+    /** Pobiera zapisane dane z cache'u */
+    fun getCachedData(): Triple<String, Long, String> {
+        val prefs =
+            context.getSharedPreferences("settings_cache", android.content.Context.MODE_PRIVATE)
+        val lastFileInfo = prefs.getString(PREF_LAST_FILE_INFO, "") ?: ""
+        val lastCheckTime = prefs.getLong(PREF_LAST_CHECK_TIME, 0L)
+        val lastSyncTimeDisplay = prefs.getString(PREF_LAST_SYNC_TIME_DISPLAY, "") ?: ""
+        return Triple(lastFileInfo, lastCheckTime, lastSyncTimeDisplay)
+    }
+
+    /** Zapisuje dane do cache'u */
+    fun saveCachedData(fileInfo: String, checkTime: Long, syncTimeDisplay: String) {
+        val prefs =
+            context.getSharedPreferences("settings_cache", android.content.Context.MODE_PRIVATE)
+        prefs.edit {
+            putString(PREF_LAST_FILE_INFO, fileInfo)
+                .putLong(PREF_LAST_CHECK_TIME, checkTime)
+                .putString(PREF_LAST_SYNC_TIME_DISPLAY, syncTimeDisplay)
+        }
+    }
+
+    /** Formatuje czas sprawdzenia do czytelnej postaci */
+    fun formatCheckTime(timeMs: Long): String {
+        val formatter = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
+        return formatter.format(Date(timeMs))
+    }
+
     /**
      * Funkcja do sprawdzania informacji o najnowszym pliku Daylio. Sprawdza
      * limity API i cache, żeby nie nadużywać API Google Drive.
      */
-    suspend fun checkLatestFileInfo(): String {
+    suspend fun checkLatestFileInfo(forceRefresh: Boolean = false): String {
         return withContext(Dispatchers.IO) {
             try {
                 val currentTime = System.currentTimeMillis()
+                val (cachedFileInfo, lastCheckTime, lastSyncTimeDisplay) = getCachedData()
 
-                // Sprawdź czy można wykonać sprawdzenie (nie częściej niż raz na 30 minut)
-                if (currentTime - lastCheckTime < 30 * 60 * 1000L) {
+                // Sprawdź czy można wykonać sprawdzenie (nie częściej niż raz na 5 minut)
+                if (!forceRefresh && currentTime - lastCheckTime < CHECK_LIMIT_MS) {
                     val remainingMinutes =
-                        ((30 * 60 * 1000L) - (currentTime - lastCheckTime)) / (60 * 1000L)
-                    return@withContext "Można odświeżyć za $remainingMinutes minut"
+                        ((CHECK_LIMIT_MS) - (currentTime - lastCheckTime)) / (60 * 1000L)
+
+                    // Jeśli mamy cache'owane dane, pokaż je z informacją o ostatniej synchronizacji
+                    return@withContext if (cachedFileInfo.isNotEmpty() && lastSyncTimeDisplay.isNotEmpty()) {
+                        "Z ostatniej synchronizacji ($lastSyncTimeDisplay):\n$cachedFileInfo\n\nMożna odświeżyć za $remainingMinutes minut"
+                    } else {
+                        "Można odświeżyć za $remainingMinutes minut"
+                    }
                 }
 
                 val appConfig = AppConfig.getInstance(context)
@@ -127,10 +172,15 @@ fun SettingsScreen(
                 val newestFile = files.maxByOrNull { it.modifiedTime.time }
                     ?: return@withContext "Błąd podczas wyszukiwania najnowszego pliku"
 
-                lastCheckTime = currentTime
-
                 val formattedDate = TimeUtils.formatDate(newestFile.modifiedTime)
-                "Najnowszy plik: ${newestFile.name}\nData: $formattedDate"
+                val syncTimeDisplay = formatCheckTime(currentTime)
+                val newFileInfo =
+                    "Najnowszy plik: ${newestFile.name}\nData modyfikacji: $formattedDate"
+
+                // Zapisz nowe dane do cache'u
+                saveCachedData(newFileInfo, currentTime, syncTimeDisplay)
+
+                return@withContext newFileInfo
 
             } catch (e: Exception) {
                 Timber.e(e, "Błąd podczas sprawdzania pliku")
@@ -146,8 +196,8 @@ fun SettingsScreen(
         isRefreshing = true
         kotlinx.coroutines.MainScope().launch {
             try {
-                fileInfo = checkLatestFileInfo()
-            } catch (e: Exception) {
+                fileInfo = checkLatestFileInfo(forceRefresh = true)
+            } catch (_: Exception) {
                 fileInfo = "Błąd podczas odświeżania"
                 Toast.makeText(context, "Nie udało się odświeżyć informacji", Toast.LENGTH_SHORT)
                     .show()
@@ -159,10 +209,10 @@ fun SettingsScreen(
 
     // Automatyczne sprawdzenie przy pierwszym załadowaniu
     LaunchedEffect(Unit) {
-        try {
-            fileInfo = checkLatestFileInfo()
-        } catch (e: Exception) {
-            fileInfo = "Błąd podczas ładowania"
+        fileInfo = try {
+            checkLatestFileInfo()
+        } catch (_: Exception) {
+            "Błąd podczas ładowania"
         }
     }
 
@@ -270,7 +320,7 @@ fun SettingsScreen(
                         text = fileInfo,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontStyle = if (fileInfo.startsWith("Błąd") || fileInfo.startsWith("Można odświeżyć")) {
+                        fontStyle = if (fileInfo.startsWith("Błąd") || fileInfo.contains("Można odświeżyć")) {
                             FontStyle.Italic
                         } else {
                             FontStyle.Normal
@@ -299,7 +349,7 @@ fun SettingsScreen(
             }
 
             // Dodatkowa informacja o limitach
-            if (fileInfo.startsWith("Można odświeżyć za")) {
+            if (fileInfo.contains("Można odświeżyć za")) {
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Row(
