@@ -29,7 +29,8 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Manager zarządzający pobieraniem plików i WorkManager. Enkapsuluje
- * logikę związaną z synchronizacją plików z Google Drive.
+ * logikę związaną z synchronizacją plików z Google Drive. Poprawiono
+ * logikę pobierania dla GiftScreen - umożliwia ponowne pobieranie.
  */
 class FileManager(
     private val context: Context,
@@ -72,7 +73,8 @@ class FileManager(
 
     /**
      * Pobiera plik eksportu Daylio z Google Drive lub otwiera istniejący
-     * lokalny plik.
+     * lokalny plik. Poprawiona wersja umożliwiająca ponowne pobieranie z
+     * GiftScreen.
      */
     fun downloadFile() {
         // Log rozpoczęcia procesu
@@ -90,9 +92,15 @@ class FileManager(
 
         // Sprawdź, czy plik już istnieje w folderze Pobrane
         val fileName = appConfig.getDaylioFileName()
-        if (FileUtils.isFileInPublicDownloads(fileName)) {
-            // Plik już istnieje - oznacz jako pobrany
-            Timber.d("Plik $fileName już istnieje w folderze Pobrane - nie trzeba pobierać ponownie")
+        val fileExists = FileUtils.isFileInPublicDownloads(fileName)
+        val giftReceived = prefs.getBoolean("gift_received", false)
+
+        // Określ czy to pierwsze pobieranie
+        val isFirstDownload = !giftReceived
+
+        if (fileExists && isFirstDownload) {
+            // Plik już istnieje i to pierwsze pobieranie - oznacz jako pobrany
+            Timber.d("Plik $fileName już istnieje w folderze Pobrane - oznaczam jako pobrany (pierwsze pobieranie)")
 
             // Oznacz prezent jako odebrany
             prefs.edit {
@@ -103,17 +111,24 @@ class FileManager(
 
             // Wyświetl informację o istniejącym pliku
             Toast.makeText(
-                context, "Plik $fileName został już pobrany wcześniej", Toast.LENGTH_SHORT
+                context, "Plik $fileName został znaleziony w folderze Pobrane", Toast.LENGTH_SHORT
             ).show()
 
             // Zakończ pobieranie
             appStateManager.setDownloadInProgress(false)
             return
+        } else if (fileExists && !isFirstDownload) {
+            // Plik istnieje ale to nie pierwsze pobieranie (z GiftScreen) - pokaż info ale pobierz ponownie
+            Timber.d("Plik $fileName już istnieje, ale użytkownik żąda ponownego pobrania z GiftScreen")
+
+            Toast.makeText(
+                context, "Pobieranie najnowszej wersji pliku $fileName...", Toast.LENGTH_SHORT
+            ).show()
         }
 
         // Oznacz jako rozpoczęcie pobierania
         appStateManager.setDownloadInProgress(true)
-        Timber.d("Nie znaleziono lokalnego pliku, oznaczono pobieranie jako w trakcie, uruchomienie workera")
+        Timber.d("Oznaczono pobieranie jako w trakcie, uruchomienie workera")
 
         // Uruchom FileCheckWorker do pobrania najnowszego pliku z wymuszeniem
         Timber.d("Uruchamiam FileCheckWorker z forceDownload=true dla pobrania najnowszego pliku")
@@ -242,6 +257,7 @@ class FileManager(
 
                 // Sprawdź czy już pokazaliśmy powiadomienie o pobraniu
                 val firstDownloadNotified = prefs.getBoolean("first_download_notified", false)
+                val giftReceived = prefs.getBoolean("gift_received", false)
 
                 // Oznacz prezent jako odebrany
                 prefs.edit {
@@ -256,14 +272,18 @@ class FileManager(
                 // Zaktualizuj stan pobierania
                 appStateManager.setDownloadInProgress(false)
 
-                // Pokaż informację o pobraniu pliku tylko raz
-                if (!firstDownloadNotified) {
-                    Toast.makeText(
-                        context,
-                        context.getString(R.string.download_complete_toast, fileName),
-                        Toast.LENGTH_LONG
-                    ).show()
+                // Pokaż informację o pobraniu pliku
+                val message = if (giftReceived && firstDownloadNotified) {
+                    // Ponowne pobieranie z GiftScreen
+                    "Pobrano najnowszą wersję: $fileName"
+                } else {
+                    // Pierwsze pobieranie
+                    context.getString(R.string.download_complete_toast, fileName)
                 }
+
+                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+
+                Timber.d("Wyświetlono komunikat o pobraniu: $message")
             }
         }
     }

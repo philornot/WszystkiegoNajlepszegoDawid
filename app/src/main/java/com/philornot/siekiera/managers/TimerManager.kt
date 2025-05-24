@@ -10,7 +10,8 @@ import timber.log.Timber
 
 /**
  * Ulepszona wersja TimerManager z lepszą responsywnością i obsługą błędów.
- * Enkapsuluje logikę TimerScheduler i zarządzanie stanem timera.
+ * Enkapsuluje logikę TimerScheduler i zarządzanie stanem timera. Dodano
+ * natychmiastową aktualizację stanu dla lepszych animacji.
  */
 class TimerManager(
     private val context: Context,
@@ -19,7 +20,8 @@ class TimerManager(
 
     /**
      * Ustawia timer na określoną ilość minut z ulepszoną obsługą błędów.
-     * Planuje powiadomienie po upływie czasu.
+     * Planuje powiadomienie po upływie czasu i natychmiastowo aktualizuje stan
+     * UI.
      *
      * @param minutes Ilość minut do odliczania (1-1440)
      * @return true jeśli timer został ustawiony pomyślnie
@@ -44,6 +46,12 @@ class TimerManager(
             TimerScheduler.cancelTimer(context)
         }
 
+        // Natychmiast aktualizuj stan UI przed planowaniem timera
+        val initialTimeMillis = minutes * 60 * 1000L
+        appStateManager.setActiveTimerRemainingTime(initialTimeMillis)
+        appStateManager.setTimerPaused(false)
+        appStateManager.setCurrentSection(NavigationSection.TIMER)
+
         return if (TimerScheduler.scheduleTimer(context, minutes)) {
             // Timer został ustawiony pomyślnie
             val message = when {
@@ -63,15 +71,12 @@ class TimerManager(
 
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
 
-            // Natychmiastowa aktualizacja stanu timera
-            appStateManager.setActiveTimerRemainingTime(minutes * 60 * 1000L)
-            appStateManager.setTimerPaused(false)
-            appStateManager.setCurrentSection(NavigationSection.TIMER)
-
             Timber.d("Timer został pomyślnie ustawiony na $minutes minut")
             true
         } else {
-            // Wystąpił błąd podczas ustawiania timera
+            // Wystąpił błąd podczas ustawiania timera - cofnij zmiany stanu
+            appStateManager.resetTimerState()
+
             Toast.makeText(
                 context,
                 "Nie udało się ustawić timera. Sprawdź uprawnienia do alarmów w ustawieniach systemowych.",
@@ -98,19 +103,22 @@ class TimerManager(
             return false
         }
 
+        // Natychmiastowa aktualizacja stanu UI przed operacją
+        val remainingTime = TimerScheduler.getRemainingTimeMillis(context)
+        appStateManager.setTimerPaused(true)
+        appStateManager.setActiveTimerRemainingTime(remainingTime)
+
         return if (TimerScheduler.pauseTimer(context)) {
             Toast.makeText(
                 context, context.getString(R.string.timer_paused_toast), Toast.LENGTH_SHORT
             ).show()
 
-            // Natychmiastowa aktualizacja stanu UI
-            val remainingTime = TimerScheduler.getRemainingTimeMillis(context)
-            appStateManager.setActiveTimerRemainingTime(remainingTime)
-            appStateManager.setTimerPaused(true)
-
             Timber.d("Timer został spauzowany, pozostały czas: ${remainingTime / 1000} sekund")
             true
         } else {
+            // Cofnij zmiany stanu jeśli operacja się nie powiodła
+            appStateManager.setTimerPaused(false)
+
             Toast.makeText(
                 context, context.getString(R.string.timer_cannot_pause), Toast.LENGTH_SHORT
             ).show()
@@ -135,19 +143,22 @@ class TimerManager(
             return false
         }
 
+        // Natychmiastowa aktualizacja stanu UI przed operacją
+        val remainingTime = TimerScheduler.getRemainingTimeMillis(context)
+        appStateManager.setTimerPaused(false)
+        appStateManager.setActiveTimerRemainingTime(remainingTime)
+
         return if (TimerScheduler.resumeTimer(context)) {
             Toast.makeText(
                 context, context.getString(R.string.timer_resumed_toast), Toast.LENGTH_SHORT
             ).show()
 
-            // Natychmiastowa aktualizacja stanu UI
-            val remainingTime = TimerScheduler.getRemainingTimeMillis(context)
-            appStateManager.setActiveTimerRemainingTime(remainingTime)
-            appStateManager.setTimerPaused(false)
-
             Timber.d("Timer został wznowiony, pozostały czas: ${remainingTime / 1000} sekund")
             true
         } else {
+            // Cofnij zmiany stanu jeśli operacja się nie powiodła
+            appStateManager.setTimerPaused(true)
+
             Toast.makeText(
                 context, context.getString(R.string.timer_cannot_resume), Toast.LENGTH_SHORT
             ).show()
@@ -165,13 +176,13 @@ class TimerManager(
     fun cancelTimer(): Boolean {
         Timber.d("Próba anulowania timera")
 
+        // Natychmiastowa aktualizacja stanu UI
+        appStateManager.resetTimerState()
+
         return if (TimerScheduler.cancelTimer(context)) {
             Toast.makeText(
                 context, context.getString(R.string.timer_cancelled_toast), Toast.LENGTH_SHORT
             ).show()
-
-            // Natychmiastowa aktualizacja stanu UI
-            appStateManager.resetTimerState()
 
             Timber.d("Timer został anulowany")
             true
@@ -192,13 +203,13 @@ class TimerManager(
         val wasActive = TimerScheduler.isTimerSet(context)
         val wasPaused = TimerScheduler.isTimerPaused(context)
 
-        // Anuluj aktywny timer
-        val cancelled = cancelTimer()
-
-        // Zawsze pozostań w trybie timera ale zresetuj stan
+        // Natychmiastowa aktualizacja stanu UI
         appStateManager.setActiveTimerRemainingTime(0L)
         appStateManager.setTimerPaused(false)
         appStateManager.setCurrentSection(NavigationSection.TIMER)
+
+        // Anuluj aktywny timer
+        val cancelled = TimerScheduler.cancelTimer(context)
 
         // Personalizowana wiadomość na podstawie poprzedniego stanu
         val message = when {

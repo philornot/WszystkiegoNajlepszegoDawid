@@ -1,7 +1,6 @@
 package com.philornot.siekiera.ui.screens.main.countdown
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -34,7 +33,9 @@ import kotlin.math.roundToInt
 /**
  * Główny komponent sekcji odliczania. Orkiestruje wyświetlanie czasu,
  * kontrolek timera i obsługę przeciągania. Zrefaktorowana wersja
- * z wydzielonymi komponentami dla lepszej czytelności i podziału odpowiedzialności.
+ * z wydzielonymi komponentami dla lepszej czytelności i podziału
+ * odpowiedzialności. Usunięto duplikującą sekcję zakończenia dla trybu
+ * timera.
  *
  * @param modifier Modifier dla kontenera
  * @param timeRemaining Pozostały czas w milisekundach
@@ -102,9 +103,9 @@ fun CountdownSection(
         Timber.d("Synchronizacja timerMinutes: $timerMinutes -> currentDragMinutes: $currentDragMinutes")
     }
 
-    // UI odliczania
+    // UI odliczania - dla trybu timera nie pokazuj gdy zakończony
     AnimatedVisibility(
-        visible = !isTimeUp,
+        visible = if (isTimerMode) !isTimeUp else !isTimeUp,
         enter = fadeIn(),
         exit = fadeOut(),
         modifier = modifier
@@ -120,24 +121,20 @@ fun CountdownSection(
                     if (isTimerMode && !isTimerActive) {
                         Timber.d("Włączam detekcję przeciągania dla timera")
                         // Uproszczona logika przeciągania - bardziej intuicyjna
-                        detectVerticalDragGestures(
-                            onDragStart = {
-                                isDragging = true
-                                accumulatedDrag = 0f
-                                Timber.d("Rozpoczęto przeciąganie timera")
-                            },
-                            onDragEnd = {
-                                isDragging = false
-                                onTimerMinutesChanged(currentDragMinutes)
-                                accumulatedDrag = 0f
-                                Timber.d("Zakończono przeciąganie timera na wartości: $currentDragMinutes minut")
-                            },
-                            onDragCancel = {
-                                isDragging = false
-                                accumulatedDrag = 0f
-                                Timber.d("Anulowano przeciąganie timera")
-                            }
-                        ) { _, dragAmount ->
+                        detectVerticalDragGestures(onDragStart = {
+                            isDragging = true
+                            accumulatedDrag = 0f
+                            Timber.d("Rozpoczęto przeciąganie timera")
+                        }, onDragEnd = {
+                            isDragging = false
+                            onTimerMinutesChanged(currentDragMinutes)
+                            accumulatedDrag = 0f
+                            Timber.d("Zakończono przeciąganie timera na wartości: $currentDragMinutes minut")
+                        }, onDragCancel = {
+                            isDragging = false
+                            accumulatedDrag = 0f
+                            Timber.d("Anulowano przeciąganie timera")
+                        }) { _, dragAmount ->
                             // Bardzo uproszczona logika - jeden piksel = jedna zmiana
                             accumulatedDrag += dragAmount
 
@@ -147,7 +144,8 @@ fun CountdownSection(
 
                             if (minuteChange != 0) {
                                 // Zwiększony limit timera - do 24 godzin (1440 minut)
-                                val newMinutes = (currentDragMinutes + minuteChange).coerceIn(1, 1440)
+                                val newMinutes =
+                                    (currentDragMinutes + minuteChange).coerceIn(1, 1440)
 
                                 if (newMinutes != currentDragMinutes) {
                                     currentDragMinutes = newMinutes
@@ -158,8 +156,7 @@ fun CountdownSection(
                             }
                         }
                     }
-                }
-        ) {
+                }) {
             // Tytuł z animowaną zmianą
             Text(
                 text = when {
@@ -208,11 +205,9 @@ fun CountdownSection(
         }
     }
 
-    // Wiadomość po zakończeniu odliczania
+    // Wiadomość po zakończeniu odliczania - tylko dla trybu urodzinowego
     AnimatedVisibility(
-        visible = isTimeUp,
-        enter = fadeIn(),
-        modifier = modifier.fillMaxWidth()
+        visible = isTimeUp && !isTimerMode, enter = fadeIn(), modifier = modifier.fillMaxWidth()
     ) {
         CountdownFinishedSection(
             isTimerMode = isTimerMode

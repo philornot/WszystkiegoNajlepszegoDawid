@@ -147,9 +147,6 @@ fun MainScreen(
     var showProgressDialog by remember { mutableStateOf(false) }
     var progressValue by remember { mutableFloatStateOf(0f) }
 
-    // Czy pokazujemy fajerwerki po zakończeniu timera
-    var showTimerFinishedCelebration by remember { mutableStateOf(false) }
-
     // Pozostały czas timera, jeśli aktywny - ulepszony tracking
     var timerRemainingTime by remember { mutableLongStateOf(activeTimer) }
     var timerFinished by remember { mutableStateOf(false) }
@@ -171,9 +168,6 @@ fun MainScreen(
         else if (!isCurrentlyActive && previousTimerActive && timerRemainingTime > 0) {
             Timber.d("Timer się zakończył - pokazuję celebrację")
             timerFinished = true
-            if (isTimerMode) {
-                showTimerFinishedCelebration = true
-            }
         }
         // Normalne śledzenie aktywnego timera
         else if (isCurrentlyActive) {
@@ -212,7 +206,6 @@ fun MainScreen(
                     if (timerRemainingTime <= 0) {
                         timerRemainingTime = 0
                         timerFinished = true
-                        showTimerFinishedCelebration = true
                         Timber.d("Timer zakończył odliczanie")
                     }
                 }
@@ -315,9 +308,9 @@ fun MainScreen(
 
         // Główna zawartość
         Box(modifier = Modifier.fillMaxSize()) {
-            // Zwykły ekran z czekaniem/prezentem
+            // Zwykły ekran z czekaniem/prezentem (nie pokazuj gdy timer się zakończył)
             AnimatedVisibility(
-                visible = !showCelebration && !showTimerFinishedCelebration,
+                visible = !showCelebration && !(isTimerMode && timerFinished),
                 enter = fadeIn(),
                 exit = fadeOut()
             ) {
@@ -375,13 +368,16 @@ fun MainScreen(
                             // Ulepszona wersja TimerScreen z lepszą responsywnością
                             TimerScreen(
                                 timerRemainingTime = timerRemainingTime,
-                                timerFinished = timerFinished,
+                                timerFinished = false, // Zawsze false, bo finished obsługujemy osobno
                                 isTimerPaused = isTimerPaused,
                                 onTimerSet = onTimerSet,
                                 onPauseTimer = onPauseTimer,
                                 onResumeTimer = onResumeTimer,
-                                onResetTimer = onResetTimer
-                            )
+                                onResetTimer = {
+                                    // Po resecie pozostajemy w trybie timera
+                                    timerFinished = false
+                                    onResetTimer()
+                                })
                         }
 
                         NavigationSection.GIFT -> {
@@ -436,20 +432,17 @@ fun MainScreen(
                     })
             }
 
-            // Ekran po zakończeniu timera
+            // Ekran po zakończeniu timera - uproszczony
             AnimatedVisibility(
-                visible = showTimerFinishedCelebration, enter = fadeIn(), exit = fadeOut()
+                visible = isTimerMode && timerFinished, enter = fadeIn(), exit = fadeOut()
             ) {
                 TimerFinishedMessage(
-                    minutes = timerMinutes,
-                    modifier = Modifier.fillMaxSize(),
-                    onBackClick = {
-                        showTimerFinishedCelebration = false
-                        onSectionSelected(NavigationSection.BIRTHDAY_COUNTDOWN)
-                    },
-                    onResetTimer = {
-                        showTimerFinishedCelebration = false
+                    minutes = timerMinutes, modifier = Modifier.fillMaxSize(), onSetNewTimer = {
+                        // Resetuj stan timera i pozostań w trybie timera
+                        timerFinished = false
+                        timerRemainingTime = 0L
                         onResetTimer()
+                        // currentSection pozostaje TIMER - nie zmieniamy sekcji
                     })
             }
 
