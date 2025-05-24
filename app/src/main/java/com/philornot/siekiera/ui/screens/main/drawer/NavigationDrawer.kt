@@ -7,11 +7,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -34,7 +32,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -166,55 +163,4 @@ fun NavigationDrawer(
             }
         }
     }
-}
-
-/** Individual drawer item with icon and title. */
-@Composable
-private fun DrawerItem(
-    icon: ImageVector,
-    title: String,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val backgroundColor = if (isSelected) {
-        MaterialTheme.colorScheme.primaryContainer
-    } else {
-        Color.Transparent
-    }
-
-    val contentColor = if (isSelected) {
-        MaterialTheme.colorScheme.onPrimaryContainer
-    } else {
-        MaterialTheme.colorScheme.onSurface
-    }
-
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
-            .clickable(onClick = onClick),
-        color = backgroundColor,
-        shape = MaterialTheme.shapes.medium
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = icon, contentDescription = null, tint = contentColor
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-            Text(
-                text = title, style = MaterialTheme.typography.bodyLarge, color = contentColor
-            )
-        }
-    }
-}
-
-/** Navigation sections available in the drawer. */
-enum class NavigationSection {
-    GIFT, TIMER, BIRTHDAY_COUNTDOWN
 }
