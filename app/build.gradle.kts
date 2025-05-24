@@ -213,11 +213,28 @@ dependencies {
     testImplementation(libs.ui.test.junit4)
 }
 
+// Kkonfiguracja Sentry
 sentry {
-    org.set("wszystkiegonajlepszegodawid")
-    projectName.set("wszystkiegonajlepszegodawid")
+    // Włącz szczegółowe logowanie Sentry CLI w debug
+    debug = true
 
-    // this will upload your source code to Sentry to show it as part of the stack traces
-    // disable if you don't want to expose your sources
-    includeSourceContext.set(true)
+    // Automatyczne przesyłanie kodu źródłowego do Sentry
+    // Umożliwia wyświetlanie kodu źródłowego w stack trace w Sentry UI
+    includeSourceContext = true
+
+    // Dodatkowe foldery z kodem źródłowym do przesłania
+    additionalSourceDirsForSourceContext = setOf(
+        "src/main/java",
+        "src/main/kotlin"
+    )
+
+    // Konfiguracja organizacji i projektu Sentry
+    org = "wszystkiegonajlepszegodawid"
+    projectName = "wszystkiegonajlepszegodawid"
+
+    // Token autoryzacyjny Sentry z zmiennej środowiskowej
+    authToken = System.getenv("SENTRY_AUTH_TOKEN")
+
+    // Automatyczne przesyłanie ProGuard mapping files w release
+    autoUploadProguardMapping = true
 }
