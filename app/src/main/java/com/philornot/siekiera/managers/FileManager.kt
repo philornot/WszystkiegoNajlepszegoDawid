@@ -111,7 +111,7 @@ class FileManager(
 
             // Wyświetl informację o istniejącym pliku
             Toast.makeText(
-                context, "Plik $fileName został znaleziony w folderze Pobrane", Toast.LENGTH_SHORT
+                context, "Plik $fileName już jest w folderze Pobrane", Toast.LENGTH_SHORT
             ).show()
 
             // Zakończ pobieranie
