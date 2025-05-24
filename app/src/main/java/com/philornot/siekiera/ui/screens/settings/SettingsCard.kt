@@ -13,7 +13,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 /**
- * Karta grupująca powiązane ustawienia.
+ * Karta grupująca powiązane ustawienia - bez widocznych ramek.
  *
  * @param title Tytuł sekcji ustawień
  * @param description Opis sekcji
@@ -29,17 +29,19 @@ fun SettingsCard(
 ) {
     Card(
         modifier = modifier.fillMaxWidth(), colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-        ), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f)
+        ), elevation = CardDefaults.cardElevation(
+            defaultElevation = 0.dp // Usunięcie cienia
+        ), border = null // Usunięcie obramowania
     ) {
         Column(
-            modifier = Modifier.Companion.padding(16.dp)
+            modifier = Modifier.padding(20.dp) // Zwiększony padding dla lepszego wyglądu
         ) {
             // Nagłówek sekcji
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Companion.SemiBold,
+                fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.primary
             )
 
@@ -47,7 +49,7 @@ fun SettingsCard(
                 text = description,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.Companion.padding(bottom = 16.dp)
+                modifier = Modifier.padding(bottom = 20.dp) // Zwiększony padding
             )
 
             // Zawartość sekcji

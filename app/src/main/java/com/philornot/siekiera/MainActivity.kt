@@ -28,6 +28,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -60,12 +61,13 @@ import timber.log.Timber
 import java.util.Calendar
 import java.util.TimeZone
 import java.util.concurrent.TimeUnit
-import io.sentry.Sentry
+import kotlin.system.exitProcess
 
 
 class MainActivity : ComponentActivity() {
 
     // Strefa czasowa Warszawy
+    @Suppress("PrivatePropertyName")
     private val WARSAW_TIMEZONE = TimeZone.getTimeZone("Europe/Warsaw")
 
     // Domyślnie używaj prawdziwego czasu, ale umożliw wstrzyknięcie testowego w testach
@@ -145,7 +147,7 @@ class MainActivity : ComponentActivity() {
     private val currentSection: StateFlow<NavigationSection> = _currentSection
 
     // Aktywny czas timera (w milisekundach)
-    private val activeTimerRemainingTime = mutableStateOf(0L)
+    private val activeTimerRemainingTime = mutableLongStateOf(0L)
 
     // Stan pauzy timera
     private val isTimerPaused = mutableStateOf(false)
@@ -297,7 +299,7 @@ class MainActivity : ComponentActivity() {
 
             if (remainingMillis > 0 || isPaused) {
                 // Timer wciąż aktywny lub spauzowany, ustaw jego stan
-                activeTimerRemainingTime.value = remainingMillis
+                activeTimerRemainingTime.longValue = remainingMillis
                 isTimerPaused.value = isPaused
                 isTimerMode.value = true
                 // Ustaw odpowiednią sekcję w nawigacji
@@ -374,7 +376,7 @@ class MainActivity : ComponentActivity() {
                                 this@MainActivity, "Odkryto tryb timera!", Toast.LENGTH_SHORT
                             ).show()
                         },
-                        activeTimer = activeTimerRemainingTime.value,
+                        activeTimer = activeTimerRemainingTime.longValue,
                         isTimerPaused = isTimerPaused.value,
                         onCancelTimer = {
                             // Anuluj aktywny timer
@@ -517,7 +519,10 @@ class MainActivity : ComponentActivity() {
         ).show()
     }
 
-    /** Zmienia nazwę aplikacji na nową wartość. */
+    /**
+     * Zmienia nazwę aplikacji na nową wartość i zamyka aplikację. Aplikacja
+     * musi zostać ponownie otwarta przez użytkownika.
+     */
     private fun changeAppName(newName: String) {
         val trimmedName = newName.trim()
         if (trimmedName.isBlank()) {
@@ -535,15 +540,23 @@ class MainActivity : ComponentActivity() {
 
         Timber.d("Zmieniono nazwę aplikacji na: $trimmedName")
 
-        // Próba zmiany nazwy w systemie (może się nie udać bez uprawnień systemowych)
+        // Próba zmiany nazwy w systemie przez włączenie odpowiedniego aliasu
         tryChangeAppNameInSystem(trimmedName)
 
+        // Pokaż toast i zamknij aplikację
         Toast.makeText(
             this, getString(R.string.app_name_changed_toast), Toast.LENGTH_SHORT
         ).show()
+
+        // Zamknij aplikację po krótkim opóźnieniu, żeby toast się pokazał
+        CoroutineScope(Dispatchers.Main).launch {
+            delay(1500) // 1.5 sekundy na pokazanie toast
+            finishAffinity() // Zamknij wszystkie aktywności
+            exitProcess(0) // Wymusi zamknięcie aplikacji
+        }
     }
 
-    /** Resetuje nazwę aplikacji do domyślnej wartości. */
+    /** Resetuje nazwę aplikacji do domyślnej wartości i zamyka aplikację. */
     private fun resetAppName() {
         val defaultName = getString(R.string.app_name)
         _currentAppName.value = defaultName
@@ -559,39 +572,90 @@ class MainActivity : ComponentActivity() {
         // Próba przywrócenia oryginalnej nazwy w systemie
         tryChangeAppNameInSystem(defaultName)
 
+        // Pokaż toast i zamknij aplikację
         Toast.makeText(
             this, getString(R.string.app_name_reset_toast), Toast.LENGTH_SHORT
         ).show()
+
+        // Zamknij aplikację po krótkim opóźnieniu
+        CoroutineScope(Dispatchers.Main).launch {
+            delay(1500)
+            finishAffinity()
+            exitProcess(0)
+        }
     }
 
     /**
      * Próbuje zmienić nazwę aplikacji w systemie Android poprzez manipulację
-     * komponentów. Ta funkcja wymaga uprawnień systemowych i może nie działać
-     * na zwykłych aplikacjach.
+     * activity-alias. Ta funkcja próbuje włączyć/wyłączyć odpowiednie aliasy
+     * aktywności.
      */
     private fun tryChangeAppNameInSystem(newName: String) {
         try {
-            // Ta operacja wymaga uprawnień systemowych i prawdopodobnie się nie powiedzie
-            packageManager
-            ComponentName(this, MainActivity::class.java)
+            val packageManager = packageManager
+            val originalComponent = ComponentName(this, MainActivity::class.java)
+            val timerComponent = ComponentName(this, "com.philornot.siekiera.TimerActivityAlias")
 
-            // Można by tu spróbować różnych technik zmiany nazwy, ale jest to bardzo ograniczone
-            // bez uprawnień systemowych. Na razie logujemy próbę.
-            Timber.d("Próba zmiany nazwy aplikacji w systemie na: $newName (może wymagać uprawnień systemowych)")
+            // Sprawdź czy nazwa odpowiada nazwie timera
+            val timerName = getString(R.string.app_name_timer)
+            val defaultName = getString(R.string.app_name)
 
-            // W praktyce, zmiana nazwy aplikacji widocznej w systemie jest bardzo ograniczona
-            // dla zwykłych aplikacji. Możemy tylko zmienić label w manifestie poprzez activity-alias,
-            // ale to wymaga predefiniowanych aliasów.
+            when (newName) {
+                timerName -> {
+                    // Włącz alias timera, wyłącz oryginalną aktywność
+                    packageManager.setComponentEnabledSetting(
+                        originalComponent,
+                        PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                        PackageManager.DONT_KILL_APP
+                    )
+                    packageManager.setComponentEnabledSetting(
+                        timerComponent,
+                        PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                        PackageManager.DONT_KILL_APP
+                    )
+                    Timber.d("Włączono alias timera dla nazwy: $newName")
+                }
+                defaultName -> {
+                    // Przywróć oryginalną aktywność, wyłącz alias
+                    packageManager.setComponentEnabledSetting(
+                        originalComponent,
+                        PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                        PackageManager.DONT_KILL_APP
+                    )
+                    packageManager.setComponentEnabledSetting(
+                        timerComponent,
+                        PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                        PackageManager.DONT_KILL_APP
+                    )
+                    Timber.d("Przywrócono oryginalną aktywność dla nazwy: $newName")
+                }
+                else -> {
+                    // Dla innych nazw używamy domyślnej aktywności
+                    packageManager.setComponentEnabledSetting(
+                        originalComponent,
+                        PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                        PackageManager.DONT_KILL_APP
+                    )
+                    packageManager.setComponentEnabledSetting(
+                        timerComponent,
+                        PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                        PackageManager.DONT_KILL_APP
+                    )
+                    Timber.d("Ustawiono domyślną aktywność dla niestandardowej nazwy: $newName")
+                }
+            }
 
+        } catch (e: SecurityException) {
+            Timber.w("Brak uprawnień do zmiany komponentów aplikacji: ${e.message}")
+            // Nie pokazujemy błędu użytkownikowi, ponieważ to oczekiwane ograniczenie
         } catch (e: Exception) {
-            Timber.w("Nie można zmienić nazwy aplikacji w systemie: ${e.message}")
-            // Nie pokazujemy błędu użytkownikowi, ponieważ to jest oczekiwane ograniczenie
+            Timber.e(e, "Nieznany błąd podczas zmiany nazwy aplikacji w systemie: ${e.message}")
         }
     }
 
     /**
      * Ustawia timer na określoną ilość minut. Planuje powiadomienie po upływie
-     * czasu i zmienia nazwę aplikacji, jeśli jest to wymagane.
+     * czasu.
      *
      * @param minutes Ilość minut do odliczania
      */
@@ -605,12 +669,10 @@ class MainActivity : ComponentActivity() {
             ).show()
 
             // Ustaw stan timera
-            activeTimerRemainingTime.value = minutes * 60 * 1000L
+            activeTimerRemainingTime.longValue = minutes * 60 * 1000L
             isTimerPaused.value = false
             isTimerMode.value = true
             _currentSection.value = NavigationSection.TIMER
-
-            // Nie używamy już checkbox do zmiany nazwy - opcja została przeniesiona do ustawień
         } else {
             // Wystąpił błąd podczas ustawiania timera
             Toast.makeText(
@@ -661,7 +723,7 @@ class MainActivity : ComponentActivity() {
             ).show()
 
             // Zresetuj stan timera
-            activeTimerRemainingTime.value = 0L
+            activeTimerRemainingTime.longValue = 0L
             isTimerPaused.value = false
             isTimerMode.value = false
         }
@@ -675,7 +737,7 @@ class MainActivity : ComponentActivity() {
         cancelTimer()
 
         // Zresetuj stan trybu timera
-        activeTimerRemainingTime.value = 0L
+        activeTimerRemainingTime.longValue = 0L
         isTimerPaused.value = false
 
         // Zaktualizuj UI
@@ -1015,7 +1077,7 @@ class MainActivity : ComponentActivity() {
             val isPaused = TimerScheduler.isTimerPaused(this)
 
             if (remainingMillis > 0 || isPaused) {
-                activeTimerRemainingTime.value = remainingMillis
+                activeTimerRemainingTime.longValue = remainingMillis
                 isTimerPaused.value = isPaused
                 isTimerMode.value = true
                 _currentSection.value = NavigationSection.TIMER
@@ -1024,7 +1086,7 @@ class MainActivity : ComponentActivity() {
             // Nie ma aktywnego timera, przywróć normalny tryb
             if (isTimerMode.value) {
                 isTimerMode.value = false
-                activeTimerRemainingTime.value = 0L
+                activeTimerRemainingTime.longValue = 0L
                 isTimerPaused.value = false
             }
         }
