@@ -4,6 +4,8 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("kotlin-parcelize")
+
+    id("io.sentry.android.gradle") version "5.6.0"
 }
 
 android {
@@ -209,4 +211,13 @@ dependencies {
 
     // Testy Compose
     testImplementation(libs.ui.test.junit4)
+}
+
+sentry {
+    org.set("wszystkiegonajlepszegodawid")
+    projectName.set("wszystkiegonajlepszegodawid")
+
+    // this will upload your source code to Sentry to show it as part of the stack traces
+    // disable if you don't want to expose your sources
+    includeSourceContext.set(true)
 }
