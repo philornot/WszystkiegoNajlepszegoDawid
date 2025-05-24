@@ -1,26 +1,35 @@
 package com.philornot.siekiera.ui.screens.settings
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AppRegistration
+import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -29,12 +38,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
 import com.philornot.siekiera.R
+import com.philornot.siekiera.config.AppConfig
+import com.philornot.siekiera.network.DriveApiClient
+import com.philornot.siekiera.utils.TimeUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import timber.log.Timber
 
 /**
  * Ekran ustawień aplikacji zawierający opcje zmiany nazwy aplikacji,
- * motywu i innych preferencji użytkownika.
+ * motywu i informację o najnowszym pliku Daylio.
  *
  * @param modifier Modifier dla całego ekranu
  * @param currentAppName Aktualna nazwa aplikacji
@@ -53,12 +70,17 @@ fun SettingsScreen(
     onAppNameChange: (String) -> Unit,
     onAppNameReset: () -> Unit,
 ) {
-    LocalContext.current
+    val context = LocalContext.current
     val scrollState = rememberScrollState()
 
     // Stany dla dialogu zmiany nazwy
     var showChangeNameDialog by remember { mutableStateOf(false) }
     var newAppName by remember { mutableStateOf("") }
+
+    // Stany dla informacji o pliku
+    var fileInfo by remember { mutableStateOf("Sprawdzanie...") }
+    var isRefreshing by remember { mutableStateOf(false) }
+    var lastCheckTime by remember { mutableStateOf(0L) }
 
     // Domyślna nazwa aplikacji
     val defaultAppName = stringResource(R.string.app_name)
@@ -66,6 +88,83 @@ fun SettingsScreen(
 
     // Sprawdź czy nazwa aplikacji jest domyślna
     val isDefaultName = currentAppName == defaultAppName
+
+    /**
+     * Funkcja do sprawdzania informacji o najnowszym pliku Daylio. Sprawdza
+     * limity API i cache, żeby nie nadużywać API Google Drive.
+     */
+    suspend fun checkLatestFileInfo(): String {
+        return withContext(Dispatchers.IO) {
+            try {
+                val currentTime = System.currentTimeMillis()
+
+                // Sprawdź czy można wykonać sprawdzenie (nie częściej niż raz na 30 minut)
+                if (currentTime - lastCheckTime < 30 * 60 * 1000L) {
+                    val remainingMinutes =
+                        ((30 * 60 * 1000L) - (currentTime - lastCheckTime)) / (60 * 1000L)
+                    return@withContext "Można odświeżyć za $remainingMinutes minut"
+                }
+
+                val appConfig = AppConfig.getInstance(context)
+                val driveClient = DriveApiClient.getInstance(context)
+
+                // Zainicjalizuj klienta
+                if (!driveClient.initialize()) {
+                    return@withContext "Błąd połączenia z Google Drive"
+                }
+
+                val folderId = appConfig.getDriveFolderId()
+
+                // Pobierz listę plików .daylio
+                val files =
+                    driveClient.listFilesInFolder(folderId).filter { it.name.endsWith(".daylio") }
+
+                if (files.isEmpty()) {
+                    return@withContext "Nie znaleziono plików .daylio"
+                }
+
+                // Znajdź najnowszy plik
+                val newestFile = files.maxByOrNull { it.modifiedTime.time }
+                    ?: return@withContext "Błąd podczas wyszukiwania najnowszego pliku"
+
+                lastCheckTime = currentTime
+
+                val formattedDate = TimeUtils.formatDate(newestFile.modifiedTime)
+                "Najnowszy plik: ${newestFile.name}\nData: $formattedDate"
+
+            } catch (e: Exception) {
+                Timber.e(e, "Błąd podczas sprawdzania pliku")
+                "Błąd: ${e.message ?: "Nieznany błąd"}"
+            }
+        }
+    }
+
+    /** Funkcja do odświeżania informacji o pliku */
+    fun refreshFileInfo() {
+        if (isRefreshing) return
+
+        isRefreshing = true
+        kotlinx.coroutines.MainScope().launch {
+            try {
+                fileInfo = checkLatestFileInfo()
+            } catch (e: Exception) {
+                fileInfo = "Błąd podczas odświeżania"
+                Toast.makeText(context, "Nie udało się odświeżyć informacji", Toast.LENGTH_SHORT)
+                    .show()
+            } finally {
+                isRefreshing = false
+            }
+        }
+    }
+
+    // Automatyczne sprawdzenie przy pierwszym załadowaniu
+    LaunchedEffect(Unit) {
+        try {
+            fileInfo = checkLatestFileInfo()
+        } catch (e: Exception) {
+            fileInfo = "Błąd podczas ładowania"
+        }
+    }
 
     Column(
         modifier = modifier
@@ -141,17 +240,88 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Sekcja dla przyszłych ustawień
+        // Sekcja informacji o pliku Daylio
         SettingsCard(
-            title = "Dodatkowe opcje",
-            description = "Więcej ustawień zostanie dodanych w przyszłości"
+            title = "Plik z wpisami",
+            description = "Informacja o najnowszym pliku Daylio na Google Drive"
         ) {
-            Text(
-                text = "Tutaj pojawią się dodatkowe opcje konfiguracji aplikacji.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(16.dp)
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Ikona informacji
+                androidx.compose.material3.Icon(
+                    imageVector = Icons.Default.CloudSync,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
+                )
+
+                Spacer(modifier = Modifier.width(16.dp))
+
+                // Informacja o pliku
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Status synchronizacji",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Text(
+                        text = fileInfo,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontStyle = if (fileInfo.startsWith("Błąd") || fileInfo.startsWith("Można odświeżyć")) {
+                            FontStyle.Italic
+                        } else {
+                            FontStyle.Normal
+                        }
+                    )
+                }
+
+                // Przycisk odświeżania
+                IconButton(
+                    onClick = { refreshFileInfo() }, enabled = !isRefreshing
+                ) {
+                    if (isRefreshing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    } else {
+                        androidx.compose.material3.Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Odśwież",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+
+            // Dodatkowa informacja o limitach
+            if (fileInfo.startsWith("Można odświeżyć za")) {
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    androidx.compose.material3.Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.size(16.dp)
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Text(
+                        text = "Ograniczenie sprawdzania chroni przed przekroczeniem limitów API",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontStyle = FontStyle.Italic
+                    )
+                }
+            }
         }
 
         // Spacer na dole
