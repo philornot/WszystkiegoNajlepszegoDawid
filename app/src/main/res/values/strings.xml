@@ -34,9 +34,16 @@
     <string name="timer_notification_text">Twoje odliczanie %1$d minut dobiegło końca</string>
     <string name="timer_set_toast">Timer ustawiony na %1$d minut</string>
     <string name="timer_cancelled_toast">Timer został anulowany</string>
+    <string name="timer_paused_toast">Timer został spauzowany</string>
+    <string name="timer_resumed_toast">Timer został wznowiony</string>
     <string name="timer_mode_title">Tryb timera</string>
     <string name="timer_instructions">Przeciągnij w górę lub w dół, aby ustawić czas</string>
     <string name="timer_set_button">Ustaw timer</string>
+    <string name="timer_start_button">Start</string>
+    <string name="timer_pause_button">Pauza</string>
+    <string name="timer_resume_button">Wznów</string>
+    <string name="timer_stop_button">Stop</string>
+    <string name="timer_reset_button">Reset</string>
     <string name="timer_back_button">Wróć</string>
     <string name="timer_minutes">minut</string>
 
@@ -47,9 +54,52 @@
     <string name="change_app_name_text">Zmieniam nazwę aplikacji na \'Lawendowy Timer\'…</string>
     <string name="timer_countdown_title">Timer: ustaw czas</string>
     <string name="timer_drag_instruction">Przeciągnij w górę lub w dół, aby zmienić czas</string>
-    <string name="timer_change_app_name">Zmień nazwę aplikacji na \'Lawendowy Timer\'</string>
     <string name="timer_finished_title">Czas minął!</string>
     <string name="timer_finished_text">Twój timer na %1$d minut zakończył odliczanie.</string>
     <string name="timer_finished_congratulations">Gratulacje! Możesz wrócić do trybu odliczania urodzin lub ustawić nowy timer.</string>
     <string name="timer_return_to_countdown">Wróć do trybu odliczania</string>
+
+    <!-- Nowe teksty dla przycisków kontroli timera -->
+    <string name="timer_active_title">Timer aktywny</string>
+    <string name="timer_paused_title">Timer spauzowany</string>
+    <string name="timer_setup_title">Timer: ustaw czas</string>
+    <string name="timer_control_start">Start</string>
+    <string name="timer_control_pause">Pauza</string>
+    <string name="timer_control_resume">Wznów</string>
+    <string name="timer_control_stop">Stop</string>
+    <string name="timer_cannot_pause">Nie można spauzować timera</string>
+    <string name="timer_cannot_resume">Nie można wznowić timera</string>
+    <string name="timer_drag_to_change">Przeciągnij w górę lub w dół, aby zmienić czas</string>
+
+    <!-- Ustawienia - nowe -->
+    <string name="settings_title">Ustawienia</string>
+    <string name="settings_appearance_title">Wygląd</string>
+    <string name="settings_appearance_description">Personalizuj wygląd aplikacji</string>
+    <string name="settings_dark_theme_title">Ciemny motyw</string>
+    <string name="settings_dark_theme_enabled">Włączony</string>
+    <string name="settings_dark_theme_disabled">Wyłączony</string>
+
+    <string name="settings_app_name_title">Nazwa aplikacji</string>
+    <string name="settings_app_name_description">Zmień nazwę wyświetlaną w systemie</string>
+    <string name="settings_current_name_title">Aktualna nazwa</string>
+    <string name="settings_change_name_title">Zmień nazwę aplikacji</string>
+    <string name="settings_change_name_description">Ustaw własną nazwę (wymaga restartu)</string>
+    <string name="settings_reset_name_title">Zresetuj nazwę aplikacji</string>
+    <string name="settings_reset_name_description">Przywróć domyślną nazwę \"%1$s\"</string>
+
+    <string name="settings_additional_title">Dodatkowe opcje</string>
+    <string name="settings_additional_description">Więcej ustawień zostanie dodanych w przyszłości</string>
+    <string name="settings_additional_placeholder">Tutaj pojawią się dodatkowe opcje konfiguracji aplikacji.</string>
+
+    <!-- Dialogi ustawień -->
+    <string name="settings_change_name_dialog_title">Zmień nazwę aplikacji</string>
+    <string name="settings_change_name_dialog_warning">⚠️ Uwaga: Zmiana nazwy aplikacji spowoduje zamknięcie aplikacji. Będziesz musiał ponownie ją otworzyć z ekranu głównego.</string>
+    <string name="settings_new_name_label">Nowa nazwa</string>
+    <string name="settings_change_button">Zmień</string>
+    <string name="settings_cancel_button">Anuluj</string>
+
+    <!-- Powiadomienia o zmianie nazwy -->
+    <string name="app_name_changed_toast">Nazwa aplikacji została zmieniona</string>
+    <string name="app_name_reset_toast">Nazwa aplikacji została zresetowana</string>
+    <string name="app_name_change_failed_toast">Nie udało się zmienić nazwy aplikacji</string>
 </resources>

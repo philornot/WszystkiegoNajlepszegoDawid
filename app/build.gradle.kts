@@ -4,6 +4,8 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("kotlin-parcelize")
+
+    id("io.sentry.android.gradle") version "5.6.0"
 }
 
 android {
@@ -209,4 +211,30 @@ dependencies {
 
     // Testy Compose
     testImplementation(libs.ui.test.junit4)
+}
+
+// Kkonfiguracja Sentry
+sentry {
+    // Włącz szczegółowe logowanie Sentry CLI w debug
+    debug = true
+
+    // Automatyczne przesyłanie kodu źródłowego do Sentry
+    // Umożliwia wyświetlanie kodu źródłowego w stack trace w Sentry UI
+    includeSourceContext = true
+
+    // Dodatkowe foldery z kodem źródłowym do przesłania
+    additionalSourceDirsForSourceContext = setOf(
+        "src/main/java",
+        "src/main/kotlin"
+    )
+
+    // Konfiguracja organizacji i projektu Sentry
+    org = "wszystkiegonajlepszegodawid"
+    projectName = "wszystkiegonajlepszegodawid"
+
+    // Token autoryzacyjny Sentry z zmiennej środowiskowej
+    authToken = System.getenv("SENTRY_AUTH_TOKEN")
+
+    // Automatyczne przesyłanie ProGuard mapping files w release
+    autoUploadProguardMapping = true
 }

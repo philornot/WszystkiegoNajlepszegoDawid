@@ -12,7 +12,8 @@ import timber.log.Timber
 
 /**
  * BroadcastReceiver wywoływany po uruchomieniu urządzenia. Ponownie
- * planuje powiadomienia i zadania po restarcie urządzenia.
+ * planuje powiadomienia i zadania po restarcie urządzenia. Obsługuje
+ * również przywracanie spauzowanych timerów.
  */
 class BootReceiver : BroadcastReceiver() {
 
@@ -32,7 +33,7 @@ class BootReceiver : BroadcastReceiver() {
                 restoreBirthdayNotification(context, appConfig)
             }
 
-            // Przywróć timer, jeśli był aktywny przed restartem
+            // Przywróć timer, jeśli był aktywny lub spauzowany
             restoreTimer(context)
         }
     }
@@ -58,45 +59,71 @@ class BootReceiver : BroadcastReceiver() {
         }
     }
 
-    /** Przywraca timer po restarcie urządzenia, jeśli był aktywny */
+    /**
+     * Przywraca timer po restarcie urządzenia, jeśli był aktywny lub
+     * spauzowany
+     */
     private fun restoreTimer(context: Context) {
         // Sprawdź, czy timer był aktywny i czy już się nie zakończył
         if (TimerScheduler.checkAndCleanupTimer(context)) {
-            Timber.d("Przywracanie aktywnego timera po restarcie urządzenia")
-            val success = TimerScheduler.restoreTimerAfterReboot(context)
+            val isTimerPaused = TimerScheduler.isTimerPaused(context)
 
-            if (success) {
-                Timber.d("Timer został pomyślnie przywrócony")
+            if (isTimerPaused) {
+                Timber.d("Przywracanie spauzowanego timera po restarcie urządzenia")
+                // Timer był spauzowany - nie trzeba nic robić z alarmami,
+                // stan zostanie przywrócony w MainActivity
 
                 // Sprawdź, czy dla timera była zmieniona nazwa aplikacji
                 if (TimerScheduler.wasAppNameChanged(context)) {
                     // Spróbuj przywrócić alias aktywności dla trybu timera
-                    try {
-                        val originalComponent =
-                            ComponentName(context, "com.philornot.siekiera.MainActivity")
-                        val timerComponent =
-                            ComponentName(context, "com.philornot.siekiera.TimerActivityAlias")
-
-                        context.packageManager.setComponentEnabledSetting(
-                            originalComponent,
-                            PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                            PackageManager.DONT_KILL_APP
-                        )
-                        context.packageManager.setComponentEnabledSetting(
-                            timerComponent,
-                            PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                            PackageManager.DONT_KILL_APP
-                        )
-                        Timber.d("Alias aktywności dla trybu timera został włączony")
-                    } catch (e: Exception) {
-                        Timber.w("Nie udało się włączyć aliasu aktywności: ${e.message}")
-                    }
+                    tryRestoreAppNameAlias(context)
                 }
             } else {
-                Timber.d("Nie udało się przywrócić timera")
+                Timber.d("Przywracanie aktywnego timera po restarcie urządzenia")
+                val success = TimerScheduler.restoreTimerAfterReboot(context)
+
+                if (success) {
+                    Timber.d("Timer został pomyślnie przywrócony")
+
+                    // Sprawdź, czy dla timera była zmieniona nazwa aplikacji
+                    if (TimerScheduler.wasAppNameChanged(context)) {
+                        // Spróbuj przywrócić alias aktywności dla trybu timera
+                        tryRestoreAppNameAlias(context)
+                    }
+                } else {
+                    Timber.d("Nie udało się przywrócić timera")
+                }
             }
         } else {
             Timber.d("Brak aktywnego timera do przywrócenia lub timer już się zakończył")
+        }
+    }
+
+    /**
+     * Próbuje przywrócić alias aktywności dla trybu timera. Oddzielna metoda
+     * dla lepszej czytelności kodu.
+     */
+    private fun tryRestoreAppNameAlias(context: Context) {
+        try {
+            // Próba nie powiedzie się dla zwykłych aplikacji (wymaga uprawnień systemowych)
+            val packageManager = context.packageManager
+            val originalComponent = ComponentName(context, "com.philornot.siekiera.MainActivity")
+            val timerComponent = ComponentName(context, "com.philornot.siekiera.TimerActivityAlias")
+
+            // Włącz alias timera, wyłącz oryginalną aktywność
+            packageManager.setComponentEnabledSetting(
+                originalComponent,
+                PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                PackageManager.DONT_KILL_APP
+            )
+            packageManager.setComponentEnabledSetting(
+                timerComponent,
+                PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                PackageManager.DONT_KILL_APP
+            )
+            Timber.d("Alias aktywności dla trybu timera został włączony")
+        } catch (e: Exception) {
+            Timber.w("Nie udało się włączyć aliasu aktywności: ${e.message}")
         }
     }
 }
