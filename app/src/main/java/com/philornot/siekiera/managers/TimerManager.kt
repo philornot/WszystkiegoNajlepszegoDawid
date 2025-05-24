@@ -12,6 +12,10 @@ import timber.log.Timber
  * Ulepszona wersja TimerManager z lepszą responsywnością i obsługą błędów.
  * Enkapsuluje logikę TimerScheduler i zarządzanie stanem timera. Dodano
  * natychmiastową aktualizację stanu dla lepszych animacji.
+ *
+ * AKTUALIZACJA: Zmodyfikowano logikę przywracania timera, żeby nie
+ * ustawiał automatycznie sekcji na TIMER - to będzie kontrolowane przez
+ * ManagerContainer.
  */
 class TimerManager(
     private val context: Context,
@@ -50,6 +54,7 @@ class TimerManager(
         val initialTimeMillis = minutes * 60 * 1000L
         appStateManager.setActiveTimerRemainingTime(initialTimeMillis)
         appStateManager.setTimerPaused(false)
+        // Gdy użytkownik świadomie ustawia timer, przełącz na sekcję TIMER
         appStateManager.setCurrentSection(NavigationSection.TIMER)
 
         return if (TimerScheduler.scheduleTimer(context, minutes)) {
@@ -206,6 +211,7 @@ class TimerManager(
         // Natychmiastowa aktualizacja stanu UI
         appStateManager.setActiveTimerRemainingTime(0L)
         appStateManager.setTimerPaused(false)
+        // Po resecie, pozostań w sekcji TIMER (użytkownik może chcieć ustawić nowy timer)
         appStateManager.setCurrentSection(NavigationSection.TIMER)
 
         // Anuluj aktywny timer
@@ -227,11 +233,18 @@ class TimerManager(
     /**
      * Przywraca timer po restarcie aplikacji z ulepszoną obsługą. Wywoływane w
      * onCreate() MainActivity.
+     *
+     * AKTUALIZACJA: Metoda teraz zwraca boolean informujący czy timer został
+     * przywrócony i nie ustawia automatycznie sekcji na TIMER. Sekcja będzie
+     * ustawiona przez ManagerContainer na podstawie zwróconej wartości.
+     *
+     * @return true jeśli timer został przywrócony jako aktywny, false w
+     *    przeciwnym wypadku
      */
-    fun restoreTimerAfterRestart() {
+    fun restoreTimerAfterRestart(): Boolean {
         if (!TimerScheduler.isTimerSet(context)) {
             Timber.d("Brak timera do przywrócenia po restarcie")
-            return
+            return false
         }
 
         Timber.d("Przywracanie timera po uruchomieniu aplikacji")
@@ -246,7 +259,8 @@ class TimerManager(
             // Timer wciąż aktywny lub spauzowany, przywróć jego stan
             appStateManager.setActiveTimerRemainingTime(remainingMillis)
             appStateManager.setTimerPaused(isPaused)
-            appStateManager.setCurrentSection(NavigationSection.TIMER)
+            // USUNIĘTO: appStateManager.setCurrentSection(NavigationSection.TIMER)
+            // Sekcja będzie ustawiona przez ManagerContainer
 
             val statusMessage = when {
                 isPaused -> "Przywrócono spauzowany timer (${remainingMillis / 60000} min pozostało)"
@@ -256,12 +270,14 @@ class TimerManager(
 
             Toast.makeText(context, statusMessage, Toast.LENGTH_SHORT).show()
             Timber.d("Timer przywrócony pomyślnie")
+            return true
         } else {
             // Timer już się zakończył, pokaż powiadomienie i wyczyść
             Timber.d("Timer zakończył się podczas nieobecności aplikacji")
             TimerNotificationHelper.showTimerCompletedNotification(context, minutes)
             TimerScheduler.cancelTimer(context)
             appStateManager.resetTimerState()
+            return false
         }
     }
 
