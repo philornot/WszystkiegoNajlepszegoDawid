@@ -79,10 +79,6 @@ fun TimerScreen(
                 onTimerSet(minutes)
             },
             timerMinutes = timerMinutes,
-            changeAppName = changeAppName,
-            onChangeAppNameChanged = { checked ->
-                changeAppName = checked
-            },
             onPauseTimer = onPauseTimer,
             onResumeTimer = onResumeTimer,
             onResetTimer = onResetTimer,

@@ -393,7 +393,6 @@ fun MainScreen(
                         }
 
                         NavigationSection.SETTINGS -> {
-                            // Nowy ekran ustawień
                             SettingsScreen(
                                 currentAppName = currentAppName,
                                 isDarkTheme = isDarkTheme,
