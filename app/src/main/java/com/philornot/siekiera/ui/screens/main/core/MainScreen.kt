@@ -52,37 +52,9 @@ import timber.log.Timber
 
 /**
  * Główny ekran z czystym, lawendowym motywem i minimalnymi animacjami.
- * Ulepszona wersja z lepszą responsywnością timera i animacjami.
- * Zawiera również szufladkę nawigacyjną po odebraniu prezentu.
- *
- * @param modifier Modifier dla kontenera
- * @param targetDate Data urodzin w milisekundach
- * @param currentTime Aktualny czas (domyślnie czas systemowy)
- * @param onGiftClicked Callback dla kliknięcia prezentu
- * @param activity Referencja do MainActivity dla sprawdzania plików
- * @param giftReceived Czy prezent został już odebrany
- * @param onTimerSet Callback kiedy timer jest ustawiony
- * @param timerModeEnabled Czy tryb timera został odkryty przez użytkownika
- * @param onTimerModeDiscovered Callback informujący że tryb timera został
- *    odkryty
- * @param activeTimer Aktualnie aktywny timer w milisekundach (0 jeśli brak
- *    aktywnego timera)
- * @param isTimerPaused Czy timer jest spauzowany
- * @param onCancelTimer Callback do anulowania timera
- * @param onResetTimer Callback do resetowania timera
- * @param onPauseTimer Callback do pauzowania timera
- * @param onResumeTimer Callback do wznawiania timera
- * @param isDrawerOpen Czy szufladka nawigacyjna jest otwarta
- * @param onDrawerStateChange Callback wywoływany przy zmianie stanu
- *    szufladki
- * @param currentSection Obecnie wybrana sekcja nawigacyjna
- * @param onSectionSelected Callback wywoływany przy wyborze sekcji
- * @param isDarkTheme Czy aktywny jest ciemny motyw
- * @param onThemeToggle Callback wywoływany przy zmianie motywu
- * @param currentAppName Aktualna nazwa aplikacji
- * @param onAppNameChange Callback wywoływany przy zmianie nazwy aplikacji
- * @param onAppNameReset Callback wywoływany przy resetowaniu nazwy
- *    aplikacji
+ * Ulepszona wersja z lepszą responsywnością timera i poprawionymi
+ * animacjami. Zawiera również szufladkę nawigacyjną po odebraniu prezentu.
+ * POPRAWKA: Naprawiono synchronizację animacji licznika dla trybu timera.
  */
 @Composable
 fun MainScreen(
@@ -147,7 +119,7 @@ fun MainScreen(
     var showProgressDialog by remember { mutableStateOf(false) }
     var progressValue by remember { mutableFloatStateOf(0f) }
 
-    // Pozostały czas timera, jeśli aktywny - ulepszony tracking
+    // POPRAWKA: Lepsze śledzenie czasu timera z rzeczywistą synchronizacją
     var timerRemainingTime by remember { mutableLongStateOf(activeTimer) }
     var timerFinished by remember { mutableStateOf(false) }
     var previousTimerActive by remember { mutableStateOf(false) }
@@ -155,7 +127,7 @@ fun MainScreen(
     // Czy aplikacja jest w trybie timera (kontrolowane teraz przez currentSection)
     val isTimerMode = currentSection == NavigationSection.TIMER
 
-    // Ulepszona inicjalizacja - lepsze śledzenie zmian stanu timera
+    // POPRAWKA: Ulepszona inicjalizacja z lepszym śledzeniem zmian stanu timera
     LaunchedEffect(activeTimer, isTimerPaused, isTimerMode) {
         val isCurrentlyActive = activeTimer > 0
 
@@ -163,13 +135,14 @@ fun MainScreen(
         if (isCurrentlyActive && !previousTimerActive) {
             timerRemainingTime = activeTimer
             timerFinished = false
+            Timber.d("Timer rozpoczęty: ${timerRemainingTime}ms")
         }
         // Sprawdź czy timer właśnie się zakończył
         else if (!isCurrentlyActive && previousTimerActive && timerRemainingTime > 0) {
             Timber.d("Timer się zakończył - pokazuję celebrację")
             timerFinished = true
         }
-        // Normalne śledzenie aktywnego timera
+        // Normalne śledzenie aktywnego timera - POPRAWKA: Tylko gdy timer jest aktywny
         else if (isCurrentlyActive) {
             timerRemainingTime = activeTimer
         }
@@ -191,31 +164,36 @@ fun MainScreen(
         }
     }
 
-    // Ulepszony system aktualizacji czasu - bardziej responsywny dla timera
-    LaunchedEffect(Unit) {
+    // POPRAWKA: Ulepszony system aktualizacji czasu z lepszą synchronizacją dla timera
+    LaunchedEffect(isTimerMode, activeTimer, isTimerPaused) {
         while (true) {
-            if (isTimerMode && timerRemainingTime > 0 && !isTimerPaused) {
-                // Częstsze aktualizacje dla aktywnego timera (co 100ms dla płynności)
-                delay(100)
-                currentTimeState = System.currentTimeMillis()
+            currentTimeState = System.currentTimeMillis()
 
-                // Aktualizuj timer co 1000ms (sekundę)
-                if (System.currentTimeMillis() % 1000 < 100) {
-                    timerRemainingTime -= 1000
+            if (isTimerMode) {
+                // POPRAWKA: W trybie timera aktualizuj lokalny stan na podstawie activeTimer
+                if (activeTimer > 0 && !isTimerPaused) {
+                    // Timer jest aktywny - używaj wartości z activeTimer (zarządzane przez TimerManager)
+                    timerRemainingTime = activeTimer
 
+                    // Sprawdź czy timer się zakończył
                     if (timerRemainingTime <= 0) {
-                        timerRemainingTime = 0
                         timerFinished = true
-                        Timber.d("Timer zakończył odliczanie")
+                        Timber.d("Timer zakończył odliczanie (w głównej pętli)")
                     }
-                }
-                100L
-            } else {
-                // Standardowe aktualizacje co sekundę dla pozostałych trybów
-                delay(1000)
-                currentTimeState = System.currentTimeMillis()
 
-                if (!isTimerMode && currentSection == NavigationSection.BIRTHDAY_COUNTDOWN) {
+                    delay(250) // Częstsze aktualizacje dla płynności animacji timera
+                } else if (isTimerPaused) {
+                    // Timer spauzowany - zachowaj obecną wartość
+                    timerRemainingTime = activeTimer
+                    delay(1000) // Rzadsze aktualizacje gdy spauzowany
+                } else {
+                    // Timer nieaktywny
+                    timerRemainingTime = 0L
+                    delay(1000)
+                }
+            } else {
+                // Tryb urodzinowy - standardowe aktualizacje co sekundę
+                if (currentSection == NavigationSection.BIRTHDAY_COUNTDOWN) {
                     timeRemaining = (targetDate - currentTimeState).coerceAtLeast(0)
 
                     // Sprawdzaj pliki gdy zbliża się koniec
@@ -253,7 +231,7 @@ fun MainScreen(
                         }
                     }
                 }
-                1000L
+                delay(1000) // Standardowa częstotliwość dla trybu urodzinowego
             }
         }
     }
@@ -351,10 +329,12 @@ fun MainScreen(
                                 modifier = Modifier.weight(1f)
                             )
 
+                            // POPRAWKA: Dla trybu urodzinowego używaj timeRemaining
                             CountdownSection(
                                 modifier = Modifier.padding(bottom = 24.dp),
                                 timeRemaining = timeRemaining,
                                 isTimeUp = isTimeUp,
+                                isTimerMode = false, // Wyraźnie oznacz jako tryb urodzinowy
                                 onTimerMinutesChanged = { /* Nie używane w trybie urodzin */ },
                                 onTimerSet = { /* Nie używane w trybie urodzin */ },
                                 timerMinutes = timerMinutes,
@@ -365,9 +345,9 @@ fun MainScreen(
                         }
 
                         NavigationSection.TIMER -> {
-                            // Ulepszona wersja TimerScreen z lepszą responsywnością
+                            // POPRAWKA: Dla trybu timera przekaż poprawny czas
                             TimerScreen(
-                                timerRemainingTime = timerRemainingTime,
+                                timerRemainingTime = timerRemainingTime, // Użyj timerRemainingTime zamiast activeTimer
                                 timerFinished = false, // Zawsze false, bo finished obsługujemy osobno
                                 isTimerPaused = isTimerPaused,
                                 onTimerSet = onTimerSet,
@@ -376,6 +356,7 @@ fun MainScreen(
                                 onResetTimer = {
                                     // Po resecie pozostajemy w trybie timera
                                     timerFinished = false
+                                    timerRemainingTime = 0L
                                     onResetTimer()
                                 })
                         }

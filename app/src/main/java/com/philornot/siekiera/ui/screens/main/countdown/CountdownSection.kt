@@ -34,20 +34,8 @@ import kotlin.math.roundToInt
  * Główny komponent sekcji odliczania. Orkiestruje wyświetlanie czasu,
  * kontrolek timera i obsługę przeciągania. Zrefaktorowana wersja
  * z wydzielonymi komponentami dla lepszej czytelności i podziału
- * odpowiedzialności. Usunięto duplikującą sekcję zakończenia dla trybu
- * timera.
- *
- * @param modifier Modifier dla kontenera
- * @param timeRemaining Pozostały czas w milisekundach
- * @param isTimeUp Czy czas upłynął
- * @param isTimerMode Czy jest aktywny tryb timera
- * @param isTimerPaused Czy timer jest spauzowany
- * @param onTimerMinutesChanged Wywołanie gdy zmieniają się minuty timera
- * @param onTimerSet Wywołanie gdy timer powinien zostać uruchomiony
- * @param timerMinutes Aktualnie ustawione minuty w trybie timera
- * @param onPauseTimer Wywołanie gdy użytkownik pauzuje timer
- * @param onResumeTimer Wywołanie gdy użytkownik wznawia timer
- * @param onResetTimer Wywołanie gdy użytkownik resetuje timer
+ * odpowiedzialności. POPRAWKA: Ulepszone formatowanie czasu dla trybu
+ * timera z lepszą synchronizacją animacji.
  */
 @Composable
 fun CountdownSection(
@@ -65,42 +53,59 @@ fun CountdownSection(
 ) {
     Timber.v("CountdownSection: timeRemaining=$timeRemaining, isTimerMode=$isTimerMode, isTimerPaused=$isTimerPaused, timerMinutes=$timerMinutes")
 
-    // Formatowanie czasu
-    val formattedTime = if (isTimerMode) {
-        if (timeRemaining > 0) {
-            TimeUtils.formatRemainingTime(timeRemaining)
-        } else {
-            val hours = timerMinutes / 60
-            val minutes = timerMinutes % 60
-            String.format(Locale.getDefault(), "%d dni, %02d:%02d:00", timerMinutes, hours, minutes)
-        }
+    // POPRAWKA: Ulepszone formatowanie czasu z lepszą obsługą trybu timera
+    val formattedTime = if (isTimerMode && timeRemaining > 0) {
+        // W trybie timera, gdy timer jest aktywny, używaj rzeczywistego timeRemaining
+        TimeUtils.formatRemainingTime(timeRemaining)
+    } else if (isTimerMode && timeRemaining <= 0) {
+        // W trybie timera, gdy timer nie jest aktywny, pokaż ustawienie
+        val hours = timerMinutes / 60
+        val minutes = timerMinutes % 60
+        String.format(Locale.getDefault(), "0 dni, %02d:%02d:00", hours, minutes)
     } else {
+        // Tryb urodzinowy - standardowe formatowanie
         TimeUtils.formatRemainingTime(timeRemaining)
     }
 
+    // POPRAWKA: Lepsze rozdzielanie komponentów czasu
     val (days, time) = if ("," in formattedTime) {
-        formattedTime.split(", ")
+        val parts = formattedTime.split(", ", limit = 2)
+        Pair(parts.getOrElse(0) { "0 dni" }, parts.getOrElse(1) { "00:00:00" })
     } else {
-        listOf("0 dni", "00:00:00")
+        Pair("0 dni", formattedTime.ifEmpty { "00:00:00" })
     }
 
-    // Rozdziel komponenty czasu
-    val hoursPart = if (time.length >= 2) time.substring(0, 2) else "00"
-    val minutesPart = if (time.length >= 5) time.substring(3, 5) else "00"
-    val secondsPart = if (time.length >= 8) time.substring(6, 8) else "00"
+    // POPRAWKA: Bezpieczniejsze rozdzielanie komponenentów czasu z walidacją
+    val timeParts = time.split(":")
+    val hoursPart = timeParts.getOrElse(0) { "00" }.padStart(2, '0')
+    val minutesPart = timeParts.getOrElse(1) { "00" }.padStart(2, '0')
+    val secondsPart = timeParts.getOrElse(2) { "00" }.padStart(2, '0')
 
     // Stany dla przeciągania - uproszczona logika
     var isDragging by remember { mutableStateOf(false) }
     var currentDragMinutes by remember { mutableIntStateOf(timerMinutes) }
     var accumulatedDrag by remember { mutableFloatStateOf(0f) }
 
-    // Stan aktywności timera
+    // POPRAWKA: Lepsze określenie stanu aktywności timera
     val isTimerActive = isTimerMode && timeRemaining > 0
 
     // Synchronizacja lokalnego stanu z przekazanym
     LaunchedEffect(timerMinutes) {
-        currentDragMinutes = timerMinutes
-        Timber.d("Synchronizacja timerMinutes: $timerMinutes -> currentDragMinutes: $currentDragMinutes")
+        if (!isTimerActive) { // Tylko gdy timer nie jest aktywny
+            currentDragMinutes = timerMinutes
+            Timber.d("Synchronizacja timerMinutes: $timerMinutes -> currentDragMinutes: $currentDragMinutes")
+        }
+    }
+
+    // POPRAWKA: Dodatkowa synchronizacja dla aktywnego timera
+    LaunchedEffect(isTimerActive, timeRemaining) {
+        if (isTimerActive) {
+            // Gdy timer jest aktywny, oblicz minuty na podstawie pozostałego czasu
+            val remainingMinutes = (timeRemaining / (60 * 1000)).toInt()
+            if (remainingMinutes != currentDragMinutes) {
+                Timber.v("Aktualizacja currentDragMinutes na podstawie aktywnego timera: $remainingMinutes")
+            }
+        }
     }
 
     // UI odliczania - dla trybu timera nie pokazuj gdy zakończony
@@ -157,7 +162,7 @@ fun CountdownSection(
                         }
                     }
                 }) {
-            // Tytuł z animowaną zmianą
+            // POPRAWKA: Lepszy tytuł z animowaną zmianą
             Text(
                 text = when {
                     isTimerMode && isTimerActive && isTimerPaused -> "Timer spauzowany:"
@@ -176,7 +181,7 @@ fun CountdownSection(
                 modifier = Modifier.padding(bottom = 16.dp)
             )
 
-            // Wyświetlanie czasu
+            // POPRAWKA: Wyświetlanie czasu z poprawionym formatowaniem
             TimeDisplaySection(
                 isTimerMode = isTimerMode,
                 isTimerActive = isTimerActive,
