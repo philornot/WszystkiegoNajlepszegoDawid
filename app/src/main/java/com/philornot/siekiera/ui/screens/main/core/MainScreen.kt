@@ -52,9 +52,8 @@ import timber.log.Timber
 
 /**
  * Główny ekran z czystym, lawendowym motywem i minimalnymi animacjami.
- * Teraz obsługuje zarówno tryb odliczania urodzin jak i tryb timera oraz
- * nową sekcję ustawień. Zawiera również szufladkę nawigacyjną po odebraniu
- * prezentu.
+ * Ulepszona wersja z lepszą responsywnością timera i animacjami.
+ * Zawiera również szufladkę nawigacyjną po odebraniu prezentu.
  *
  * @param modifier Modifier dla kontenera
  * @param targetDate Data urodzin w milisekundach
@@ -151,19 +150,37 @@ fun MainScreen(
     // Czy pokazujemy fajerwerki po zakończeniu timera
     var showTimerFinishedCelebration by remember { mutableStateOf(false) }
 
-    // Pozostały czas timera, jeśli aktywny
+    // Pozostały czas timera, jeśli aktywny - ulepszony tracking
     var timerRemainingTime by remember { mutableLongStateOf(activeTimer) }
     var timerFinished by remember { mutableStateOf(false) }
+    var previousTimerActive by remember { mutableStateOf(false) }
 
     // Czy aplikacja jest w trybie timera (kontrolowane teraz przez currentSection)
     val isTimerMode = currentSection == NavigationSection.TIMER
 
-    // Inicjalizacja - sprawdź czy timer jest aktywny
-    LaunchedEffect(activeTimer, isTimerPaused) {
-        if (activeTimer > 0) {
+    // Ulepszona inicjalizacja - lepsze śledzenie zmian stanu timera
+    LaunchedEffect(activeTimer, isTimerPaused, isTimerMode) {
+        val isCurrentlyActive = activeTimer > 0
+
+        // Sprawdź czy timer właśnie się rozpoczął
+        if (isCurrentlyActive && !previousTimerActive) {
             timerRemainingTime = activeTimer
             timerFinished = false
         }
+        // Sprawdź czy timer właśnie się zakończył
+        else if (!isCurrentlyActive && previousTimerActive && timerRemainingTime > 0) {
+            Timber.d("Timer się zakończył - pokazuję celebrację")
+            timerFinished = true
+            if (isTimerMode) {
+                showTimerFinishedCelebration = true
+            }
+        }
+        // Normalne śledzenie aktywnego timera
+        else if (isCurrentlyActive) {
+            timerRemainingTime = activeTimer
+        }
+
+        previousTimerActive = isCurrentlyActive
     }
 
     // Reagowanie na zmianę stanu isTimeUp - automatyczne fajerwerki po zakończeniu odliczania
@@ -171,11 +188,8 @@ fun MainScreen(
     LaunchedEffect(isTimeUp) {
         if (isTimeUp && !isTimerMode) {
             Timber.d("Czas upłynął! Uruchamiam automatyczne fajerwerki!")
-            // Automatycznie uruchamiamy fajerwerki gdy czas się kończy
             showConfettiExplosion = true
 
-            // Po 5 sekundach automatycznie ukrywamy efekt konfetti
-            // aby nie kolidował z innymi efektami
             MainScope().launch {
                 delay(5000)
                 showConfettiExplosion = false
@@ -183,69 +197,70 @@ fun MainScreen(
         }
     }
 
-// Aktualizuj czas co sekundę i sprawdzaj aktualizacje pliku gdy czas zbliża się do końca
+    // Ulepszony system aktualizacji czasu - bardziej responsywny dla timera
     LaunchedEffect(Unit) {
         while (true) {
-            delay(1000)
-            currentTimeState = System.currentTimeMillis()
-
             if (isTimerMode && timerRemainingTime > 0 && !isTimerPaused) {
-                // W trybie timera aktualizuj pozostały czas tylko jeśli nie jest spauzowany
-                timerRemainingTime -= 1000
+                // Częstsze aktualizacje dla aktywnego timera (co 100ms dla płynności)
+                delay(100)
+                currentTimeState = System.currentTimeMillis()
 
-                if (timerRemainingTime <= 0) {
-                    // Timer zakończony
-                    timerRemainingTime = 0
-                    timerFinished = true
-                    showTimerFinishedCelebration = true
+                // Aktualizuj timer co 1000ms (sekundę)
+                if (System.currentTimeMillis() % 1000 < 100) {
+                    timerRemainingTime -= 1000
 
-                    // Nie pokazujemy fajerwerków w trybie timera
-                }
-            } else if (!isTimerMode && currentSection == NavigationSection.BIRTHDAY_COUNTDOWN) {
-                // W trybie odliczania urodzin aktualizuj pozostały czas
-                timeRemaining = (targetDate - currentTimeState).coerceAtLeast(0)
-
-                // Sprawdzaj częściej gdy pozostało mało czasu
-                if (activity != null && timeRemaining > 0) {
-                    val remainingMinutes = timeRemaining / 60000
-
-                    // Określ minimalny interwał między sprawdzeniami
-                    val checkInterval = when {
-                        remainingMinutes <= 1 -> 30_000      // 30 sekund w ostatniej minucie
-                        remainingMinutes <= 5 -> 60_000      // 1 minuta
-                        remainingMinutes <= 15 -> 120_000    // 2 minuty
-                        remainingMinutes <= 60 -> 300_000    // 5 minut
-                        else -> 900_000                       // 15 minut
-                    }
-
-                    val currentTime = System.currentTimeMillis()
-
-                    // Sprawdź tylko jeśli:
-                    // 1. Prezent nie został jeszcze odebrany (używamy giftReceived, które już jest parametrem)
-                    // 2. Minął odpowiedni czas od ostatniego sprawdzenia
-                    // 3. Sprawdzenie nie jest zablokowane przez inny worker
-                    if (!giftReceived && currentTime - lastCheckTime >= checkInterval && FileCheckWorker.canCheckFile(
-                            activity
-                        )
-                    ) {
-
-                        Timber.d("Uruchamiam dodatkowe sprawdzenie pliku, pozostało $remainingMinutes minut (interwał: ${checkInterval / 1000}s)")
-                        activity.checkFileNow()
-                        lastCheckTime = currentTime
+                    if (timerRemainingTime <= 0) {
+                        timerRemainingTime = 0
+                        timerFinished = true
+                        showTimerFinishedCelebration = true
+                        Timber.d("Timer zakończył odliczanie")
                     }
                 }
+                100L
+            } else {
+                // Standardowe aktualizacje co sekundę dla pozostałych trybów
+                delay(1000)
+                currentTimeState = System.currentTimeMillis()
 
-                // Sprawdź czy czas się skończył
-                if (currentTimeState >= targetDate && !isTimeUp) {
-                    isTimeUp = true
+                if (!isTimerMode && currentSection == NavigationSection.BIRTHDAY_COUNTDOWN) {
+                    timeRemaining = (targetDate - currentTimeState).coerceAtLeast(0)
 
-                    // Opcjonalnie: ostatnie sprawdzenie tuż po upływie czasu
-                    if (activity != null) {
-                        Timber.d("Uruchamiam ostatnie sprawdzenie pliku po upływie czasu")
-                        activity.checkFileNow()
-                        lastCheckTime = currentTimeState
+                    // Sprawdzaj pliki gdy zbliża się koniec
+                    if (activity != null && timeRemaining > 0) {
+                        val remainingMinutes = timeRemaining / 60000
+                        val checkInterval = when {
+                            remainingMinutes <= 1 -> 30_000
+                            remainingMinutes <= 5 -> 60_000
+                            remainingMinutes <= 15 -> 120_000
+                            remainingMinutes <= 60 -> 300_000
+                            else -> 900_000
+                        }
+
+                        val currentTime = System.currentTimeMillis()
+
+                        if (!giftReceived && currentTime - lastCheckTime >= checkInterval && FileCheckWorker.canCheckFile(
+                                activity
+                            )
+                        ) {
+
+                            Timber.d("Uruchamiam dodatkowe sprawdzenie pliku, pozostało $remainingMinutes minut")
+                            activity.checkFileNow()
+                            lastCheckTime = currentTime
+                        }
+                    }
+
+                    // Sprawdź czy czas się skończył
+                    if (currentTimeState >= targetDate && !isTimeUp) {
+                        isTimeUp = true
+
+                        if (activity != null) {
+                            Timber.d("Uruchamiam ostatnie sprawdzenie pliku po upływie czasu")
+                            activity.checkFileNow()
+                            lastCheckTime = currentTimeState
+                        }
                     }
                 }
+                1000L
             }
         }
     }
@@ -255,8 +270,7 @@ fun MainScreen(
         if (showProgressDialog) {
             progressValue = 0f
 
-            // Animacja przez 2 sekundy
-            val updateInterval = 50L // 50ms
+            val updateInterval = 50L
             val steps = 2000L / updateInterval
             val increment = 1f / steps
 
@@ -265,7 +279,6 @@ fun MainScreen(
                 progressValue += increment
             }
 
-            // Po zakończeniu animacji ustaw timer i zamknij dialog
             onTimerSet(timerMinutes)
             showProgressDialog = false
         }
@@ -277,7 +290,6 @@ fun MainScreen(
             .fillMaxSize()
             .shakeEffect(timeRemaining = if (isTimerMode) timerRemainingTime else timeRemaining)
             .flashEffect(timeRemaining = if (isTimerMode) timerRemainingTime else timeRemaining)
-            // Add swipe detection if gift has been received
             .then(
                 if (giftWasClicked) {
                     Modifier.detectHorizontalSwipes(
@@ -315,38 +327,26 @@ fun MainScreen(
                         .padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Sprawdź aktualną sekcję i wyświetl odpowiednią zawartość
                     when (currentSection) {
                         NavigationSection.BIRTHDAY_COUNTDOWN -> {
-                            // Standardowy ekran odliczania urodzin
-
-                            // Nagłówek z tytułem - przekaż informację o dostępności drawera
                             HeaderSection(hasDrawer = giftWasClicked)
 
-                            // Sekcja kurtyny lub prezentu
                             CurtainSection(
                                 isTimeUp = isTimeUp,
                                 showGift = true,
                                 onGiftClicked = { centerX, centerY ->
-                                    // Zapisz pozycję kliknięcia i pokaż konfetti
                                     confettiCenterX = centerX
                                     confettiCenterY = centerY
-
-                                    // Pokaż wybuch konfetti
                                     showConfettiExplosion = true
 
-                                    // Opóźnij pokazanie ekranu celebracji
                                     MainScope().launch {
-                                        // Oznacz, że prezent został kliknięty, aby pokazać drawer
                                         giftWasClicked = true
-
-                                        delay(1500) // Krótsze opóźnienie aby przejść po wybuchu konfetti
+                                        delay(1500)
                                         showCelebration = true
                                         onGiftClicked()
                                     }
                                 },
                                 onGiftLongPressed = {
-                                    // Aktywuj tryb timera i powiadom, że został odkryty
                                     Timber.d("Prezent długo naciśnięty, aktywuję tryb timera")
                                     if (!timerModeEnabled) {
                                         timerMinutes = 5
@@ -358,7 +358,6 @@ fun MainScreen(
                                 modifier = Modifier.weight(1f)
                             )
 
-                            // Sekcja odliczania
                             CountdownSection(
                                 modifier = Modifier.padding(bottom = 24.dp),
                                 timeRemaining = timeRemaining,
@@ -373,7 +372,7 @@ fun MainScreen(
                         }
 
                         NavigationSection.TIMER -> {
-                            // Użyj wydzielonego ekranu timera
+                            // Ulepszona wersja TimerScreen z lepszą responsywnością
                             TimerScreen(
                                 timerRemainingTime = timerRemainingTime,
                                 timerFinished = timerFinished,
@@ -386,7 +385,6 @@ fun MainScreen(
                         }
 
                         NavigationSection.GIFT -> {
-                            // Użyj wydzielonego ekranu prezentu
                             GiftScreen(
                                 onGiftClicked = onGiftClicked, giftReceived = giftReceived
                             )
@@ -405,7 +403,7 @@ fun MainScreen(
                 }
             }
 
-            // Wyświetlaj fajerwerki natychmiast, gdy czas się skończy, ale tylko w trybie urodzinowym
+            // Fajerwerki dla zakończenia odliczania urodzin
             AnimatedVisibility(
                 visible = (isTimeUp && !showCelebration && currentSection == NavigationSection.BIRTHDAY_COUNTDOWN),
                 enter = fadeIn(tween(300)),
@@ -416,7 +414,7 @@ fun MainScreen(
                 }
             }
 
-            // Wybuch konfetti gdy prezent jest kliknięty lub gdy czas upłynie (tylko w trybie urodzinowym)
+            // Wybuch konfetti
             AnimatedVisibility(
                 visible = showConfettiExplosion && !showCelebration && currentSection == NavigationSection.BIRTHDAY_COUNTDOWN,
                 enter = fadeIn(tween(100)),
@@ -433,13 +431,12 @@ fun MainScreen(
             ) {
                 BirthdayMessage(
                     modifier = Modifier.fillMaxSize(), onBackClick = {
-                        // Przy powrocie do głównego ekranu resetuj wybuch konfetti
                         showConfettiExplosion = false
                         showCelebration = false
                     })
             }
 
-            // Ekran po zakończeniu timera - bez fajerwerków
+            // Ekran po zakończeniu timera
             AnimatedVisibility(
                 visible = showTimerFinishedCelebration, enter = fadeIn(), exit = fadeOut()
             ) {
@@ -447,12 +444,10 @@ fun MainScreen(
                     minutes = timerMinutes,
                     modifier = Modifier.fillMaxSize(),
                     onBackClick = {
-                        // Przy powrocie do głównego ekranu
                         showTimerFinishedCelebration = false
                         onSectionSelected(NavigationSection.BIRTHDAY_COUNTDOWN)
                     },
                     onResetTimer = {
-                        // Resetuj timer
                         showTimerFinishedCelebration = false
                         onResetTimer()
                     })
