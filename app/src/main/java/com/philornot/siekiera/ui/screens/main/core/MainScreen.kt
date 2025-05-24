@@ -43,6 +43,7 @@ import com.philornot.siekiera.ui.screens.main.gift.BirthdayMessage
 import com.philornot.siekiera.ui.screens.main.gift.GiftScreen
 import com.philornot.siekiera.ui.screens.main.timer.TimerFinishedMessage
 import com.philornot.siekiera.ui.screens.main.timer.TimerScreen
+import com.philornot.siekiera.ui.screens.settings.SettingsScreen
 import com.philornot.siekiera.workers.FileCheckWorker
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.delay
@@ -51,8 +52,9 @@ import timber.log.Timber
 
 /**
  * Główny ekran z czystym, lawendowym motywem i minimalnymi animacjami.
- * Teraz obsługuje zarówno tryb odliczania urodzin jak i tryb timera.
- * Zawiera również szufladkę nawigacyjną po odebraniu prezentu.
+ * Teraz obsługuje zarówno tryb odliczania urodzin jak i tryb timera oraz
+ * nową sekcję ustawień. Zawiera również szufladkę nawigacyjną po odebraniu
+ * prezentu.
  *
  * @param modifier Modifier dla kontenera
  * @param targetDate Data urodzin w milisekundach
@@ -76,6 +78,12 @@ import timber.log.Timber
  *    szufladki
  * @param currentSection Obecnie wybrana sekcja nawigacyjna
  * @param onSectionSelected Callback wywoływany przy wyborze sekcji
+ * @param isDarkTheme Czy aktywny jest ciemny motyw
+ * @param onThemeToggle Callback wywoływany przy zmianie motywu
+ * @param currentAppName Aktualna nazwa aplikacji
+ * @param onAppNameChange Callback wywoływany przy zmianie nazwy aplikacji
+ * @param onAppNameReset Callback wywoływany przy resetowaniu nazwy
+ *    aplikacji
  */
 @Composable
 fun MainScreen(
@@ -98,6 +106,11 @@ fun MainScreen(
     onDrawerStateChange: (Boolean) -> Unit = {},
     currentSection: NavigationSection = NavigationSection.BIRTHDAY_COUNTDOWN,
     onSectionSelected: (NavigationSection) -> Unit = {},
+    isDarkTheme: Boolean = false,
+    onThemeToggle: (Boolean) -> Unit = {},
+    currentAppName: String = "",
+    onAppNameChange: (String) -> Unit = {},
+    onAppNameReset: () -> Unit = {},
 ) {
     // Oblicz czy czas upłynął
     var isTimeUp by remember { mutableStateOf(currentTime >= targetDate) }
@@ -129,7 +142,6 @@ fun MainScreen(
     var confettiCenterY by remember { mutableFloatStateOf(0.5f) }
 
     // Stany dla trybu timera
-    var changeAppName by remember { mutableStateOf(false) }
     var timerMinutes by remember { mutableIntStateOf(5) }
 
     // Stan dla dialogu zmiany nazwy aplikacji
@@ -338,7 +350,6 @@ fun MainScreen(
                                     Timber.d("Prezent długo naciśnięty, aktywuję tryb timera")
                                     if (!timerModeEnabled) {
                                         timerMinutes = 5
-                                        changeAppName = false
                                         timerFinished = false
                                         onTimerModeDiscovered()
                                     }
@@ -378,6 +389,17 @@ fun MainScreen(
                             // Użyj wydzielonego ekranu prezentu
                             GiftScreen(
                                 onGiftClicked = onGiftClicked, giftReceived = giftReceived
+                            )
+                        }
+
+                        NavigationSection.SETTINGS -> {
+                            // Nowy ekran ustawień
+                            SettingsScreen(
+                                currentAppName = currentAppName,
+                                isDarkTheme = isDarkTheme,
+                                onThemeToggle = onThemeToggle,
+                                onAppNameChange = onAppNameChange,
+                                onAppNameReset = onAppNameReset
                             )
                         }
                     }

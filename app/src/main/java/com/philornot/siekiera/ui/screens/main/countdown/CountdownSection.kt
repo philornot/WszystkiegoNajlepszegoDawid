@@ -21,7 +21,6 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -30,24 +29,26 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.core.content.edit
 import com.philornot.siekiera.ui.screens.main.timer.TimerDaysCounter
 import com.philornot.siekiera.utils.TimeUtils
 
 /**
  * Sekcja odliczania, która obsługuje zarówno tryb odliczania do urodzin
  * jak i tryb timera z przyciskami kontroli.
+ *
+ * Usunięto checkbox zmiany nazwy aplikacji - ta opcja została przeniesiona
+ * do sekcji Ustawienia.
  *
  * @param modifier Modifier dla kontenera
  * @param timeRemaining Pozostały czas w milisekundach
@@ -57,9 +58,6 @@ import com.philornot.siekiera.utils.TimeUtils
  * @param onTimerMinutesChanged Wywołanie gdy zmieniają się minuty timera
  * @param onTimerSet Wywołanie gdy timer powinien zostać uruchomiony
  * @param timerMinutes Aktualnie ustawione minuty w trybie timera
- * @param changeAppName Czy zmienić nazwę aplikacji w trybie timera
- * @param onChangeAppNameChanged Wywołanie gdy zmienia się opcja zmiany
- *    nazwy
  * @param onPauseTimer Wywołanie gdy użytkownik pauzuje timer
  * @param onResumeTimer Wywołanie gdy użytkownik wznawia timer
  * @param onResetTimer Wywołanie gdy użytkownik resetuje timer
@@ -75,8 +73,6 @@ fun CountdownSection(
     onTimerMinutesChanged: (Int) -> Unit = {},
     onTimerSet: (Int) -> Unit = {},
     timerMinutes: Int = 5,
-    changeAppName: Boolean = false,
-    onChangeAppNameChanged: (Boolean) -> Unit = {},
     onPauseTimer: () -> Unit = {},
     onResumeTimer: () -> Unit = {},
     onResetTimer: () -> Unit = {},
@@ -114,7 +110,7 @@ fun CountdownSection(
     var currentDragMinutes by remember { mutableIntStateOf(timerMinutes) }
 
     // Dodane: Stan dla inteligentnego przeciągania
-    var lastDragTime by remember { mutableStateOf(0L) }
+    var lastDragTime by remember { mutableLongStateOf(0L) }
     var lastDragPosition by remember { mutableFloatStateOf(0f) }
     var dragVelocity by remember { mutableFloatStateOf(0f) }
     var accumulatedDrag by remember { mutableFloatStateOf(0f) }
@@ -297,48 +293,9 @@ fun CountdownSection(
                 )
             }
 
-            // Dodatkowe opcje dla trybu timera
+            // Dodatkowe opcje dla trybu timera - usunięto checkbox zmiany nazwy
             if (isTimerMode) {
                 Spacer(modifier = Modifier.height(24.dp))
-
-                // Opcja zmiany nazwy aplikacji (tylko gdy timer nie jest aktywny)
-                if (!isTimerActive) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 32.dp)
-                    ) {
-                        // Pobierz kontekst w kontekście funkcji @Composable
-                        val context = LocalContext.current
-
-                        Checkbox(
-                            checked = changeAppName, onCheckedChange = {
-                                onChangeAppNameChanged(it)
-
-                                // Używamy pobranego wcześniej kontekstu
-                                context.getSharedPreferences(
-                                    "timer_prefs", android.content.Context.MODE_PRIVATE
-                                ).edit { putBoolean("change_app_name", it) }
-                            })
-
-                        Column(modifier = Modifier.padding(start = 8.dp)) {
-                            Text(
-                                text = "Zmień nazwę aplikacji na 'Lawendowy Timer'",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-
-                            Text(
-                                text = "Uwaga: może wymagać zamknięcia aplikacji",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
 
                 // Przyciski kontroli timera
                 Row(

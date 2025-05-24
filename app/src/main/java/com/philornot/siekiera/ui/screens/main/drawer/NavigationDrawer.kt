@@ -5,11 +5,15 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -20,6 +24,8 @@ import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Cake
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -32,17 +38,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 
 /**
  * Navigation drawer for the app that slides in from the left. Contains
- * options for gift, timer, and countdown to next birthday. Only accessible
- * after the gift has been opened at least once.
+ * options for gift, timer, countdown to next birthday, and settings.
+ * Only accessible after the gift has been opened at least once.
  *
- * Updated with improved hamburger menu positioning to avoid text
- * collision.
+ * Rozszerzone o sekcję ustawień na dole szufladki z separatorem.
  */
 @Composable
 fun NavigationDrawer(
@@ -108,7 +114,7 @@ fun NavigationDrawer(
                     modifier = Modifier.padding(vertical = 24.dp)
                 )
 
-                // Navigation items
+                // Main navigation items
                 DrawerItem(
                     icon = Icons.Default.CardGiftcard,
                     title = "Prezent",
@@ -135,6 +141,28 @@ fun NavigationDrawer(
                         onSectionSelected(NavigationSection.BIRTHDAY_COUNTDOWN)
                         onOpenStateChange(false)
                     })
+
+                // Spacer to push settings to bottom
+                Spacer(modifier = Modifier.weight(1f))
+
+                // Separator before settings
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 16.dp),
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                )
+
+                // Settings section at the bottom
+                DrawerItem(
+                    icon = Icons.Default.Settings,
+                    title = "Ustawienia",
+                    isSelected = currentSection == NavigationSection.SETTINGS,
+                    onClick = {
+                        onSectionSelected(NavigationSection.SETTINGS)
+                        onOpenStateChange(false)
+                    })
+
+                // Bottom spacing
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
 

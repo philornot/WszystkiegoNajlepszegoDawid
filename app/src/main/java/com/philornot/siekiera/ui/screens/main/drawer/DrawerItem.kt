@@ -29,7 +29,7 @@ internal fun DrawerItem(
     val backgroundColor = if (isSelected) {
         MaterialTheme.colorScheme.primaryContainer
     } else {
-        Color.Companion.Transparent
+        Color.Transparent
     }
 
     val contentColor = if (isSelected) {
@@ -47,15 +47,15 @@ internal fun DrawerItem(
         shape = MaterialTheme.shapes.medium
     ) {
         Row(
-            modifier = Modifier.Companion
+            modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            verticalAlignment = Alignment.Companion.CenterVertically
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = icon, contentDescription = null, tint = contentColor
             )
-            Spacer(modifier = Modifier.Companion.width(16.dp))
+            Spacer(modifier = Modifier.width(16.dp))
             Text(
                 text = title, style = MaterialTheme.typography.bodyLarge, color = contentColor
             )

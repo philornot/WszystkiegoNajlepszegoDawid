@@ -13,8 +13,6 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -150,6 +148,13 @@ class MainActivity : ComponentActivity() {
     // Stan pauzy timera
     private val isTimerPaused = mutableStateOf(false)
 
+    // Stany dla ustawień
+    private val _isDarkTheme = MutableStateFlow(false)
+    private val isDarkTheme: StateFlow<Boolean> = _isDarkTheme
+
+    private val _currentAppName = MutableStateFlow("")
+    private val currentAppName: StateFlow<String> = _currentAppName
+
     // Launcher dla żądania uprawnień do dokładnych alarmów
     private val alarmPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -234,6 +239,9 @@ class MainActivity : ComponentActivity() {
         val timerModeEnabled = prefs.getBoolean("timer_mode_discovered", false)
         timerModeDiscovered.value = timerModeEnabled
 
+        // Załaduj ustawienia motywu i nazwy aplikacji
+        loadAppSettings()
+
         // Inicjalizacja kanałów powiadomień
         NotificationHelper.initNotificationChannels(this)
 
@@ -304,7 +312,11 @@ class MainActivity : ComponentActivity() {
         registerWorkInfoReceiver()
 
         setContent {
-            AppTheme {
+            // Collect theme state
+            val darkTheme by isDarkTheme.collectAsState()
+            val appName by currentAppName.collectAsState()
+
+            AppTheme(darkTheme = darkTheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background
                 ) {
@@ -343,7 +355,7 @@ class MainActivity : ComponentActivity() {
                         targetDate = calculateNextBirthday(),
                         currentTime = timeProvider.getCurrentTimeMillis(),
                         onGiftClicked = { showDialog.value = true },
-                        activity = this, // Przekaż referencję do aktywności
+                        activity = this@MainActivity, // Przekaż referencję do aktywności
                         giftReceived = giftReceived,
                         onTimerSet = { minutes ->
                             // Ustaw timer na podaną ilość minut
@@ -404,7 +416,24 @@ class MainActivity : ComponentActivity() {
                                         showDialog.value = true
                                     }
                                 }
+
+                                NavigationSection.SETTINGS -> {
+                                    isTimerMode.value = false
+                                    // Settings section doesn't require any special action
+                                }
                             }
+                        },
+                        // Settings parameters
+                        isDarkTheme = darkTheme,
+                        onThemeToggle = { enableDarkTheme ->
+                            toggleTheme(enableDarkTheme)
+                        },
+                        currentAppName = appName,
+                        onAppNameChange = { newName ->
+                            changeAppName(newName)
+                        },
+                        onAppNameReset = {
+                            resetAppName()
                         })
 
                     // Dialog pobierania
@@ -412,7 +441,9 @@ class MainActivity : ComponentActivity() {
                         AlertDialog(onDismissRequest = {
                             // Gdy użytkownik kliknie poza dialogiem, anulujemy pobieranie i pokazujemy toast
                             Toast.makeText(
-                                this, "Anulowano pobieranie prezentu", Toast.LENGTH_SHORT
+                                this@MainActivity,
+                                "Anulowano pobieranie prezentu",
+                                Toast.LENGTH_SHORT
                             ).show()
                             showDialog.value = false
                         }, title = {
@@ -443,6 +474,119 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** Ładuje ustawienia aplikacji z SharedPreferences. */
+    private fun loadAppSettings() {
+        val settingsPrefs = getSharedPreferences("settings_prefs", MODE_PRIVATE)
+
+        // Załaduj ustawienie motywu (domyślnie system)
+        val savedTheme = settingsPrefs.getString("theme_preference", "system")
+        val systemDarkTheme =
+            resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK == android.content.res.Configuration.UI_MODE_NIGHT_YES
+
+        val isDark = when (savedTheme) {
+            "dark" -> true
+            "light" -> false
+            else -> systemDarkTheme // "system" lub brak ustawienia
+        }
+        _isDarkTheme.value = isDark
+
+        // Załaduj aktualną nazwę aplikacji
+        val savedAppName = settingsPrefs.getString("app_name", getString(R.string.app_name))
+        _currentAppName.value = savedAppName ?: getString(R.string.app_name)
+
+        Timber.d("Załadowano ustawienia - motyw: $savedTheme (isDark: $isDark), nazwa: ${_currentAppName.value}")
+    }
+
+    /** Przełącza motyw aplikacji między jasnym a ciemnym. */
+    private fun toggleTheme(enableDarkTheme: Boolean) {
+        _isDarkTheme.value = enableDarkTheme
+
+        // Zapisz ustawienie motywu
+        val settingsPrefs = getSharedPreferences("settings_prefs", MODE_PRIVATE)
+        settingsPrefs.edit {
+            putString("theme_preference", if (enableDarkTheme) "dark" else "light")
+        }
+
+        Timber.d("Zmieniono motyw na: ${if (enableDarkTheme) "ciemny" else "jasny"}")
+        Toast.makeText(
+            this,
+            "Motyw został zmieniony na ${if (enableDarkTheme) "ciemny" else "jasny"}",
+            Toast.LENGTH_SHORT
+        ).show()
+    }
+
+    /** Zmienia nazwę aplikacji na nową wartość. */
+    private fun changeAppName(newName: String) {
+        val trimmedName = newName.trim()
+        if (trimmedName.isBlank()) {
+            Toast.makeText(this, "Nazwa aplikacji nie może być pusta", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        _currentAppName.value = trimmedName
+
+        // Zapisz nową nazwę
+        val settingsPrefs = getSharedPreferences("settings_prefs", MODE_PRIVATE)
+        settingsPrefs.edit {
+            putString("app_name", trimmedName)
+        }
+
+        Timber.d("Zmieniono nazwę aplikacji na: $trimmedName")
+
+        // Próba zmiany nazwy w systemie (może się nie udać bez uprawnień systemowych)
+        tryChangeAppNameInSystem(trimmedName)
+
+        Toast.makeText(
+            this, getString(R.string.app_name_changed_toast), Toast.LENGTH_SHORT
+        ).show()
+    }
+
+    /** Resetuje nazwę aplikacji do domyślnej wartości. */
+    private fun resetAppName() {
+        val defaultName = getString(R.string.app_name)
+        _currentAppName.value = defaultName
+
+        // Usuń zapisaną nazwę (powróć do domyślnej)
+        val settingsPrefs = getSharedPreferences("settings_prefs", MODE_PRIVATE)
+        settingsPrefs.edit {
+            remove("app_name")
+        }
+
+        Timber.d("Zresetowano nazwę aplikacji do: $defaultName")
+
+        // Próba przywrócenia oryginalnej nazwy w systemie
+        tryChangeAppNameInSystem(defaultName)
+
+        Toast.makeText(
+            this, getString(R.string.app_name_reset_toast), Toast.LENGTH_SHORT
+        ).show()
+    }
+
+    /**
+     * Próbuje zmienić nazwę aplikacji w systemie Android poprzez manipulację
+     * komponentów. Ta funkcja wymaga uprawnień systemowych i może nie działać
+     * na zwykłych aplikacjach.
+     */
+    private fun tryChangeAppNameInSystem(newName: String) {
+        try {
+            // Ta operacja wymaga uprawnień systemowych i prawdopodobnie się nie powiedzie
+            packageManager
+            ComponentName(this, MainActivity::class.java)
+
+            // Można by tu spróbować różnych technik zmiany nazwy, ale jest to bardzo ograniczone
+            // bez uprawnień systemowych. Na razie logujemy próbę.
+            Timber.d("Próba zmiany nazwy aplikacji w systemie na: $newName (może wymagać uprawnień systemowych)")
+
+            // W praktyce, zmiana nazwy aplikacji widocznej w systemie jest bardzo ograniczona
+            // dla zwykłych aplikacji. Możemy tylko zmienić label w manifestie poprzez activity-alias,
+            // ale to wymaga predefiniowanych aliasów.
+
+        } catch (e: Exception) {
+            Timber.w("Nie można zmienić nazwy aplikacji w systemie: ${e.message}")
+            // Nie pokazujemy błędu użytkownikowi, ponieważ to jest oczekiwane ograniczenie
+        }
+    }
+
     /**
      * Ustawia timer na określoną ilość minut. Planuje powiadomienie po upływie
      * czasu i zmienia nazwę aplikacji, jeśli jest to wymagane.
@@ -464,15 +608,7 @@ class MainActivity : ComponentActivity() {
             isTimerMode.value = true
             _currentSection.value = NavigationSection.TIMER
 
-            // Sprawdź, czy użytkownik chce zmienić nazwę aplikacji poprzez checkbox
-            val changeAppName = getSharedPreferences("timer_prefs", MODE_PRIVATE).getBoolean(
-                "change_app_name", false
-            )
-
-            // Próba zmiany nazwy aplikacji na "Lawendowy Timer" tylko jeśli checkbox jest zaznaczony
-            if (changeAppName) {
-                tryChangeAppName(true)
-            }
+            // Nie używamy już checkbox do zmiany nazwy - opcja została przeniesiona do ustawień
         } else {
             // Wystąpił błąd podczas ustawiania timera
             Toast.makeText(
@@ -526,9 +662,6 @@ class MainActivity : ComponentActivity() {
             activeTimerRemainingTime.value = 0L
             isTimerPaused.value = false
             isTimerMode.value = false
-
-            // Przywróć oryginalną nazwę aplikacji
-            tryChangeAppName(false)
         }
     }
 
@@ -580,92 +713,6 @@ class MainActivity : ComponentActivity() {
         }
 
         return birthdayCalendar.timeInMillis
-    }
-
-    /**
-     * Próbuje zmienić nazwę aplikacji poprzez włączenie/wyłączenie
-     * activity-alias. UWAGA: Wymaga uprawnień CHANGE_COMPONENT_ENABLED_STATE,
-     * które zwykle są dostępne tylko dla aplikacji systemowych.
-     *
-     * @param enableTimerMode true, jeśli włączamy tryb timera, false dla
-     *    normalnego trybu
-     */
-    private fun tryChangeAppName(enableTimerMode: Boolean) {
-        try {
-            // Próba nie powiedzie się dla zwykłych aplikacji (wymaga uprawnień systemowych)
-            val packageManager = packageManager
-            val originalComponent = ComponentName(this, MainActivity::class.java)
-            val timerComponent = ComponentName(this, "com.philornot.siekiera.TimerActivityAlias")
-
-            if (enableTimerMode) {
-                // Włącz alias timera, wyłącz oryginalną aktywność
-                packageManager.setComponentEnabledSetting(
-                    originalComponent,
-                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                    PackageManager.DONT_KILL_APP
-                )
-                packageManager.setComponentEnabledSetting(
-                    timerComponent,
-                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                    PackageManager.DONT_KILL_APP
-                )
-                Timber.d("Zmieniono nazwę aplikacji na 'Lawendowy Timer'")
-
-                // Próba automatycznego ponownego uruchomienia aplikacji
-                try {
-                    val intent = packageManager.getLaunchIntentForPackage(packageName)
-                    intent?.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                    intent?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-
-                    // Uruchom nową instancję aplikacji po krótkim opóźnieniu
-                    Handler(Looper.getMainLooper()).postDelayed({
-                        startActivity(intent)
-                        finish() // Zakończ obecną aktywność
-                    }, 500)
-                } catch (e: Exception) {
-                    Timber.e(e, "Błąd podczas próby ponownego uruchomienia aplikacji")
-                }
-            } else {
-                // Włącz oryginalną aktywność, wyłącz alias timera
-                packageManager.setComponentEnabledSetting(
-                    originalComponent,
-                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                    PackageManager.DONT_KILL_APP
-                )
-                packageManager.setComponentEnabledSetting(
-                    timerComponent,
-                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                    PackageManager.DONT_KILL_APP
-                )
-                Timber.d("Przywrócono oryginalną nazwę aplikacji")
-
-                // Próba automatycznego ponownego uruchomienia aplikacji
-                try {
-                    val intent = packageManager.getLaunchIntentForPackage(packageName)
-                    intent?.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                    intent?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-
-                    // Uruchom nową instancję aplikacji po krótkim opóźnieniu
-                    Handler(Looper.getMainLooper()).postDelayed({
-                        startActivity(intent)
-                        finish() // Zakończ obecną aktywność
-                    }, 500)
-                } catch (e: Exception) {
-                    Timber.e(e, "Błąd podczas próby ponownego uruchomienia aplikacji")
-                }
-            }
-
-            // Zapisz aktualny tryb
-            prefs.edit { putBoolean("timer_mode", enableTimerMode) }
-            isTimerMode.value = enableTimerMode
-
-        } catch (e: SecurityException) {
-            // To oczekiwany błąd - aplikacja nie ma uprawnień do zmiany komponentów
-            Timber.w("Brak uprawnień do zmiany nazwy aplikacji: ${e.message}")
-        } catch (e: Exception) {
-            // Inny nieoczekiwany błąd
-            Timber.e(e, "Błąd podczas próby zmiany nazwy aplikacji")
-        }
     }
 
     /** Rejestruje odbiornik do monitorowania stanu zadań WorkManager */
@@ -971,18 +1018,12 @@ class MainActivity : ComponentActivity() {
                 isTimerMode.value = true
                 _currentSection.value = NavigationSection.TIMER
             }
-
-            // Sprawdź czy tryb timera jest włączony dla nazwy aplikacji
-            if (!isTimerMode.value) {
-                tryChangeAppName(true)
-            }
         } else {
             // Nie ma aktywnego timera, przywróć normalny tryb
             if (isTimerMode.value) {
                 isTimerMode.value = false
                 activeTimerRemainingTime.value = 0L
                 isTimerPaused.value = false
-                tryChangeAppName(false)
             }
         }
     }
