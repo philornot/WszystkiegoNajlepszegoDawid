@@ -11,7 +11,11 @@ import com.philornot.siekiera.utils.TimeUtils
 import timber.log.Timber
 import java.util.TimeZone
 
-/** Klasa do planowania powiadomienia o odsłonięciu prezentu. */
+/**
+ * Klasa do planowania powiadomienia o odsłonięciu prezentu.
+ *
+ * Powiadomienia są planowane tylko na podstawie daty z konfiguracji.
+ */
 object NotificationScheduler {
     // Strefa czasowa Warszawy
     private val WARSAW_TIMEZONE = TimeZone.getTimeZone("Europe/Warsaw")
@@ -44,23 +48,26 @@ object NotificationScheduler {
     /**
      * Planuje powiadomienie na dzień urodzin.
      *
+     * Nie sprawdza czy prezent został odebrany - powiadomienie
+     * jest planowane tylko na podstawie daty z konfiguracji.
+     *
      * @param context Kontekst aplikacji
      * @param appConfig Konfiguracja aplikacji z datą urodzin
      */
     fun scheduleGiftRevealNotification(context: Context, appConfig: AppConfig) {
-        // Sprawdź, czy prezent został już odebrany
-        val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-        val giftReceived = prefs.getBoolean("gift_received", false)
-
-        if (giftReceived) {
-            Timber.d("Prezent został już odebrany, pomijam planowanie powiadomienia")
-            return
-        }
-
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val intent = Intent(context, NotificationReceiver::class.java)
 
         Timber.d("Rozpoczynam planowanie powiadomienia urodzinowego")
+
+        // Sprawdź czy data urodzin jest w przyszłości
+        val revealDateMillis = appConfig.getBirthdayTimeMillis()
+        val currentTimeMillis = System.currentTimeMillis()
+
+        if (currentTimeMillis >= revealDateMillis) {
+            Timber.d("Data urodzin już minęła - nie planuję powiadomienia")
+            return
+        }
 
         // Tworzymy PendingIntent, który zostanie wywołany o określonej godzinie
         val pendingIntent = try {

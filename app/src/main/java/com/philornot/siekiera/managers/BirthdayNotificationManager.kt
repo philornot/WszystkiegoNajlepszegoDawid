@@ -2,14 +2,18 @@ package com.philornot.siekiera.managers
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.core.content.edit
 import com.philornot.siekiera.config.AppConfig
 import com.philornot.siekiera.notification.NotificationScheduler
 import timber.log.Timber
-import androidx.core.content.edit
 
 /**
  * Manager zarządzający powiadomieniami urodzinowymi. Enkapsuluje logikę
  * planowania i anulowania powiadomień związanych z urodzinami.
+ *
+ * AKTUALIZACJA: Powiadomienia są teraz planowane tylko na podstawie daty z
+ * konfiguracji (czy jest w przyszłości), niezależnie od statusu odebrania
+ * prezentu. To jest spójne z logiką szufladki nawigacyjnej.
  */
 class BirthdayNotificationManager(
     private val context: Context,
@@ -18,28 +22,33 @@ class BirthdayNotificationManager(
 ) {
 
     /**
-     * Planuje powiadomienie na dzień urodzin jeśli prezent nie został jeszcze
-     * odebrany. Sprawdza warunki i wywołuje NotificationScheduler.
+     * Planuje powiadomienie na dzień urodzin jeśli data jest w przyszłości.
+     * Sprawdza warunki i wywołuje NotificationScheduler.
+     *
+     * Nie sprawdza czy prezent został odebrany - powiadomienia są
+     * planowane tylko na podstawie daty z konfiguracji.
      */
     fun scheduleRevealNotification() {
-        val giftReceived = prefs.getBoolean("gift_received", false)
-
-        // Zaplanuj powiadomienie tylko jeśli prezent nie został odebrany
-        if (appConfig.isBirthdayNotificationEnabled() && !giftReceived) {
-            Timber.d("Zlecam zaplanowanie powiadomienia urodzinowego")
-            NotificationScheduler.scheduleGiftRevealNotification(context, appConfig)
-        } else {
-            if (giftReceived) {
-                Timber.d("Prezent został już odebrany - nie planuję powiadomienia")
-            } else {
-                Timber.d("Powiadomienia urodzinowe są wyłączone w konfiguracji")
-            }
+        // Sprawdź czy powiadomienia są włączone w konfiguracji
+        if (!appConfig.isBirthdayNotificationEnabled()) {
+            Timber.d("Powiadomienia urodzinowe są wyłączone w konfiguracji")
+            return
         }
+
+        // Sprawdź czy data urodzin jest w przyszłości
+        if (!validateNotificationTiming()) {
+            Timber.d("Data urodzin już minęła - nie planuję powiadomienia")
+            return
+        }
+
+        // Zaplanuj powiadomienie
+        Timber.d("Zlecam zaplanowanie powiadomienia urodzinowego")
+        NotificationScheduler.scheduleGiftRevealNotification(context, appConfig)
     }
 
     /**
      * Anuluje zaplanowane powiadomienie urodzinowe. Może być użyte gdy prezent
-     * zostanie odebrany wcześniej.
+     * zostanie odebrany wcześniej lub gdy użytkownik wyłączy powiadomienia.
      */
     fun cancelRevealNotification() {
         // NotificationScheduler nie ma metody cancel, ale można by ją dodać
@@ -53,15 +62,16 @@ class BirthdayNotificationManager(
     /**
      * Sprawdza czy powiadomienie powinno być zaplanowane ponownie. Używane po
      * przyznaniu uprawnień do alarmów.
+     *
+     * Nie sprawdza statusu odebrania prezentu.
      */
     fun recheckNotificationScheduling() {
-        val giftReceived = prefs.getBoolean("gift_received", false)
         val notificationCancelled = prefs.getBoolean("notification_cancelled", false)
 
-        if (!giftReceived && !notificationCancelled) {
+        if (!notificationCancelled && validateNotificationTiming()) {
             scheduleRevealNotification()
         } else {
-            Timber.d("Nie planuję powiadomienia ponownie - gift_received=$giftReceived, cancelled=$notificationCancelled")
+            Timber.d("Nie planuję powiadomienia ponownie - cancelled=$notificationCancelled, timing_valid=${validateNotificationTiming()}")
         }
     }
 
@@ -84,16 +94,14 @@ class BirthdayNotificationManager(
 
     /** Loguje szczegółowe informacje o stanie powiadomień dla debugowania. */
     fun logNotificationStatus() {
-        val giftReceived = prefs.getBoolean("gift_received", false)
         val notificationEnabled = appConfig.isBirthdayNotificationEnabled()
         val isValidTiming = validateNotificationTiming()
         val notificationCancelled = prefs.getBoolean("notification_cancelled", false)
 
         Timber.d("Status powiadomień urodzinowych:")
-        Timber.d("  - Prezent odebrany: $giftReceived")
         Timber.d("  - Powiadomienia włączone: $notificationEnabled")
         Timber.d("  - Data w przyszłości: $isValidTiming")
         Timber.d("  - Powiadomienie anulowane: $notificationCancelled")
-        Timber.d("  - Powinno być zaplanowane: ${notificationEnabled && !giftReceived && isValidTiming && !notificationCancelled}")
+        Timber.d("  - Powinno być zaplanowane: ${notificationEnabled && isValidTiming && !notificationCancelled}")
     }
 }

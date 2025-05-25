@@ -5,19 +5,17 @@ import android.content.Context
 import android.content.Intent
 import timber.log.Timber
 
-/** BroadcastReceiver, który odbiera powiadomienie o odsłonięciu prezentu. */
+/**
+ * BroadcastReceiver, który odbiera powiadomienie o odsłonięciu prezentu.
+ *
+ * Powiadomienie jest zawsze wyświetlane gdy alarm się uruchomi.
+ */
 class NotificationReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         Timber.d("Czas na odsłonięcie prezentu!")
 
-        // Sprawdź, czy prezent został już odebrany
-        val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-        val giftReceived = prefs.getBoolean("gift_received", false)
-
-        if (giftReceived) {
-            Timber.d("Prezent został już odebrany, pomijam powiadomienie")
-            return
-        }
+        // Powiadomienie jest wyświetlane zawsze gdy alarm się uruchomi,
+        // ponieważ alarm jest planowany tylko gdy data jest w przyszłości
 
         // Użyj NotificationHelper do wyświetlenia powiadomienia
         NotificationHelper.showGiftRevealNotification(context)

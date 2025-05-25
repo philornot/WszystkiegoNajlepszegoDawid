@@ -8,6 +8,13 @@ import com.philornot.siekiera.notification.NotificationScheduler
 import com.philornot.siekiera.utils.TimeUtils
 import timber.log.Timber
 
+/**
+ * Główna klasa aplikacji odpowiedzialna za inicjalizację globalnych
+ * komponentów.
+ *
+ * AKTUALIZACJA: Powiadomienia są planowane tylko na podstawie daty z
+ * konfiguracji, niezależnie od statusu odebrania prezentu.
+ */
 class GiftApp : Application(), Configuration.Provider {
 
     // Przechowuje referencję do konfiguracji
@@ -34,16 +41,14 @@ class GiftApp : Application(), Configuration.Provider {
         checkAndScheduleNotification()
     }
 
+    /**
+     * Sprawdza i planuje powiadomienie urodzinowe na podstawie daty z
+     * konfiguracji.
+     *
+     * Nie sprawdza czy prezent został odebrany - powiadomienie
+     * jest planowane tylko jeśli data urodzin jest w przyszłości.
+     */
     private fun checkAndScheduleNotification() {
-        // Sprawdź czy prezent został już odebrany
-        val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
-        val giftReceived = prefs.getBoolean("gift_received", false)
-
-        if (giftReceived) {
-            Timber.d("Prezent został już odebrany, nie planuję powiadomienia")
-            return
-        }
-
         // Sprawdź czy powiadomienia są włączone w konfiguracji
         if (!appConfig.isBirthdayNotificationEnabled()) {
             Timber.d("Powiadomienia urodzinowe są wyłączone w konfiguracji")

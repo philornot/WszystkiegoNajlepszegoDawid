@@ -17,7 +17,12 @@ import com.philornot.siekiera.R
 import timber.log.Timber
 import java.io.File
 
-/** Klasa pomocnicza do zarządzania powiadomieniami w aplikacji. */
+/**
+ * Klasa pomocnicza do zarządzania powiadomieniami w aplikacji.
+ *
+ * AKTUALIZACJA: Powiadomienia urodzinowe są wyświetlane zawsze gdy zostają
+ * wywołane, niezależnie od statusu odebrania prezentu.
+ */
 object NotificationHelper {
 
     // Kanały powiadomień
@@ -150,18 +155,12 @@ object NotificationHelper {
     /**
      * Wyświetla powiadomienie o odsłonięciu prezentu.
      *
+     * Nie sprawdza czy prezent został odebrany - powiadomienie
+     * jest wyświetlane zawsze gdy zostanie wywołane.
+     *
      * @param context Kontekst aplikacji
      */
     fun showGiftRevealNotification(context: Context) {
-        // Sprawdź, czy prezent został już odebrany
-        val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-        val giftReceived = prefs.getBoolean("gift_received", false)
-
-        if (giftReceived) {
-            Timber.d("Prezent został już odebrany, nie wyświetlam powiadomienia")
-            return
-        }
-
         val notificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
