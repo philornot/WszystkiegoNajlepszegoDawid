@@ -14,7 +14,7 @@
 .cxx
 local.properties
 /.idea
-# Sentry Config File
 sentry.properties
 /app/google-services.json
 *.jks
+/app/release

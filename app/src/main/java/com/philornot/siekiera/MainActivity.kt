@@ -43,9 +43,12 @@ import java.util.TimeZone
  * managerów. Odpowiada tylko za podstawowy lifecycle, UI i koordynację
  * między managerami.
  *
- * Obsługa intencji z powiadomień - aplikacja
+ * AKTUALIZACJA: Dodana obsługa intencji z powiadomień - aplikacja
  * poprawnie otwiera się po kliknięciu w powiadomienie i reaguje na różne
  * typy powiadomień.
+ *
+ * NAPRAWKA: Dodano obsługę onRequestPermissionsResult dla
+ * PermissionManager.
  */
 class MainActivity : ComponentActivity() {
 
@@ -87,6 +90,27 @@ class MainActivity : ComponentActivity() {
 
         // Inicjalizacja UI
         setupUI()
+    }
+
+    /**
+     * NAPRAWKA: Dodano obsługę onRequestPermissionsResult dla
+     * PermissionManager.
+     */
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+
+        // Przekaż wynik do PermissionManager
+        if (::managers.isInitialized) {
+            managers.permissionsManager.handlePermissionResult(
+                requestCode,
+                permissions,
+                grantResults
+            )
+        }
     }
 
     /**
@@ -274,8 +298,18 @@ class MainActivity : ComponentActivity() {
                         ) { isGranted ->
                             if (isGranted) {
                                 Timber.d("Uprawnienia do powiadomień przyznane (z Compose)")
+                                Toast.makeText(
+                                    this@MainActivity,
+                                    "Będziesz powiadomiony w dniu urodzin!",
+                                    Toast.LENGTH_SHORT
+                                ).show()
                             } else {
                                 Timber.w("Uprawnienia do powiadomień odrzucone (z Compose)")
+                                Toast.makeText(
+                                    this@MainActivity,
+                                    "Bez uprawnień do powiadomień nie będziesz mógł zobaczyć powiadomienia urodzinowego",
+                                    Toast.LENGTH_LONG
+                                ).show()
                             }
                         }
 

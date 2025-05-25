@@ -10,9 +10,6 @@ import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.activity.result.ActivityResultLauncher
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.runtime.mutableStateOf
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.philornot.siekiera.config.AppConfig
@@ -21,6 +18,10 @@ import timber.log.Timber
 /**
  * Manager zarządzający uprawnieniami aplikacji. Enkapsuluje całą logikę
  * związaną z wymaganiem uprawnień od użytkownika.
+ *
+ * NAPRAWKA: Usunięto ActivityResultLauncher który powodował problemy z
+ * Fragment version. Logika uprawnień została przeniesiona do MainActivity
+ * gdzie używa Compose.
  */
 class PermissionsManager(
     private val activity: ComponentActivity,
@@ -28,40 +29,18 @@ class PermissionsManager(
     private val onAlarmPermissionGranted: () -> Unit,
 ) {
 
-    // Stany zarządzania uprawnieniami
-    private val notificationPermissionRequested = mutableStateOf(false)
-    private val storagePermissionRequested = mutableStateOf(false)
-
-    // Launcher dla żądania uprawnień do dokładnych alarmów
-    private val alarmPermissionLauncher: ActivityResultLauncher<Intent> =
-        activity.registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { _ ->
-            handleAlarmPermissionResult()
-        }
-
-    // Launcher dla powiadomień
-    private val notificationPermissionLauncher: ActivityResultLauncher<String> =
-        activity.registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
-            handleNotificationPermissionResult(isGranted)
-        }
-
-    // Launcher dla uprawnień do przechowywania
-    private val storagePermissionLauncher: ActivityResultLauncher<String> =
-        activity.registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
-            handleStoragePermissionResult(isGranted)
-        }
-
     /** Sprawdza i żąda wszystkich wymaganych uprawnień. */
     fun requestAllPermissions() {
-        requestAlarmPermission()
-        requestNotificationPermission()
-        requestStoragePermission()
+        checkAndRequestAlarmPermission()
+        checkNotificationPermission()
+        checkStoragePermission()
     }
 
     /**
-     * Sprawdza i żąda uprawnień do dokładnych alarmów (wymagane od Androida
-     * 12).
+     * Sprawdza uprawnienia do dokładnych alarmów i otwiera ustawienia jeśli
+     * potrzeba. NAPRAWKA: Uproszczone - bez ActivityResultLauncher.
      */
-    private fun requestAlarmPermission() {
+    private fun checkAndRequestAlarmPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val alarmManager = activity.getSystemService(Context.ALARM_SERVICE) as AlarmManager
             val hasPermission = alarmManager.canScheduleExactAlarms()
@@ -69,21 +48,8 @@ class PermissionsManager(
             Timber.d("Sprawdzanie uprawnień do dokładnych alarmów: hasPermission=$hasPermission")
 
             if (!hasPermission) {
-                Timber.d("Brak uprawnień do alarmów - otwieram ekran ustawień")
-                try {
-                    val intent = Intent().apply {
-                        action = Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM
-                        data = Uri.fromParts("package", activity.packageName, null)
-                    }
-                    alarmPermissionLauncher.launch(intent)
-                } catch (e: Exception) {
-                    Timber.e(e, "Błąd podczas otwierania ekranu uprawnień")
-                    Toast.makeText(
-                        activity,
-                        "Nie można otworzyć ekranu uprawnień: ${e.message}",
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
+                Timber.d("Brak uprawnień do alarmów - pokazuję instrukcje")
+                showAlarmPermissionInstructions()
             } else {
                 Timber.d("Uprawnienia do alarmów już przyznane")
             }
@@ -92,54 +58,77 @@ class PermissionsManager(
         }
     }
 
-    /**
-     * Sprawdza i żąda uprawnień do wyświetlania powiadomień (wymagane od
-     * Androida 13).
-     */
-    private fun requestNotificationPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(
-                    activity, Manifest.permission.POST_NOTIFICATIONS
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                if (ActivityCompat.shouldShowRequestPermissionRationale(
-                        activity, Manifest.permission.POST_NOTIFICATIONS
-                    )
-                ) {
-                    // Pokaż wyjaśnienie dlaczego potrzebujemy uprawnień
-                    Toast.makeText(
-                        activity,
-                        "Potrzebujemy uprawnień do wyświetlania powiadomień, aby poinformować Cię gdy prezent będzie gotowy.",
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
+    /** Pokazuje instrukcje jak włączyć uprawnienia do alarmów. */
+    private fun showAlarmPermissionInstructions() {
+        Toast.makeText(
+            activity,
+            "Aby aplikacja działała poprawnie, włącz uprawnienia do alarmów w ustawieniach. " + "Automatycznie otworzę ustawienia.",
+            Toast.LENGTH_LONG
+        ).show()
 
-                if (!notificationPermissionRequested.value) {
-                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        // Spróbuj otworzyć ustawienia alarmów
+        try {
+            val intent = Intent().apply {
+                action = Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM
+                data = Uri.fromParts("package", activity.packageName, null)
+            }
+            activity.startActivity(intent)
+        } catch (e: Exception) {
+            Timber.e(e, "Nie można otworzyć ustawień alarmów")
+            // Fallback - otwórz główne ustawienia aplikacji
+            try {
+                val intent = Intent().apply {
+                    action = Settings.ACTION_APPLICATION_DETAILS_SETTINGS
+                    data = Uri.fromParts("package", activity.packageName, null)
                 }
-            } else {
+                activity.startActivity(intent)
+            } catch (e2: Exception) {
+                Timber.e(e2, "Nie można otworzyć żadnych ustawień")
+                Toast.makeText(
+                    activity,
+                    "Nie można otworzyć ustawień automatycznie. " + "Przejdź ręcznie do Ustawienia > Aplikacje > ${activity.packageName} > Uprawnienia",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    /**
+     * Sprawdza uprawnienia do wyświetlania powiadomień. NAPRAWKA: Tylko
+     * sprawdza, nie żąda - żądanie jest w MainActivity z Compose.
+     */
+    private fun checkNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val hasPermission = ContextCompat.checkSelfPermission(
+                activity, Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+
+            if (hasPermission) {
                 Timber.d("Uprawnienia do powiadomień już przyznane")
+            } else {
+                Timber.d("Brak uprawnień do powiadomień - będą wymagane w MainActivity")
+                Toast.makeText(
+                    activity, "Będziesz poproszony o uprawnienia do powiadomień", Toast.LENGTH_SHORT
+                ).show()
             }
         } else {
             Timber.d("Android < 13, uprawnienia do powiadomień nie są wymagane")
         }
     }
 
-    /**
-     * Sprawdza i żąda uprawnień do przechowywania (wymagane dla starszych
-     * wersji Androida).
-     */
-    private fun requestStoragePermission() {
+    /** Sprawdza uprawnienia do przechowywania. */
+    private fun checkStoragePermission() {
         if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
-            if (ContextCompat.checkSelfPermission(
-                    activity, Manifest.permission.WRITE_EXTERNAL_STORAGE
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
+            val hasPermission = ContextCompat.checkSelfPermission(
+                activity, Manifest.permission.WRITE_EXTERNAL_STORAGE
+            ) == PackageManager.PERMISSION_GRANTED
+
+            if (!hasPermission) {
+                Timber.d("Brak uprawnień do przechowywania - prośba o przyznanie")
                 if (ActivityCompat.shouldShowRequestPermissionRationale(
                         activity, Manifest.permission.WRITE_EXTERNAL_STORAGE
                     )
                 ) {
-                    // Pokaż wyjaśnienie dlaczego potrzebujemy uprawnień
                     Toast.makeText(
                         activity,
                         "Potrzebujemy uprawnień do przechowywania, aby zapisać prezent w folderze Pobrane.",
@@ -147,9 +136,12 @@ class PermissionsManager(
                     ).show()
                 }
 
-                if (!storagePermissionRequested.value) {
-                    storagePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                }
+                // Użyj standardowego requestPermissions
+                ActivityCompat.requestPermissions(
+                    activity,
+                    arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE),
+                    STORAGE_PERMISSION_REQUEST_CODE
+                )
             } else {
                 Timber.d("Uprawnienia do przechowywania już przyznane")
             }
@@ -175,60 +167,60 @@ class PermissionsManager(
         }
     }
 
-    /** Obsługuje wynik żądania uprawnień do alarmów. */
-    private fun handleAlarmPermissionResult() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+    /** Sprawdza czy wszystkie wymagane uprawnienia są przyznane. */
+    fun hasAllRequiredPermissions(): Boolean {
+        val hasAlarmPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val alarmManager = activity.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            val hasPermission = alarmManager.canScheduleExactAlarms()
+            alarmManager.canScheduleExactAlarms()
+        } else {
+            true
+        }
 
-            Timber.d("Powrót z ekranu uprawnień do alarmów, nowy stan uprawnień: $hasPermission")
+        val hasNotificationPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(
+                activity, Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
 
-            if (hasPermission) {
-                Timber.d("Uprawnienia do dokładnych alarmów przyznane, planuję powiadomienie")
-                onAlarmPermissionGranted()
-            } else {
-                Timber.w("Uprawnienia do dokładnych alarmów nadal nie przyznane")
-                Toast.makeText(
-                    activity,
-                    "Bez uprawnień do dokładnych alarmów nie mogę zagwarantować punktualnego powiadomienia.",
-                    Toast.LENGTH_LONG
-                ).show()
+        val hasStoragePermission = if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
+            ContextCompat.checkSelfPermission(
+                activity, Manifest.permission.WRITE_EXTERNAL_STORAGE
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
+
+        return hasAlarmPermission && hasNotificationPermission && hasStoragePermission
+    }
+
+    /** Obsługuje wynik żądania uprawnień z onRequestPermissionsResult. */
+    fun handlePermissionResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray,
+    ) {
+        when (requestCode) {
+            STORAGE_PERMISSION_REQUEST_CODE -> {
+                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    Timber.d("Uprawnienia do przechowywania przyznane")
+                    Toast.makeText(
+                        activity, "Uprawnienia do przechowywania przyznane", Toast.LENGTH_SHORT
+                    ).show()
+                } else {
+                    Timber.w("Uprawnienia do przechowywania odrzucone")
+                    Toast.makeText(
+                        activity,
+                        "Bez uprawnień do przechowywania nie będziesz mógł pobrać prezentu",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
             }
         }
     }
 
-    /** Obsługuje wynik żądania uprawnień do powiadomień. */
-    private fun handleNotificationPermissionResult(isGranted: Boolean) {
-        notificationPermissionRequested.value = true
-
-        if (isGranted) {
-            Timber.d("Uprawnienia do powiadomień przyznane")
-            Toast.makeText(
-                activity, "Będziesz powiadomiony w dniu urodzin!", Toast.LENGTH_SHORT
-            ).show()
-        } else {
-            Timber.w("Uprawnienia do powiadomień odrzucone")
-            Toast.makeText(
-                activity,
-                "Bez uprawnień do powiadomień nie będziesz mógł zobaczyć powiadomienia urodzinowego",
-                Toast.LENGTH_LONG
-            ).show()
-        }
-    }
-
-    /** Obsługuje wynik żądania uprawnień do przechowywania. */
-    private fun handleStoragePermissionResult(isGranted: Boolean) {
-        storagePermissionRequested.value = true
-
-        if (isGranted) {
-            Timber.d("Uprawnienia do przechowywania przyznane")
-        } else {
-            Timber.w("Uprawnienia do przechowywania odrzucone")
-            Toast.makeText(
-                activity,
-                "Bez uprawnień do przechowywania nie będziesz mógł pobrać prezentu",
-                Toast.LENGTH_LONG
-            ).show()
-        }
+    companion object {
+        private const val STORAGE_PERMISSION_REQUEST_CODE = 1001
     }
 }
