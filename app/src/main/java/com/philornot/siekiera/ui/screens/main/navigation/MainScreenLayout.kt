@@ -4,10 +4,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import com.philornot.siekiera.ui.screens.main.shared.AppBackground
-import com.philornot.siekiera.ui.screens.main.navigation.SwipeDetector.detectHorizontalSwipes
 import com.philornot.siekiera.ui.screens.main.effects.flashEffect
 import com.philornot.siekiera.ui.screens.main.effects.shakeEffect
+import com.philornot.siekiera.ui.screens.main.navigation.SwipeDetector.detectHorizontalSwipes
+import com.philornot.siekiera.ui.screens.main.shared.AppBackground
 
 /**
  * Layout komponent odpowiedzialny za układ UI MainScreen. Zawiera tło,
@@ -37,6 +37,7 @@ fun MainScreenLayout(
     currentSection: NavigationSection,
     isDarkTheme: Boolean,
     currentAppName: String,
+    isTodayBirthday: Boolean,
     // Callbacki
     onGiftClicked: (Float, Float) -> Unit,
     onTimerModeDiscovered: () -> Unit,
@@ -60,21 +61,25 @@ fun MainScreenLayout(
             .shakeEffect(timeRemaining = if (isTimerMode) timerRemainingTime else timeRemaining)
             .flashEffect(timeRemaining = if (isTimerMode) timerRemainingTime else timeRemaining)
             .then(
-                // Dodaj obsługę swipe tylko gdy szufladka jest dostępna
-                if (isTimeUp) {
-                    Modifier.Companion.detectHorizontalSwipes(
-                        onSwipeLeft = { onDrawerStateChange(false) },
-                        onSwipeRight = { onDrawerStateChange(true) })
+                // Dodaj obsługę swipe tylko gdy szufladka jest dostępna (czas upłynął lub dzisiaj urodziny)
+                if (isTimeUp || isTodayBirthday) {
+                    Modifier.Companion.detectHorizontalSwipes(onSwipeLeft = {
+                        onDrawerStateChange(
+                            false
+                        )
+                    }, onSwipeRight = { onDrawerStateChange(true) })
                 } else {
                     Modifier
                 }
-            )) {
+            )
+    ) {
         // Tło aplikacji
-        AppBackground(isTimeUp = isTimeUp || (isTimerMode && timerFinished))
+        AppBackground(isTimeUp = isTimeUp || isTodayBirthday || (isTimerMode && timerFinished))
 
         // Warstwa nawigacji
         MainScreenNavigation(
             isTimeUp = isTimeUp,
+            isTodayBirthday = isTodayBirthday,
             isDrawerOpen = isDrawerOpen,
             currentSection = currentSection,
             onDrawerStateChange = onDrawerStateChange,
@@ -96,6 +101,7 @@ fun MainScreenLayout(
             currentSection = currentSection,
             isDarkTheme = isDarkTheme,
             currentAppName = currentAppName,
+            isTodayBirthday = isTodayBirthday,
             onGiftClicked = onGiftClicked,
             onTimerModeDiscovered = onTimerModeDiscovered,
             onTimerMinutesChanged = onTimerMinutesChanged,

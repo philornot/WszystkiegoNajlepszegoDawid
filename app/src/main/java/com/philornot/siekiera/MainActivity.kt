@@ -149,6 +149,10 @@ class MainActivity : ComponentActivity() {
                     val showDialog = remember { mutableStateOf(false) }
                     val giftReceived = prefs.getBoolean("gift_received", false)
 
+                    // Oblicz czy dzisiaj są urodziny i datę docelową
+                    val isTodayBirthday = isTodayBirthday()
+                    val targetDate = calculateTargetDate()
+
                     // Prośba o uprawnienia do powiadomień w Compose UI
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                         val requestPermissionLauncher = rememberLauncherForActivityResult(
@@ -171,18 +175,14 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    // POPRAWKA: Oblicz osobno targetDate dla countdown i sprawdź isTimeUp dla szufladki
-                    val currentTime = timeProvider.getCurrentTimeMillis()
-                    val nextBirthdayDate = calculateNextBirthday()
-                    val isTimeUp = checkIfTimeIsUp(currentTime)
-
                     // Główny ekran
                     MainScreen(
-                        targetDate = nextBirthdayDate, // Dla countdown - następne urodziny
-                        currentTime = currentTime,
+                        targetDate = targetDate,
+                        currentTime = timeProvider.getCurrentTimeMillis(),
                         onGiftClicked = { showDialog.value = true },
                         activity = this@MainActivity,
                         giftReceived = giftReceived,
+                        isTodayBirthday = isTodayBirthday,
                         onTimerSet = { minutes -> managers.timerManager.setTimer(minutes) },
                         timerModeEnabled = timerModeDiscovered,
                         onTimerModeDiscovered = {
@@ -221,10 +221,7 @@ class MainActivity : ComponentActivity() {
                         },
                         onAppNameReset = {
                             managers.settingsManager.resetAppName()
-                        },
-                        // Przekaż jawnie isTimeUp zamiast polegać na obliczeniach w MainScreen
-                        isTimeUp = isTimeUp
-                    )
+                        })
 
                     // Dialog pobierania
                     if (showDialog.value) {
@@ -265,47 +262,74 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Sprawdza czy aktualny czas jest po dacie urodzin z config.xml w tym
-     * roku. To jest używane do określenia czy pokazać szufladkę nawigacyjną.
+     * Sprawdza czy dzisiaj są urodziny (dzień i miesiąc się zgadzają z
+     * konfiguracją).
+     *
+     * @return true jeśli dzisiaj jest dzień i miesiąc urodzin z konfiguracji
      */
-    private fun checkIfTimeIsUp(currentTime: Long): Boolean {
-        val configCalendar = appConfig.getBirthdayDate()
-        val thisYearBirthday = Calendar.getInstance(WARSAW_TIMEZONE).apply {
-            timeInMillis = currentTime // Ustaw na aktualny czas
-            set(Calendar.MONTH, configCalendar.get(Calendar.MONTH))
-            set(Calendar.DAY_OF_MONTH, configCalendar.get(Calendar.DAY_OF_MONTH))
-            set(Calendar.HOUR_OF_DAY, configCalendar.get(Calendar.HOUR_OF_DAY))
-            set(Calendar.MINUTE, configCalendar.get(Calendar.MINUTE))
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
+    private fun isTodayBirthday(): Boolean {
+        val currentTime = timeProvider.getCurrentTimeMillis()
+        val currentCalendar = Calendar.getInstance(WARSAW_TIMEZONE)
+        currentCalendar.timeInMillis = currentTime
 
-        val isTimeUp = currentTime >= thisYearBirthday.timeInMillis
+        val birthdayCalendar = appConfig.getBirthdayDate()
 
-        if (appConfig.isVerboseLoggingEnabled()) {
-            Timber.d("Sprawdzanie isTimeUp: aktualna data >= data urodzin w tym roku")
-            Timber.d("  Aktualna data: ${TimeUtils.formatDate(java.util.Date(currentTime))}")
-            Timber.d("  Data urodzin (ten rok): ${TimeUtils.formatDate(thisYearBirthday.time)}")
-            Timber.d("  isTimeUp: $isTimeUp")
-        }
+        val isSameDayAndMonth =
+            currentCalendar.get(Calendar.DAY_OF_MONTH) == birthdayCalendar.get(Calendar.DAY_OF_MONTH) && currentCalendar.get(
+                Calendar.MONTH
+            ) == birthdayCalendar.get(Calendar.MONTH)
 
-        return isTimeUp
+        Timber.d("Sprawdzanie czy dzisiaj urodziny:")
+        Timber.d("  Aktualna data: ${TimeUtils.formatDate(currentCalendar.time)}")
+        Timber.d("  Dzień urodzin: ${birthdayCalendar.get(Calendar.DAY_OF_MONTH)}")
+        Timber.d("  Miesiąc urodzin: ${birthdayCalendar.get(Calendar.MONTH) + 1}")
+        Timber.d("  Aktualny dzień: ${currentCalendar.get(Calendar.DAY_OF_MONTH)}")
+        Timber.d("  Aktualny miesiąc: ${currentCalendar.get(Calendar.MONTH) + 1}")
+        Timber.d("  isTodayBirthday: $isSameDayAndMonth")
+
+        return isSameDayAndMonth
     }
 
     /**
-     * Oblicza datę następnych urodzin w oparciu o aktualny czas. To jest
-     * używane dla countdown - jeśli urodziny w tym roku już minęły, zwraca
-     * datę urodzin w przyszłym roku.
+     * Oblicza datę docelową w zależności od tego czy dzisiaj są urodziny, czy
+     * urodziny już były.
+     *
+     * @return Datę docelową w milisekundach
      */
-    private fun calculateNextBirthday(): Long {
-        val currentTime = System.currentTimeMillis()
+    private fun calculateTargetDate(): Long {
+        val currentTime = timeProvider.getCurrentTimeMillis()
+        val birthdayThisYear =
+            calculateBirthdayForYear(Calendar.getInstance(WARSAW_TIMEZONE).get(Calendar.YEAR))
 
-        // Pobierz datę urodzin skonfigurowaną w aplikacji
+        return when {
+            isTodayBirthday() -> {
+                // Dzisiaj są urodziny - zwróć datę z tego roku (będzie pokazywał że czas upłynął)
+                Timber.d("Dzisiaj są urodziny - używam daty z tego roku")
+                birthdayThisYear
+            }
+
+            currentTime < birthdayThisYear -> {
+                // Urodziny jeszcze nie były w tym roku - licz do tegorocznych
+                Timber.d("Urodziny jeszcze nie były - liczę do tegorocznych")
+                birthdayThisYear
+            }
+
+            else -> {
+                // Urodziny już były w tym roku ale nie dzisiaj - licz do przyszłorocznych
+                val nextYear = Calendar.getInstance(WARSAW_TIMEZONE).get(Calendar.YEAR) + 1
+                val birthdayNextYear = calculateBirthdayForYear(nextYear)
+                Timber.d("Urodziny już były - liczę do przyszłorocznych")
+                birthdayNextYear
+            }
+        }
+    }
+
+    /** Oblicza datę urodzin dla określonego roku na podstawie konfiguracji. */
+    private fun calculateBirthdayForYear(year: Int): Long {
         val birthdayCalendar = Calendar.getInstance(WARSAW_TIMEZONE)
         val configCalendar = appConfig.getBirthdayDate()
 
-        // Ustaw datę urodzin w bieżącym roku
-        birthdayCalendar.set(Calendar.YEAR, birthdayCalendar.get(Calendar.YEAR))
+        birthdayCalendar.set(Calendar.YEAR, year)
         birthdayCalendar.set(Calendar.MONTH, configCalendar.get(Calendar.MONTH))
         birthdayCalendar.set(Calendar.DAY_OF_MONTH, configCalendar.get(Calendar.DAY_OF_MONTH))
         birthdayCalendar.set(Calendar.HOUR_OF_DAY, configCalendar.get(Calendar.HOUR_OF_DAY))
@@ -313,12 +337,18 @@ class MainActivity : ComponentActivity() {
         birthdayCalendar.set(Calendar.SECOND, 0)
         birthdayCalendar.set(Calendar.MILLISECOND, 0)
 
-        // Jeśli bieżący czas jest po dacie urodzin w tym roku, dodaj rok
-        if (currentTime > birthdayCalendar.timeInMillis) {
-            birthdayCalendar.add(Calendar.YEAR, 1)
-        }
-
         return birthdayCalendar.timeInMillis
+    }
+
+    /**
+     * Oblicza datę następnych urodzin w oparciu o aktualny czas.
+     *
+     * @deprecated Używaj calculateTargetDate() która uwzględnia logikę czy
+     *    dzisiaj są urodziny
+     */
+    @Deprecated("Używaj calculateTargetDate() która uwzględnia logikę czy dzisiaj są urodziny")
+    private fun calculateNextBirthday(): Long {
+        return calculateTargetDate()
     }
 
     /** Loguje stan aplikacji dla debugowania. */

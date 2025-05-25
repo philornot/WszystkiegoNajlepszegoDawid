@@ -50,7 +50,8 @@ enum class NavigationSection {
  * options for gift, timer, countdown to next birthday, and settings.
  * Only accessible after the gift has been opened at least once.
  *
- * Rozszerzone o sekcję ustawień na dole szufladki z separatorem.
+ * Rozszerzone o sekcję ustawień na dole szufladki z separatorem i opcję
+ * ukrywania zakładki Prezent.
  */
 @Composable
 fun NavigationDrawer(
@@ -59,6 +60,7 @@ fun NavigationDrawer(
     currentSection: NavigationSection,
     onSectionSelected: (NavigationSection) -> Unit,
     modifier: Modifier = Modifier,
+    hideGiftSection: Boolean = false,
 ) {
     val drawerWidth = 280.dp
     val animatedWidth by animateDpAsState(
@@ -119,14 +121,18 @@ fun NavigationDrawer(
                 )
 
                 // Main navigation items
-                DrawerItem(
-                    icon = Icons.Default.CardGiftcard,
-                    title = "Prezent",
-                    isSelected = currentSection == NavigationSection.GIFT,
-                    onClick = {
-                        onSectionSelected(NavigationSection.GIFT)
-                        onOpenStateChange(false)
-                    })
+
+                // Zakładka Prezent - pokazuj tylko jeśli hideGiftSection = false
+                if (!hideGiftSection) {
+                    DrawerItem(
+                        icon = Icons.Default.CardGiftcard,
+                        title = "Prezent",
+                        isSelected = currentSection == NavigationSection.GIFT,
+                        onClick = {
+                            onSectionSelected(NavigationSection.GIFT)
+                            onOpenStateChange(false)
+                        })
+                }
 
                 DrawerItem(
                     icon = Icons.Default.AccessTime,

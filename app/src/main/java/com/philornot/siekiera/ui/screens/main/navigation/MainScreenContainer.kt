@@ -27,15 +27,16 @@ fun MainScreenContainer(
     modifier: Modifier = Modifier,
     targetDate: Long,
     currentTime: Long = System.currentTimeMillis(),
-    isTimeUp: Boolean, // DODANO: Przyjmuj jako parametr zamiast obliczać
     onGiftClicked: () -> Unit,
     activity: MainActivity? = null,
     giftReceived: Boolean = false,
+    isTodayBirthday: Boolean = false,
     onTimerSet: (Int) -> Unit = {},
     timerModeEnabled: Boolean = false,
     onTimerModeDiscovered: () -> Unit = {},
     activeTimer: Long = 0,
     isTimerPaused: Boolean = false,
+    onCancelTimer: () -> Unit = {},
     onResetTimer: () -> Unit = {},
     onPauseTimer: () -> Unit = {},
     onResumeTimer: () -> Unit = {},
@@ -50,13 +51,14 @@ fun MainScreenContainer(
     onAppNameReset: () -> Unit = {},
 ) {
     // === STAN GŁÓWNY ===
-    // POPRAWKA: Nie obliczaj isTimeUp na podstawie targetDate, użyj przekazanego parametru
+    // Jeśli dzisiaj są urodziny, pokaż że czas upłynął, jeśli nie - sprawdź normalnie
+    var isTimeUp by remember(isTodayBirthday) {
+        mutableStateOf(isTodayBirthday || currentTime >= targetDate)
+    }
     var currentTimeState by remember { mutableLongStateOf(currentTime) }
     var timeRemaining by remember {
         mutableLongStateOf(
-            (targetDate - currentTimeState).coerceAtLeast(
-                0
-            )
+            (targetDate - currentTimeState).coerceAtLeast(0)
         )
     }
     var lastCheckTime by remember { mutableLongStateOf(0L) }
@@ -102,7 +104,7 @@ fun MainScreenContainer(
     }
 
     // === EFEKT AKTUALIZACJI CZASU ===
-    LaunchedEffect(isTimerMode, activeTimer, isTimerPaused) {
+    LaunchedEffect(isTimerMode, activeTimer, isTimerPaused, isTodayBirthday) {
         while (true) {
             currentTimeState = System.currentTimeMillis()
 
@@ -118,20 +120,21 @@ fun MainScreenContainer(
                     targetDate = targetDate,
                     currentSection = currentSection,
                     giftReceived = giftReceived,
+                    isTodayBirthday = isTodayBirthday,
                     lastCheckTime = lastCheckTime,
                     activity = activity,
                     onTimeRemainingUpdate = { timeRemaining = it },
-                    onLastCheckTimeUpdate = { lastCheckTime = it }
-                    // USUNIĘTO: onIsTimeUpUpdate - już nie zmieniamy isTimeUp
-                )
+                    onIsTimeUpUpdate = { isTimeUp = it },
+                    onLastCheckTimeUpdate = { lastCheckTime = it })
             }
         }
     }
 
     // === EFEKT FAJERWERKÓW ===
-    LaunchedEffect(isTimeUp) {
-        if (isTimeUp && !isTimerMode) {
-            Timber.d("Czas upłynął! Uruchamiam automatyczne fajerwerki!")
+    LaunchedEffect(isTimeUp, isTodayBirthday) {
+        // Pokaż fajerwerki jeśli czas upłynął (normalnie) lub jeśli dzisiaj są urodziny
+        if ((isTimeUp && !isTimerMode) || isTodayBirthday) {
+            Timber.d("Czas upłynął lub dzisiaj urodziny! Uruchamiam automatyczne fajerwerki!")
             showConfettiExplosion = true
             delay(5000)
             showConfettiExplosion = false
@@ -151,7 +154,7 @@ fun MainScreenContainer(
     // === RENDEROWANIE UI ===
     MainScreenLayout(
         modifier = modifier,
-        isTimeUp = isTimeUp, // POPRAWKA: Użyj przekazanego parametru
+        isTimeUp = isTimeUp,
         timeRemaining = timeRemaining,
         isTimerMode = isTimerMode,
         timerRemainingTime = timerRemainingTime,
@@ -171,6 +174,7 @@ fun MainScreenContainer(
         currentSection = currentSection,
         isDarkTheme = isDarkTheme,
         currentAppName = currentAppName,
+        isTodayBirthday = isTodayBirthday,
         // Callbacki
         onGiftClicked = { centerX, centerY ->
             confettiCenterX = centerX
@@ -225,11 +229,13 @@ private suspend fun handleTimerModeUpdate(
     when {
         activeTimer > 0 && !isTimerPaused -> {
             onTimerRemainingTimeUpdate(activeTimer)
-            if (activeTimer <= 0) {
+            // Naprawiona kondycja - sprawdzamy po aktualizacji
+            delay(250)
+            // Jeśli po delay timer się skończył, oznacz jako zakończony
+            if (activeTimer <= 250) { // 250ms to nasza częstotliwość aktualizacji
                 onTimerFinished()
                 Timber.d("Timer zakończył odliczanie")
             }
-            delay(250)
         }
 
         isTimerPaused -> {
@@ -244,26 +250,25 @@ private suspend fun handleTimerModeUpdate(
     }
 }
 
-/**
- * Obsługuje aktualizację w trybie urodzinowym POPRAWKA: Usunięto
- * onIsTimeUpUpdate - już nie zmieniamy isTimeUp w czasie działania
- */
+/** Obsługuje aktualizację w trybie urodzinowym */
 private suspend fun handleBirthdayModeUpdate(
     currentTimeState: Long,
     targetDate: Long,
     currentSection: NavigationSection,
     giftReceived: Boolean,
+    isTodayBirthday: Boolean,
     lastCheckTime: Long,
     activity: MainActivity?,
     onTimeRemainingUpdate: (Long) -> Unit,
+    onIsTimeUpUpdate: (Boolean) -> Unit,
     onLastCheckTimeUpdate: (Long) -> Unit,
 ) {
     if (currentSection == NavigationSection.BIRTHDAY_COUNTDOWN) {
         val timeRemaining = (targetDate - currentTimeState).coerceAtLeast(0)
         onTimeRemainingUpdate(timeRemaining)
 
-        // Sprawdzanie plików
-        if (activity != null && timeRemaining > 0) {
+        // Sprawdzanie plików - tylko jeśli nie dzisiaj urodziny (bo wtedy nie ma sensu sprawdzać plików)
+        if (activity != null && timeRemaining > 0 && !isTodayBirthday) {
             val remainingMinutes = timeRemaining / 60000
             val checkInterval = when {
                 remainingMinutes <= 1 -> 30_000
@@ -283,8 +288,16 @@ private suspend fun handleBirthdayModeUpdate(
             }
         }
 
-        // USUNIĘTO: Sprawdzanie czy czas się skończył i aktualizacja isTimeUp
-        // MainActivity już to sprawdza i przekazuje isTimeUp jako parametr
+        // Sprawdź czy czas się skończył lub czy dzisiaj są urodziny
+        if (currentTimeState >= targetDate || isTodayBirthday) {
+            onIsTimeUpUpdate(true)
+            if (activity != null && !isTodayBirthday) {
+                // Sprawdź pliki tylko jeśli to nie dzisiaj urodziny
+                Timber.d("Uruchamiam ostatnie sprawdzenie pliku po upływie czasu")
+                activity.checkFileNow()
+                onLastCheckTimeUpdate(currentTimeState)
+            }
+        }
     }
     delay(1000)
 }
