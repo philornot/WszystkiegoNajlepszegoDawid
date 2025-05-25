@@ -11,8 +11,8 @@ import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 
 /**
- * Pomocnicze metody do pracy z czasem w aplikacji. Używa strefy czasowej
- * Warszawy dla wszystkich operacji czasowych.
+ * Ulepszona wersja TimeUtils z lepszym formatowaniem dla długich timerów.
+ * Pomocnicze metody do pracy z czasem w aplikacji.
  */
 object TimeUtils {
     // Strefa czasowa Warszawy
@@ -56,8 +56,7 @@ object TimeUtils {
     }
 
     /**
-     * Zwraca czas w milisekundach dla daty odsłonięcia prezentu. Teraz pobiera
-     * datę z konfiguracji.
+     * Zwraca czas w milisekundach dla daty odsłonięcia prezentu.
      *
      * @param appConfig Instancja konfiguracji aplikacji
      * @return Czas w milisekundach
@@ -66,19 +65,11 @@ object TimeUtils {
         return appConfig.getBirthdayTimeMillis()
     }
 
-    /**
-     * Metoda kompatybilności wstecznej bez parametru appConfig. Wymaga
-     * kontekstu aplikacji przez AppConfig. Ta metoda istnieje tylko dla
-     * kompatybilności z istniejącym kodem.
-     *
-     * @throws IllegalStateException jeśli nie można uzyskać instancji
-     *    AppConfig
-     */
+    /** Metoda kompatybilności wstecznej bez parametru appConfig. */
     @Deprecated(
         "Użyj wersji z jawnie przekazanym AppConfig", ReplaceWith("getRevealDateMillis(appConfig)")
     )
     fun getRevealDateMillis(): Long {
-        // Wykorzystanie zapisanego kontekstu aplikacji
         val context = appContext ?: throw IllegalStateException(
             "TimeUtils.initialize() nie zostało wywołane. Użyj wersji z jawnie przekazanym AppConfig."
         )
@@ -89,8 +80,7 @@ object TimeUtils {
     }
 
     /**
-     * Zwraca datę następnych urodzin w milisekundach. Jeśli bieżąca data jest
-     * po dacie urodzin w tym roku, zwraca datę urodzin w następnym roku.
+     * Zwraca datę następnych urodzin w milisekundach.
      *
      * @param appConfig Instancja konfiguracji aplikacji
      * @return Czas w milisekundach
@@ -100,31 +90,18 @@ object TimeUtils {
         val birthdayTime = getBirthdayTimeForCurrentYear(appConfig)
 
         return if (currentTime > birthdayTime) {
-            // Jeśli bieżąca data jest po urodzinach w tym roku, oblicz datę na następny rok
             getBirthdayTimeForYear(appConfig, Calendar.getInstance().get(Calendar.YEAR) + 1)
         } else {
-            // W przeciwnym przypadku użyj daty z tego roku
             birthdayTime
         }
     }
 
-    /**
-     * Pobiera datę urodzin dla bieżącego roku.
-     *
-     * @param appConfig Instancja konfiguracji aplikacji
-     * @return Czas w milisekundach
-     */
+    /** Pobiera datę urodzin dla bieżącego roku. */
     private fun getBirthdayTimeForCurrentYear(appConfig: AppConfig): Long {
         return getBirthdayTimeForYear(appConfig, Calendar.getInstance().get(Calendar.YEAR))
     }
 
-    /**
-     * Pobiera datę urodzin dla określonego roku.
-     *
-     * @param appConfig Instancja konfiguracji aplikacji
-     * @param year Rok
-     * @return Czas w milisekundach
-     */
+    /** Pobiera datę urodzin dla określonego roku. */
     private fun getBirthdayTimeForYear(appConfig: AppConfig, year: Int): Long {
         val birthday = appConfig.getBirthdayDate()
         birthday.set(Calendar.YEAR, year)
@@ -132,31 +109,188 @@ object TimeUtils {
     }
 
     /**
-     * Formatuje pozostały czas do wskazanej daty w postaci czytelnej dla
-     * użytkownika.
+     * Ulepszone formatowanie pozostałego czasu obsługujące długie timery (do
+     * 24h). Automatycznie dostosowuje format w zależności od długości czasu.
      *
      * @param timeRemainingMillis Pozostały czas w milisekundach
-     * @return Sformatowany tekst w formacie "X dni, HH:MM:SS"
+     * @param compact Czy użyć kompaktowego formatu (np. "2h 30m" zamiast "2
+     *    godziny, 30 minut")
+     * @return Sformatowany tekst
      */
-    fun formatRemainingTime(timeRemainingMillis: Long): String {
-        // Oblicz dni, godziny, minuty i sekundy
+    fun formatRemainingTime(timeRemainingMillis: Long, compact: Boolean = false): String {
+        if (timeRemainingMillis <= 0) {
+            return if (compact) "0s" else "0 sekund"
+        }
+
         val days = TimeUnit.MILLISECONDS.toDays(timeRemainingMillis)
         val hours = TimeUnit.MILLISECONDS.toHours(timeRemainingMillis) % 24
         val minutes = TimeUnit.MILLISECONDS.toMinutes(timeRemainingMillis) % 60
         val seconds = TimeUnit.MILLISECONDS.toSeconds(timeRemainingMillis) % 60
 
-        // Formatuj jako "X dni, HH:MM:SS"
-        return String.format(
-            Locale.getDefault(), "%d dni, %02d:%02d:%02d", days, hours, minutes, seconds
-        )
+        return if (compact) {
+            formatRemainingTimeCompact(days, hours, minutes, seconds)
+        } else {
+            formatRemainingTimeVerbose(days, hours, minutes, seconds)
+        }
+    }
+
+    /** Kompaktowy format czasu dla UI (np. "2h 30m 15s"). */
+    private fun formatRemainingTimeCompact(
+        days: Long,
+        hours: Long,
+        minutes: Long,
+        seconds: Long,
+    ): String {
+        return buildString {
+            if (days > 0) append("${days}d ")
+            if (hours > 0) append("${hours}h ")
+            if (minutes > 0) append("${minutes}m ")
+            if (seconds > 0 || isEmpty()) append("${seconds}s")
+        }.trim()
+    }
+
+    /** Szczegółowy format czasu dla powiadomień i logów. */
+    private fun formatRemainingTimeVerbose(
+        days: Long,
+        hours: Long,
+        minutes: Long,
+        seconds: Long,
+    ): String {
+        return when {
+            days > 0 -> String.format(
+                Locale.getDefault(), "%d dni, %02d:%02d:%02d", days, hours, minutes, seconds
+            )
+
+            hours > 0 -> String.format(
+                Locale.getDefault(), "%d dni, %02d:%02d:%02d", 0L, hours, minutes, seconds
+            )
+
+            else -> String.format(
+                Locale.getDefault(), "%d dni, %02d:%02d:%02d", 0L, 0L, minutes, seconds
+            )
+        }
+    }
+
+    /**
+     * Formatuje czas w formacie przyjaznym dla użytkownika. Automatycznie
+     * wybiera najlepszą reprezentację.
+     *
+     * @param timeRemainingMillis Pozostały czas w milisekundach
+     * @return Czytelny opis czasu (np. "2 godziny i 30 minut", "45 minut", "30
+     *    sekund")
+     */
+    fun formatRemainingTimeHumanReadable(timeRemainingMillis: Long): String {
+        if (timeRemainingMillis <= 0) return "Czas upłynął"
+
+        val days = TimeUnit.MILLISECONDS.toDays(timeRemainingMillis)
+        val hours = TimeUnit.MILLISECONDS.toHours(timeRemainingMillis) % 24
+        val minutes = TimeUnit.MILLISECONDS.toMinutes(timeRemainingMillis) % 60
+        val seconds = TimeUnit.MILLISECONDS.toSeconds(timeRemainingMillis) % 60
+
+        return when {
+            days > 0 -> {
+                when {
+                    hours > 0 -> "$days dni i $hours godzin"
+                    else -> "$days dni"
+                }
+            }
+
+            hours > 0 -> {
+                when {
+                    minutes > 0 -> "$hours godzin i $minutes minut"
+                    else -> "$hours godzin"
+                }
+            }
+
+            minutes > 0 -> {
+                when {
+                    seconds > 30 -> "$minutes minut"
+                    else -> "$minutes minut"
+                }
+            }
+
+            else -> "$seconds sekund"
+        }
+    }
+
+    /**
+     * Formatuje minuty na czytelny format dla ustawiania timera.
+     *
+     * @param minutes Liczba minut
+     * @return Czytelny opis (np. "2h 30min", "45min", "1h")
+     */
+    fun formatTimerDuration(minutes: Int): String {
+        return when {
+            minutes < 60 -> "${minutes}min"
+            minutes == 60 -> "1h"
+            minutes % 60 == 0 -> "${minutes / 60}h"
+            else -> {
+                val hours = minutes / 60
+                val remainingMinutes = minutes % 60
+                "${hours}h ${remainingMinutes}min"
+            }
+        }
+    }
+
+    /**
+     * Formatuje minuty na szczegółowy opis dla powiadomień.
+     *
+     * @param minutes Liczba minut
+     * @return Szczegółowy opis (np. "2 godziny i 30 minut")
+     */
+    fun formatTimerDurationVerbose(minutes: Int): String {
+        return when {
+            minutes < 60 -> when (minutes) {
+                1 -> "1 minutę"
+                in 2..4 -> "$minutes minuty"
+                else -> "$minutes minut"
+            }
+
+            minutes == 60 -> "1 godzinę"
+            minutes % 60 == 0 -> {
+                val hours = minutes / 60
+                when (hours) {
+                    in 2..4 -> "$hours godziny"
+                    else -> "$hours godzin"
+                }
+            }
+
+            else -> {
+                val hours = minutes / 60
+                val remainingMinutes = minutes % 60
+                val hoursText = when (hours) {
+                    1 -> "1 godzinę"
+                    in 2..4 -> "$hours godziny"
+                    else -> "$hours godzin"
+                }
+                val minutesText = when (remainingMinutes) {
+                    1 -> "1 minutę"
+                    in 2..4 -> "$remainingMinutes minuty"
+                    else -> "$remainingMinutes minut"
+                }
+                "$hoursText i $minutesText"
+            }
+        }
+    }
+
+    /** Sprawdza czy podana liczba minut jest prawidłowa dla timera. */
+    fun isValidTimerDuration(minutes: Int): Boolean {
+        return minutes in 1..1440 // Do 24 godzin
+    }
+
+    /** Konwertuje milisekundy na minuty z zaokrągleniem. */
+    fun millisecondsToMinutes(milliseconds: Long): Int {
+        return (milliseconds / 60000).toInt()
+    }
+
+    /** Konwertuje minuty na milisekundy. */
+    fun minutesToMilliseconds(minutes: Int): Long {
+        return minutes * 60000L
     }
 
     /**
      * Formatuje datę do czytelnej postaci dla logów w strefie czasowej
      * Warszawy.
-     *
-     * @param date Data do sformatowania
-     * @return Sformatowany tekst daty
      */
     fun formatDate(date: Date): String {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss z", Locale.getDefault()).apply {
@@ -165,24 +299,38 @@ object TimeUtils {
         return dateFormat.format(date)
     }
 
-    /**
-     * Pobiera instancję Calendar w strefie czasowej Warszawy.
-     *
-     * @return Obiekt Calendar w strefie czasowej Warszawy
-     */
+    /** Pobiera instancję Calendar w strefie czasowej Warszawy. */
     fun getWarsawCalendar(): Calendar {
         return Calendar.getInstance(WARSAW_TIMEZONE)
     }
 
-    /**
-     * Konwertuje zwykłą datę do daty w strefie czasowej Warszawy.
-     *
-     * @param date Data wejściowa
-     * @return Data w strefie czasowej Warszawy
-     */
+    /** Konwertuje zwykłą datę do daty w strefie czasowej Warszawy. */
     fun convertToWarsawTime(date: Date): Date {
         val warsawCalendar = getWarsawCalendar()
         warsawCalendar.time = date
         return warsawCalendar.time
+    }
+
+    /**
+     * Oblicza procent ukończenia timera.
+     *
+     * @param initialMinutes Początkowa wartość timera w minutach
+     * @param remainingMillis Pozostały czas w milisekundach
+     * @return Procent ukończenia (0.0 - 1.0)
+     */
+    fun calculateTimerProgress(initialMinutes: Int, remainingMillis: Long): Float {
+        if (initialMinutes <= 0) return 1.0f
+
+        val initialMillis = minutesToMilliseconds(initialMinutes)
+        val elapsed = initialMillis - remainingMillis
+
+        return (elapsed.toFloat() / initialMillis.toFloat()).coerceIn(0.0f, 1.0f)
+    }
+
+    /** Formatuje czas w formacie MM:SS dla krótkich okresów. */
+    fun formatShortTime(milliseconds: Long): String {
+        val minutes = TimeUnit.MILLISECONDS.toMinutes(milliseconds)
+        val seconds = TimeUnit.MILLISECONDS.toSeconds(milliseconds) % 60
+        return String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
     }
 }

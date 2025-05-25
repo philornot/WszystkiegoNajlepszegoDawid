@@ -2,6 +2,7 @@ package com.philornot.siekiera.ui.screens.main.countdown
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -31,9 +32,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import kotlin.random.Random
 
-/** Karta z cyframi czasu z animowanymi przejściami cyfr */
+/**
+ * Ulepszona karta z cyframi czasu z płynniejszymi animacjami. Dostosowana
+ * do responsywności timera.
+ */
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun TimeDigitCard(
@@ -42,7 +45,7 @@ fun TimeDigitCard(
     label: String,
 ) {
     Column(
-        horizontalAlignment = Alignment.Companion.CenterHorizontally,
+        horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
         modifier = modifier.padding(horizontal = 4.dp)
     ) {
@@ -52,75 +55,116 @@ fun TimeDigitCard(
                 containerColor = MaterialTheme.colorScheme.primaryContainer
             ),
             shape = MaterialTheme.shapes.small,
-            modifier = Modifier.Companion.size(width = 56.dp, height = 72.dp)
+            modifier = Modifier.size(width = 56.dp, height = 72.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Box(
-                contentAlignment = Alignment.Companion.Center,
-                modifier = Modifier.Companion.fillMaxSize()
+                contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()
             ) {
                 Row(
                     horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.Companion.CenterVertically,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    // Animuj każdą cyfrę osobno
+                    // Animuj każdą cyfrę osobno z ulepszonym systemem animacji
                     for (i in digits.indices) {
                         AnimatedContent(
                             targetState = digits[i], transitionSpec = {
-                                // Wybierz losowy typ animacji dla każdej zmiany cyfry
-                                val animationType = Random.Default.nextInt(6)
+                                // Deterministyczne animacje bazowane na pozycji cyfry
+                                val animationType = (i + digits[i].code) % 8
+
                                 when (animationType) {
                                     0 -> {
-                                        // Przesunięcie pionowe
-                                        val direction = if (Random.Default.nextBoolean()) 1 else -1
-                                        slideInVertically { height -> direction * height } + fadeIn() togetherWith slideOutVertically { height -> -direction * height } + fadeOut()
+                                        // Płynne przesunięcie pionowe w dół
+                                        slideInVertically { height -> -height } + fadeIn(
+                                            animationSpec = tween(250, easing = LinearEasing)
+                                        ) togetherWith slideOutVertically { height -> height } + fadeOut(
+                                            animationSpec = tween(200, easing = LinearEasing)
+                                        )
                                     }
 
                                     1 -> {
-                                        // Przesunięcie poziome
-                                        val direction = if (Random.Default.nextBoolean()) 1 else -1
-                                        slideInHorizontally { width -> direction * width } + fadeIn() togetherWith slideOutHorizontally { width -> -direction * width } + fadeOut()
+                                        // Płynne przesunięcie pionowe w górę
+                                        slideInVertically { height -> height } + fadeIn(
+                                            animationSpec = tween(250, easing = LinearEasing)
+                                        ) togetherWith slideOutVertically { height -> -height } + fadeOut(
+                                            animationSpec = tween(200, easing = LinearEasing)
+                                        )
                                     }
 
                                     2 -> {
-                                        // Animacja skalowania
-                                        scaleIn(initialScale = 0.8f) + fadeIn() togetherWith scaleOut(
-                                            targetScale = 1.2f
-                                        ) + fadeOut()
+                                        // Przesunięcie poziome z lewa
+                                        slideInHorizontally { width -> -width } + fadeIn(
+                                            animationSpec = tween(200, easing = LinearEasing)
+                                        ) togetherWith slideOutHorizontally { width -> width } + fadeOut(
+                                            animationSpec = tween(150, easing = LinearEasing)
+                                        )
                                     }
 
                                     3 -> {
-                                        // Animacja odbicia (zamiast rotacji)
-                                        slideInVertically {
-                                            if (Random.Default.nextBoolean()) it else -it
-                                        } + fadeIn() togetherWith slideOutVertically {
-                                            if (Random.Default.nextBoolean()) -it else it
-                                        } + fadeOut()
+                                        // Przesunięcie poziome z prawa
+                                        slideInHorizontally { width -> width } + fadeIn(
+                                            animationSpec = tween(200, easing = LinearEasing)
+                                        ) togetherWith slideOutHorizontally { width -> -width } + fadeOut(
+                                            animationSpec = tween(150, easing = LinearEasing)
+                                        )
                                     }
 
                                     4 -> {
-                                        // Przenikanie
-                                        fadeIn(animationSpec = tween(durationMillis = 200)) togetherWith fadeOut(
-                                            animationSpec = tween(durationMillis = 200)
+                                        // Płynna animacja skalowania
+                                        scaleIn(
+                                            initialScale = 0.8f,
+                                            animationSpec = tween(250, easing = LinearEasing)
+                                        ) + fadeIn(
+                                            animationSpec = tween(200, easing = LinearEasing)
+                                        ) togetherWith scaleOut(
+                                            targetScale = 1.2f,
+                                            animationSpec = tween(200, easing = LinearEasing)
+                                        ) + fadeOut(
+                                            animationSpec = tween(150, easing = LinearEasing)
+                                        )
+                                    }
+
+                                    5 -> {
+                                        // Kombinacja przesunięcia i skalowania
+                                        (slideInVertically { it / 3 } + scaleIn(
+                                            initialScale = 0.9f,
+                                            animationSpec = tween(250, easing = LinearEasing)
+                                        ) + fadeIn(
+                                            animationSpec = tween(200, easing = LinearEasing)
+                                        )) togetherWith (slideOutVertically { -it / 3 } + scaleOut(
+                                            targetScale = 1.1f,
+                                            animationSpec = tween(200, easing = LinearEasing)
+                                        ) + fadeOut(
+                                            animationSpec = tween(150, easing = LinearEasing)
+                                        ))
+                                    }
+
+                                    6 -> {
+                                        // Szybka animacja dla sekund (częstych zmian)
+                                        fadeIn(
+                                            animationSpec = tween(150, easing = LinearEasing)
+                                        ) togetherWith fadeOut(
+                                            animationSpec = tween(100, easing = LinearEasing)
                                         )
                                     }
 
                                     else -> {
-                                        // Animacja łączona
-                                        (slideInVertically { it / 2 } + fadeIn() + scaleIn(
-                                            initialScale = 0.9f
-                                        )) togetherWith (slideOutVertically { -it / 2 } + fadeOut() + scaleOut(
-                                            targetScale = 1.1f
+                                        // Animacja dyagonalna
+                                        (slideInVertically { it / 2 } + slideInHorizontally { it / 2 } + fadeIn(
+                                            animationSpec = tween(200, easing = LinearEasing)
+                                        )) togetherWith (slideOutVertically { -it / 2 } + slideOutHorizontally { -it / 2 } + fadeOut(
+                                            animationSpec = tween(150, easing = LinearEasing)
                                         ))
                                     }
                                 }
-                            }, label = "digitTransition"
+                            }, label = "digitTransition_$i"
                         ) { digit ->
                             Text(
                                 text = digit.toString(),
                                 style = MaterialTheme.typography.headlineLarge,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                fontWeight = FontWeight.Companion.Bold,
-                                textAlign = TextAlign.Companion.Center
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center
                             )
                         }
                     }
@@ -128,14 +172,20 @@ fun TimeDigitCard(
             }
         }
 
-        Spacer(modifier = Modifier.Companion.height(4.dp))
+        Spacer(modifier = Modifier.height(4.dp))
 
-        // Etykieta
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Companion.Center
-        )
+        // Etykieta z subtelną animacją
+        AnimatedContent(
+            targetState = label, transitionSpec = {
+                fadeIn(animationSpec = tween(200)) togetherWith fadeOut(animationSpec = tween(150))
+            }, label = "labelTransition"
+        ) { animatedLabel ->
+            Text(
+                text = animatedLabel,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }

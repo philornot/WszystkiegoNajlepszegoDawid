@@ -1,10 +1,10 @@
 package com.philornot.siekiera.ui.screens.main.gift
 
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -21,20 +21,14 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -44,11 +38,11 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
 import com.philornot.siekiera.ui.screens.main.effects.SparkleAnimation
-import kotlinx.coroutines.delay
+import timber.log.Timber
 
 /**
- * Przycisk prezentu z animacją iskier przy najechaniu, efektem pulsowania
- * i ulepszoną detekcją długiego naciśnięcia.
+ * Przycisk prezentu z delikatną animacją pulsowania i prostą animacją
+ * kliknięcia. Przytrzymanie wykonuje tę samą akcję co kliknięcie.
  *
  * @param enableLongPress Kontroluje czy funkcjonalność długiego
  *    naciśnięcia jest włączona
@@ -60,120 +54,78 @@ fun GiftButton(
     onLongPress: () -> Unit = {},
     enableLongPress: Boolean = false,
 ) {
-    // Animowany scale dla efektu pulsowania
+    // Animowany scale dla subtelnego efektu pulsowania
     val pulseScale = animateFloatAsState(
-        targetValue = 1.05f,  // Subtelne pulsowanie
+        targetValue = 1.03f,  // Bardzo subtelne pulsowanie
         animationSpec = infiniteRepeatable(
-            animation = tween(800), repeatMode = RepeatMode.Reverse
+            animation = tween(1200), repeatMode = RepeatMode.Reverse
         ), label = "pulseAnimation"
     )
 
-    // Stan długiego naciśnięcia
-    var isLongPressing by remember { mutableStateOf(false) }
-    var longPressProgress by remember { mutableFloatStateOf(0f) }
+    // Stan animacji kliknięcia
+    val clickAnimation = remember { Animatable(1f) }
 
     // Feedback haptyczny
     val haptic = LocalHapticFeedback.current
 
-    // Animacja skali dla długiego naciśnięcia
-    val longPressScale by animateFloatAsState(
-        targetValue = if (isLongPressing) 1.15f else 1.0f,
-        animationSpec = tween(500, easing = LinearEasing),
-        label = "longPressScale"
-    )
-
-    // Efekt drgania przy długim naciśnięciu
-    val vibrationOffset by animateFloatAsState(
-        targetValue = if (isLongPressing) 1f else 0f, animationSpec = infiniteRepeatable(
-            animation = keyframes {
-                durationMillis = 300
-                0f at 0
-                -1f at 75
-                1f at 150
-                -1f at 225
-                0f at 300
-            }, repeatMode = RepeatMode.Restart
-        ), label = "vibrationAnimation"
-    )
-
-    // Flaga do śledzenia czy długie naciśnięcie jest obsługiwane
-    var isLongPressTriggered by remember { mutableStateOf(false) }
-
-    // Efekt dla animacji długiego naciśnięcia
-    LaunchedEffect(isLongPressing) {
-        if (isLongPressing && enableLongPress) {
-            longPressProgress = 0f
-            // Animuj postęp długiego naciśnięcia
-            while (longPressProgress < 1f && isLongPressing) {
-                delay(16) // ~60fps
-                longPressProgress += 0.03f // Pełen postęp po około 0.5 sekundy
-
-                // Wibracja po osiągnięciu połowy postępu
-                if (longPressProgress >= 0.5f && longPressProgress < 0.53f) {
-                    haptic.performHapticFeedback(HapticFeedbackType.Companion.LongPress)
-                }
-
-                // Wywołaj callback po osiągnięciu pełnego postępu
-                if (longPressProgress >= 1f) {
-                    isLongPressTriggered = true
-                    haptic.performHapticFeedback(HapticFeedbackType.Companion.LongPress)
-                    onLongPress()
-                    break
-                }
-            }
-
-            // Resetuj flagę po krótkim opóźnieniu
-            if (isLongPressTriggered) {
-                delay(1000)
-                isLongPressTriggered = false
-            }
-        }
-    }
-
     // Śledź pozycję tego komponentu w layoutcie
-    val positionState = remember { mutableStateOf(Offset.Companion.Zero) }
-    val sizeState = remember { mutableStateOf(Size.Companion.Zero) }
+    val positionState = remember { mutableStateOf(Offset.Zero) }
+    val sizeState = remember { mutableStateOf(Size.Zero) }
 
     Box(
-        modifier = Modifier.Companion.size(220.dp),  // Nieco większy kontener dla efektu
-        contentAlignment = Alignment.Companion.Center
+        modifier = Modifier.size(220.dp), contentAlignment = Alignment.Center
     ) {
         // Subtelny efekt iskrzenia wokół prezentu
         SparkleAnimation(
-            modifier = Modifier.Companion.fillMaxSize()
+            modifier = Modifier.fillMaxSize()
         )
 
         // Przycisk prezentu z animacjami
         Card(
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primary
-            ),
+            containerColor = MaterialTheme.colorScheme.primary
+        ),
             shape = CircleShape,
             modifier = modifier
-                .scale(pulseScale.value * (if (isLongPressing) longPressScale else 1f))  // Zastosuj obie animacje skali
-                .graphicsLayer(
-                    transformOrigin = TransformOrigin.Companion.Center,
-                    translationX = if (isLongPressing) vibrationOffset * 3f else 0f, // Efekt drgania
-                )
+                .scale(pulseScale.value * clickAnimation.value)
                 .clip(CircleShape)
                 .pointerInput(enableLongPress) {
-                    detectTapGestures(onPress = { offset ->
-                        if (enableLongPress) {
-                            isLongPressing = true
-                            awaitRelease()
-                            isLongPressing = false
-                            longPressProgress = 0f
-                        }
+                    detectTapGestures(onPress = {
+                        // Animacja wciśnięcia
+                        clickAnimation.snapTo(0.95f)
+
+                        // Czekaj na zwolnienie
+                        awaitRelease()
+
+                        // Animacja powrotu
+                        clickAnimation.animateTo(
+                            targetValue = 1f, animationSpec = tween(150, easing = LinearEasing)
+                        )
                     }, onTap = {
-                        // Obsługuj kliknięcie tylko jeśli długie naciśnięcie nie zostało właśnie wywołane
-                        if (!isLongPressTriggered) {
-                            // Oblicz pozycję środka jako znormalizowane współrzędne (0.0 do 1.0)
+                        // Delikatna wibracja przy kliknięciu
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+
+                        // Oblicz pozycję środka jako znormalizowane współrzędne (0.0 do 1.0)
+                        val centerX =
+                            (positionState.value.x + sizeState.value.width / 2) / (positionState.value.x + sizeState.value.width)
+                        val centerY =
+                            (positionState.value.y + sizeState.value.height / 2) / (positionState.value.y + sizeState.value.height + 1000f)
+
+                        onClick(centerX, centerY)
+                        Timber.d("Prezent kliknięty")
+                    }, onLongPress = {
+                        // Długie naciśnięcie robi to samo co kliknięcie
+                        if (enableLongPress) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+
+                            // Oblicz pozycję środka
                             val centerX =
                                 (positionState.value.x + sizeState.value.width / 2) / (positionState.value.x + sizeState.value.width)
                             val centerY =
                                 (positionState.value.y + sizeState.value.height / 2) / (positionState.value.y + sizeState.value.height + 1000f)
 
                             onClick(centerX, centerY)
+                            Timber.d("Prezent długo naciśnięty - wykonuję tę samą akcję co kliknięcie")
                         }
                     })
                 }
@@ -184,9 +136,9 @@ fun GiftButton(
                 }
                 .testTag("gift")) {
             Column(
-                horizontalAlignment = Alignment.Companion.CenterHorizontally,
+                horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
-                modifier = Modifier.Companion
+                modifier = Modifier
                     .fillMaxSize()
                     .padding(16.dp)
             ) {
@@ -195,7 +147,7 @@ fun GiftButton(
                     imageVector = Icons.Outlined.CardGiftcard,
                     contentDescription = "Gift",
                     tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.Companion.size(80.dp)
+                    modifier = Modifier.size(80.dp)
                 )
             }
         }

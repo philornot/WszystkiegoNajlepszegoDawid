@@ -110,15 +110,6 @@ fun BirthdayMessage(
                 )
 
                 Spacer(modifier = Modifier.Companion.height(8.dp))
-
-                Text(
-                    text = "P.S. Przytrzymaj prezent dłużej, aby odkryć dodatkową funkcję...",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontStyle = FontStyle.Italic,
-                    color = MaterialTheme.colorScheme.tertiary,
-                    textAlign = TextAlign.Companion.Center,
-                    modifier = Modifier.Companion.padding(top = 4.dp)
-                )
             }
         }
     }
