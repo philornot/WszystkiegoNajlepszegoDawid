@@ -9,7 +9,7 @@
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
 
-    <!-- Zaktualizowane kolory, zsynchronizowane z Color.kt -->
+    <!-- Kolory zsynchronizowane z Color.kt -->
     <!-- Lavender-focused color palette -->
     <color name="colorPrimary">#9D7CD8</color>         <!-- LavenderPrimary -->
     <color name="colorPrimaryDark">#6D5BA8</color>     <!-- LavenderDark -->

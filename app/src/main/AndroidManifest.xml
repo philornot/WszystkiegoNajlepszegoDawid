@@ -11,9 +11,6 @@
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
 
-    <!-- Tymczasowo dodane, ale działa tylko dla aplikacji systemowych -->
-    <!-- <uses-permission android:name="android.permission.CHANGE_COMPONENT_ENABLED_STATE" /> -->
-
     <queries>
         <!-- Aplikacje, które mogą obsługiwać pliki .daylio lub ogólne octet-stream -->
         <intent>

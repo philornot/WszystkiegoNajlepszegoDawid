@@ -34,7 +34,7 @@ import kotlin.math.roundToInt
  * Główny komponent sekcji odliczania. Orkiestruje wyświetlanie czasu,
  * kontrolek timera i obsługę przeciągania. Zrefaktorowana wersja
  * z wydzielonymi komponentami dla lepszej czytelności i podziału
- * odpowiedzialności. POPRAWKA: Ulepszone formatowanie czasu dla trybu
+ * odpowiedzialności. Formatowanie czasu dla trybu
  * timera z lepszą synchronizacją animacji.
  */
 @Composable
@@ -53,7 +53,7 @@ fun CountdownSection(
 ) {
     Timber.v("CountdownSection: timeRemaining=$timeRemaining, isTimerMode=$isTimerMode, isTimerPaused=$isTimerPaused, timerMinutes=$timerMinutes")
 
-    // POPRAWKA: Ulepszone formatowanie czasu z lepszą obsługą trybu timera
+    // Ulepszone formatowanie czasu z lepszą obsługą trybu timera
     val formattedTime = if (isTimerMode && timeRemaining > 0) {
         // W trybie timera, gdy timer jest aktywny, używaj rzeczywistego timeRemaining
         TimeUtils.formatRemainingTime(timeRemaining)
@@ -67,7 +67,7 @@ fun CountdownSection(
         TimeUtils.formatRemainingTime(timeRemaining)
     }
 
-    // POPRAWKA: Lepsze rozdzielanie komponentów czasu
+    // Lepsze rozdzielanie komponentów czasu
     val (days, time) = if ("," in formattedTime) {
         val parts = formattedTime.split(", ", limit = 2)
         Pair(parts.getOrElse(0) { "0 dni" }, parts.getOrElse(1) { "00:00:00" })
@@ -75,7 +75,7 @@ fun CountdownSection(
         Pair("0 dni", formattedTime.ifEmpty { "00:00:00" })
     }
 
-    // POPRAWKA: Bezpieczniejsze rozdzielanie komponenentów czasu z walidacją
+    // Bezpieczniejsze rozdzielanie komponenentów czasu z walidacją
     val timeParts = time.split(":")
     val hoursPart = timeParts.getOrElse(0) { "00" }.padStart(2, '0')
     val minutesPart = timeParts.getOrElse(1) { "00" }.padStart(2, '0')
@@ -86,7 +86,7 @@ fun CountdownSection(
     var currentDragMinutes by remember { mutableIntStateOf(timerMinutes) }
     var accumulatedDrag by remember { mutableFloatStateOf(0f) }
 
-    // POPRAWKA: Lepsze określenie stanu aktywności timera
+    // Lepsze określenie stanu aktywności timera
     val isTimerActive = isTimerMode && timeRemaining > 0
 
     // Synchronizacja lokalnego stanu z przekazanym
@@ -97,7 +97,7 @@ fun CountdownSection(
         }
     }
 
-    // POPRAWKA: Dodatkowa synchronizacja dla aktywnego timera
+    // Dodatkowa synchronizacja dla aktywnego timera
     LaunchedEffect(isTimerActive, timeRemaining) {
         if (isTimerActive) {
             // Gdy timer jest aktywny, oblicz minuty na podstawie pozostałego czasu
@@ -162,7 +162,7 @@ fun CountdownSection(
                         }
                     }
                 }) {
-            // POPRAWKA: Lepszy tytuł z animowaną zmianą
+            // Lepszy tytuł z animowaną zmianą
             Text(
                 text = when {
                     isTimerMode && isTimerActive && isTimerPaused -> "Timer spauzowany:"
@@ -181,7 +181,7 @@ fun CountdownSection(
                 modifier = Modifier.padding(bottom = 16.dp)
             )
 
-            // POPRAWKA: Wyświetlanie czasu z poprawionym formatowaniem
+            // Wyświetlanie czasu z poprawionym formatowaniem
             TimeDisplaySection(
                 isTimerMode = isTimerMode,
                 isTimerActive = isTimerActive,

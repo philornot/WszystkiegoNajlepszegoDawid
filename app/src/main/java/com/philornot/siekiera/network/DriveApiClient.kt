@@ -37,7 +37,7 @@ import java.util.concurrent.atomic.AtomicLong
  * poświadczeń konta usługi, które ma dostęp do określonego folderu Google
  * Drive.
  *
- * Dodane mechanizmy auto-refresh tokenu i ponownych prób.
+ * Mechanizmy auto-refresh tokenu i ponownych prób.
  */
 class DriveApiClient(context: Context) {
     // Używamy WeakReference aby uniknąć memory leak

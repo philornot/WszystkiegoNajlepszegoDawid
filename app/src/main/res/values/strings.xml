@@ -47,7 +47,7 @@
     <string name="timer_back_button">Wróć</string>
     <string name="timer_minutes">minut</string>
 
-    <!-- Tryb timera - dodane -->
+    <!-- Tryb timera -->
     <string name="timer_mode_discovered">Odkryto tryb timera!</string>
     <string name="changing_app_name">Zmieniam nazwę aplikacji…</string>
     <string name="change_app_name_title">Zmieniam nazwę aplikacji</string>
