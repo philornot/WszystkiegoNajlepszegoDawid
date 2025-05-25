@@ -149,8 +149,9 @@ class MainActivity : ComponentActivity() {
                     val showDialog = remember { mutableStateOf(false) }
                     val giftReceived = prefs.getBoolean("gift_received", false)
 
-                    // Oblicz czy dzisiaj są urodziny i datę docelową
+                    // Oblicz stany związane z urodzinami
                     val isTodayBirthday = isTodayBirthday()
+                    val isBirthdayPastThisYear = isBirthdayPastThisYear()
                     val targetDate = calculateTargetDate()
 
                     // Prośba o uprawnienia do powiadomień w Compose UI
@@ -183,6 +184,7 @@ class MainActivity : ComponentActivity() {
                         activity = this@MainActivity,
                         giftReceived = giftReceived,
                         isTodayBirthday = isTodayBirthday,
+                        isBirthdayPastThisYear = isBirthdayPastThisYear,
                         onTimerSet = { minutes -> managers.timerManager.setTimer(minutes) },
                         timerModeEnabled = timerModeDiscovered,
                         onTimerModeDiscovered = {
@@ -194,7 +196,6 @@ class MainActivity : ComponentActivity() {
                         },
                         activeTimer = activeTimerTime,
                         isTimerPaused = isTimerPaused,
-                        onCancelTimer = { managers.timerManager.cancelTimer() },
                         onResetTimer = { managers.timerManager.resetTimer() },
                         onPauseTimer = { managers.timerManager.pauseTimer() },
                         onResumeTimer = { managers.timerManager.resumeTimer() },
@@ -291,6 +292,27 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
+     * Sprawdza czy urodziny już były w tym roku (ale nie dzisiaj). Używane do
+     * określenia czy pokazać zakładkę "Prezent" w drawer.
+     *
+     * @return true jeśli urodziny już były w tym roku ale nie dzisiaj
+     */
+    private fun isBirthdayPastThisYear(): Boolean {
+        val currentTime = timeProvider.getCurrentTimeMillis()
+        val birthdayThisYear =
+            calculateBirthdayForYear(Calendar.getInstance(WARSAW_TIMEZONE).get(Calendar.YEAR))
+        val result = currentTime >= birthdayThisYear && !isTodayBirthday()
+
+        Timber.d("Sprawdzanie czy urodziny były w tym roku:")
+        Timber.d("  Aktualna data: ${TimeUtils.formatDate(java.util.Date(currentTime))}")
+        Timber.d("  Urodziny w tym roku: ${TimeUtils.formatDate(java.util.Date(birthdayThisYear))}")
+        Timber.d("  Dzisiaj urodziny: ${isTodayBirthday()}")
+        Timber.d("  isBirthdayPastThisYear: $result")
+
+        return result
+    }
+
+    /**
      * Oblicza datę docelową w zależności od tego czy dzisiaj są urodziny, czy
      * urodziny już były.
      *
@@ -361,6 +383,8 @@ class MainActivity : ComponentActivity() {
         Timber.d("Pierwsze uruchomienie aplikacji: $isFirstRun")
         Timber.d("Prezent odebrany: $giftReceived")
         Timber.d("Tryb timera odkryty: $timerModeEnabled")
+        Timber.d("Dzisiaj urodziny: ${isTodayBirthday()}")
+        Timber.d("Urodziny były w tym roku: ${isBirthdayPastThisYear()}")
 
         if (appConfig.isTestMode()) {
             Timber.d("UWAGA: Aplikacja działa w trybie testowym!")

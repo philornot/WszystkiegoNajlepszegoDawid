@@ -11,11 +11,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.philornot.siekiera.ui.screens.main.birthday.BirthdayMessage
 import com.philornot.siekiera.ui.screens.main.birthday.CountdownSection
 import com.philornot.siekiera.ui.screens.main.birthday.CurtainSection
-import com.philornot.siekiera.ui.screens.main.birthday.BirthdayMessage
-import com.philornot.siekiera.ui.screens.main.shared.HeaderSection
 import com.philornot.siekiera.ui.screens.main.shared.GiftScreen
+import com.philornot.siekiera.ui.screens.main.shared.HeaderSection
 import com.philornot.siekiera.ui.screens.main.timer.TimerFinishedMessage
 import com.philornot.siekiera.ui.screens.main.timer.TimerScreen
 import com.philornot.siekiera.ui.screens.settings.SettingsScreen
@@ -24,6 +24,29 @@ import timber.log.Timber
 /**
  * Komponent odpowiedzialny za główną zawartość MainScreen. Renderuje
  * odpowiednią sekcję w zależności od currentSection.
+ *
+ * Zaktualizowany o nowe parametry związane z logiką dostępności drawer i
+ * przekazywanie informacji o dostępności drawer do HeaderSection.
+ *
+ * @param modifier Modyfikator do zastosowania do kontenera.
+ * @param isTimeUp Flaga wskazująca, czy czas odliczania do urodzin minął.
+ * @param timeRemaining Pozostały czas do urodzin w milisekundach.
+ * @param isTimerMode Flaga wskazująca, czy aktywny jest tryb timera.
+ * @param timerRemainingTime Pozostały czas timera w milisekundach.
+ * @param timerFinished Flaga wskazująca, czy timer zakończył odliczanie.
+ * @param showCelebration Flaga wskazująca, czy pokazać ekran celebracji urodzin.
+ * @param timerMinutes Ustawiona liczba minut dla timera.
+ * @param giftReceived Flaga wskazująca, czy prezent został odebrany.
+ * @param timerModeEnabled Flaga wskazująca, czy tryb timera jest włączony.
+ * @param isTimerPaused Flaga wskazująca, czy timer jest zapauzowany.
+ * @param currentSection Aktualnie wybrana sekcja nawigacji.
+ * @param isDarkTheme Flaga wskazująca, czy aktywny jest ciemny motyw.
+ * @param currentAppName Aktualna nazwa aplikacji.
+ * @param isTodayBirthday Flaga wskazująca, czy dzisiaj są urodziny.
+ * @param isDrawerAvailable Flaga wskazująca, czy drawer nawigacyjny jest dostępny.
+ * @param onGiftClicked Callback wywoływany po kliknięciu prezentu.
+ * @param onTimerModeDiscovered Callback wywoływany po odkryciu trybu timera.
+ * @param onTimerReset Callback wywoływany po zresetowaniu timera.
  */
 @Composable
 fun MainScreenContent(
@@ -43,10 +66,11 @@ fun MainScreenContent(
     currentSection: NavigationSection,
     isDarkTheme: Boolean,
     currentAppName: String,
+    isTodayBirthday: Boolean,
+    isDrawerAvailable: Boolean,
     // Callbacki
     onGiftClicked: (Float, Float) -> Unit,
     onTimerModeDiscovered: () -> Unit,
-    onTimerMinutesChanged: (Int) -> Unit,
     onTimerReset: () -> Unit,
     onCelebrationBack: () -> Unit,
     onTimerFinishedReset: () -> Unit,
@@ -73,6 +97,7 @@ fun MainScreenContent(
                         giftReceived = giftReceived,
                         timerModeEnabled = timerModeEnabled,
                         isTimerPaused = isTimerPaused,
+                        isDrawerAvailable = isDrawerAvailable,
                         onGiftClicked = onGiftClicked,
                         onTimerModeDiscovered = onTimerModeDiscovered,
                         onPauseTimer = onPauseTimer,
@@ -139,6 +164,7 @@ private fun BirthdayCountdownContent(
     giftReceived: Boolean,
     timerModeEnabled: Boolean,
     isTimerPaused: Boolean,
+    isDrawerAvailable: Boolean,
     onGiftClicked: (Float, Float) -> Unit,
     onTimerModeDiscovered: () -> Unit,
     onPauseTimer: () -> Unit,
@@ -150,8 +176,8 @@ private fun BirthdayCountdownContent(
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Przekaż informację o dostępności szufladki
-        HeaderSection(hasDrawer = isTimeUp)
+        // Przekaż informację o dostępności drawer do HeaderSection
+        HeaderSection(hasDrawer = isDrawerAvailable)
 
         CurtainSection(
             isTimeUp = isTimeUp,

@@ -31,12 +31,12 @@ fun MainScreenContainer(
     activity: MainActivity? = null,
     giftReceived: Boolean = false,
     isTodayBirthday: Boolean = false,
+    isBirthdayPastThisYear: Boolean = false,
     onTimerSet: (Int) -> Unit = {},
     timerModeEnabled: Boolean = false,
     onTimerModeDiscovered: () -> Unit = {},
     activeTimer: Long = 0,
     isTimerPaused: Boolean = false,
-    onCancelTimer: () -> Unit = {},
     onResetTimer: () -> Unit = {},
     onPauseTimer: () -> Unit = {},
     onResumeTimer: () -> Unit = {},
@@ -131,10 +131,10 @@ fun MainScreenContainer(
     }
 
     // === EFEKT FAJERWERKÓW ===
-    LaunchedEffect(isTimeUp, isTodayBirthday) {
-        // Pokaż fajerwerki jeśli czas upłynął (normalnie) lub jeśli dzisiaj są urodziny
-        if ((isTimeUp && !isTimerMode) || isTodayBirthday) {
-            Timber.d("Czas upłynął lub dzisiaj urodziny! Uruchamiam automatyczne fajerwerki!")
+    LaunchedEffect(isTimeUp, isTimerMode) {
+        // Pokaż fajerwerki jeśli czas upłynął w trybie urodzinowym
+        if (isTimeUp && !isTimerMode) {
+            Timber.d("Czas upłynął! Uruchamiam automatyczne fajerwerki!")
             showConfettiExplosion = true
             delay(5000)
             showConfettiExplosion = false
@@ -175,6 +175,7 @@ fun MainScreenContainer(
         isDarkTheme = isDarkTheme,
         currentAppName = currentAppName,
         isTodayBirthday = isTodayBirthday,
+        isBirthdayPastThisYear = isBirthdayPastThisYear,
         // Callbacki
         onGiftClicked = { centerX, centerY ->
             confettiCenterX = centerX
@@ -193,7 +194,6 @@ fun MainScreenContainer(
                 onTimerModeDiscovered()
             }
         },
-        onTimerMinutesChanged = { timerMinutes = it },
         onTimerReset = {
             timerFinished = false
             timerRemainingTime = 0L
