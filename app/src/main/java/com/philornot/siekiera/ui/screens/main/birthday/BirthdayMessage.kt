@@ -68,17 +68,8 @@ fun BirthdayMessage(
                 // Elastyczny odstęp dla lepszego układu
                 Spacer(modifier = Modifier.Companion.weight(1f))
 
-                // Tekst zachęcający do powrotu
                 Text(
-                    text = "Nie odebrałeś prezentu?",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    textAlign = TextAlign.Companion.Center,
-                    modifier = Modifier.Companion.padding(bottom = 8.dp)
-                )
-
-                Text(
-                    text = "Kliknij strzałkę, aby wrócić do poprzedniego ekranu",
+                    text = "ten ekran będzie dostępny do północy",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Companion.Center,
@@ -101,7 +92,7 @@ fun BirthdayMessage(
                     )
                 }
                 Text(
-                    text = "A może po prostu chcesz pooglądać fajerwerki, nad którymi kompletnie nie spędziłem 3h...",
+                    text = "chcesz może pooglądać fajerwerki, nad którymi kompletnie nie spędziłem 3h...?",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.Companion.Center,

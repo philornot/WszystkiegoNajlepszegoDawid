@@ -252,7 +252,9 @@ class MainActivity : ComponentActivity() {
 
     /**
      * Sprawdza czy dzisiaj są urodziny (dzień i miesiąc się zgadzają z
-     * konfiguracją).
+     * konfiguracją). UWAGA: Ta funkcja sprawdza tylko dzień i miesiąc,
+     * ignorując godzinę. Do sprawdzenia czy czas urodzin już nadszedł używaj
+     * funkcji calculateTargetDate().
      *
      * @return true jeśli dzisiaj jest dzień i miesiąc urodzin z konfiguracji
      */
@@ -268,7 +270,7 @@ class MainActivity : ComponentActivity() {
                 Calendar.MONTH
             ) == birthdayCalendar.get(Calendar.MONTH)
 
-        Timber.d("Sprawdzanie czy dzisiaj urodziny:")
+        Timber.d("Sprawdzanie czy dzisiaj urodziny (dzień i miesiąc):")
         Timber.d("  Aktualna data: ${TimeUtils.formatDate(currentCalendar.time)}")
         Timber.d("  Dzień urodzin: ${birthdayCalendar.get(Calendar.DAY_OF_MONTH)}")
         Timber.d("  Miesiąc urodzin: ${birthdayCalendar.get(Calendar.MONTH) + 1}")
@@ -277,6 +279,28 @@ class MainActivity : ComponentActivity() {
         Timber.d("  isTodayBirthday: $isSameDayAndMonth")
 
         return isSameDayAndMonth
+    }
+
+    /**
+     * Sprawdza czy czas urodzin już nadszedł (dzień, miesiąc I godzina). Ta
+     * funkcja sprawdza pełną datę i czas z konfiguracji.
+     *
+     * @return true jeśli aktualny czas >= czasie urodzin z konfiguracji w tym
+     *    roku
+     */
+    private fun isBirthdayTimeReached(): Boolean {
+        val currentTime = timeProvider.getCurrentTimeMillis()
+        val birthdayThisYear =
+            calculateBirthdayForYear(Calendar.getInstance(WARSAW_TIMEZONE).get(Calendar.YEAR))
+
+        val result = currentTime >= birthdayThisYear
+
+        Timber.d("Sprawdzanie czy czas urodzin już nadszedł:")
+        Timber.d("  Aktualna data: ${TimeUtils.formatDate(java.util.Date(currentTime))}")
+        Timber.d("  Czas urodzin w tym roku: ${TimeUtils.formatDate(java.util.Date(birthdayThisYear))}")
+        Timber.d("  isBirthdayTimeReached: $result")
+
+        return result
     }
 
     /**
@@ -294,7 +318,8 @@ class MainActivity : ComponentActivity() {
         Timber.d("Sprawdzanie czy urodziny były w tym roku:")
         Timber.d("  Aktualna data: ${TimeUtils.formatDate(java.util.Date(currentTime))}")
         Timber.d("  Urodziny w tym roku: ${TimeUtils.formatDate(java.util.Date(birthdayThisYear))}")
-        Timber.d("  Dzisiaj urodziny: ${isTodayBirthday()}")
+        Timber.d("  Dzisiaj urodziny (dzień/miesiąc): ${isTodayBirthday()}")
+        Timber.d("  Czas urodzin już nadszedł: ${isBirthdayTimeReached()}")
         Timber.d("  isBirthdayPastThisYear: $result")
 
         return result
@@ -303,6 +328,14 @@ class MainActivity : ComponentActivity() {
     /**
      * Oblicza datę docelową w zależności od tego czy dzisiaj są urodziny, czy
      * urodziny już były.
+     *
+     * LOGIKA:
+     * - Jeśli dzisiaj są urodziny (dzień/miesiąc) - zwraca dzisiejszą datę z
+     *   godziną urodzin
+     * - Jeśli urodziny jeszcze nie były w tym roku - zwraca tegoroczną datę
+     *   urodzin
+     * - Jeśli urodziny już były w tym roku - zwraca przyszłoroczną datę
+     *   urodzin
      *
      * @return Datę docelową w milisekundach
      */
@@ -313,8 +346,10 @@ class MainActivity : ComponentActivity() {
 
         return when {
             isTodayBirthday() -> {
-                // Dzisiaj są urodziny - zwróć datę z tego roku (będzie pokazywał że czas upłynął)
-                Timber.d("Dzisiaj są urodziny - używam daty z tego roku")
+                // Dzisiaj są urodziny (dzień/miesiąc) - zwróć datę z tego roku z godziną urodzin
+                // Jeśli godzina jeszcze nie minęła, timer będzie odliczał do niej
+                // Jeśli godzina już minęła, timer pokaże że czas upłynął
+                Timber.d("Dzisiaj są urodziny - używam daty z tego roku z godziną urodzin")
                 birthdayThisYear
             }
 
@@ -369,7 +404,8 @@ class MainActivity : ComponentActivity() {
         Timber.d("Konfiguracja załadowana: data urodzin ${TimeUtils.formatDate(appConfig.getBirthdayDate().time)}")
         Timber.d("Pierwsze uruchomienie aplikacji: $isFirstRun")
         Timber.d("Prezent odebrany: $giftReceived")
-        Timber.d("Dzisiaj urodziny: ${isTodayBirthday()}")
+        Timber.d("Dzisiaj urodziny (dzień/miesiąc): ${isTodayBirthday()}")
+        Timber.d("Czas urodzin już nadszedł: ${isBirthdayTimeReached()}")
         Timber.d("Urodziny były w tym roku: ${isBirthdayPastThisYear()}")
 
         if (appConfig.isTestMode()) {

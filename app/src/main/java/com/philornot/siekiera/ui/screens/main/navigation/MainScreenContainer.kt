@@ -49,9 +49,10 @@ fun MainScreenContainer(
     onAppNameReset: () -> Unit = {},
 ) {
     // === STAN GŁÓWNY ===
-    // Jeśli dzisiaj są urodziny, pokaż że czas upłynął, jeśli nie - sprawdź normalnie
-    var isTimeUp by remember(isTodayBirthday) {
-        mutableStateOf(isTodayBirthday || currentTime >= targetDate)
+    // Czas upłynął tylko gdy currentTime >= targetDate
+    // USUNIĘTO wymuszone isTodayBirthday - teraz sprawdzamy tylko rzeczywisty czas
+    var isTimeUp by remember(currentTime, targetDate) {
+        mutableStateOf(currentTime >= targetDate)
     }
     var currentTimeState by remember { mutableLongStateOf(currentTime) }
     var timeRemaining by remember {
@@ -240,7 +241,10 @@ private suspend fun handleTimerModeUpdate(
     }
 }
 
-/** Obsługuje aktualizację w trybie urodzinowym */
+/**
+ * Obsługuje aktualizację w trybie urodzinowym. POPRAWKA: Sprawdza tylko
+ * rzeczywisty czas, nie wymusza isTimeUp gdy isTodayBirthday.
+ */
 private suspend fun handleBirthdayModeUpdate(
     currentTimeState: Long,
     targetDate: Long,
@@ -278,8 +282,9 @@ private suspend fun handleBirthdayModeUpdate(
             }
         }
 
-        // Sprawdź czy czas się skończył lub czy dzisiaj są urodziny
-        if (currentTimeState >= targetDate || isTodayBirthday) {
+        // POPRAWKA: Sprawdź tylko rzeczywisty czas - usunieto "|| isTodayBirthday"
+        // Teraz czas upłynął tylko gdy currentTimeState >= targetDate
+        if (currentTimeState >= targetDate) {
             onIsTimeUpUpdate(true)
             if (activity != null && !isTodayBirthday) {
                 // Sprawdź pliki tylko jeśli to nie dzisiaj urodziny

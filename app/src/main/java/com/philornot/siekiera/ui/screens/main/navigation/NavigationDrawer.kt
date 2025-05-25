@@ -36,6 +36,8 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 
@@ -154,6 +156,17 @@ fun NavigationDrawer(
 
                 // Spacer to push settings to bottom
                 Spacer(modifier = Modifier.weight(1f))
+
+                Text(
+                    text = "Jeśli nawigacja nie działa,\nzamknij aplikację i wejdź ponownie.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    fontStyle = FontStyle.Italic,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .padding(horizontal = 8.dp)
+                        .padding(vertical = 8.dp)
+                )
 
                 // Separator before settings
                 HorizontalDivider(
