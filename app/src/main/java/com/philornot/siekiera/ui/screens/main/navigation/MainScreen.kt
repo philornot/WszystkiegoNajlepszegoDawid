@@ -17,6 +17,7 @@ fun MainScreen(
     modifier: Modifier = Modifier,
     targetDate: Long,
     currentTime: Long = System.currentTimeMillis(),
+    isTimeUp: Boolean, // DODANO: Jawny parametr zamiast obliczania na podstawie targetDate
     onGiftClicked: () -> Unit,
     activity: MainActivity? = null,
     giftReceived: Boolean = false,
@@ -44,6 +45,7 @@ fun MainScreen(
         modifier = modifier,
         targetDate = targetDate,
         currentTime = currentTime,
+        isTimeUp = isTimeUp, // DODANO: Przekaż jawnie zamiast obliczać
         onGiftClicked = onGiftClicked,
         activity = activity,
         giftReceived = giftReceived,
@@ -52,7 +54,6 @@ fun MainScreen(
         onTimerModeDiscovered = onTimerModeDiscovered,
         activeTimer = activeTimer,
         isTimerPaused = isTimerPaused,
-        onCancelTimer = onCancelTimer,
         onResetTimer = onResetTimer,
         onPauseTimer = onPauseTimer,
         onResumeTimer = onResumeTimer,

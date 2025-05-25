@@ -27,6 +27,7 @@ fun MainScreenContainer(
     modifier: Modifier = Modifier,
     targetDate: Long,
     currentTime: Long = System.currentTimeMillis(),
+    isTimeUp: Boolean, // DODANO: Przyjmuj jako parametr zamiast obliczać
     onGiftClicked: () -> Unit,
     activity: MainActivity? = null,
     giftReceived: Boolean = false,
@@ -35,7 +36,6 @@ fun MainScreenContainer(
     onTimerModeDiscovered: () -> Unit = {},
     activeTimer: Long = 0,
     isTimerPaused: Boolean = false,
-    onCancelTimer: () -> Unit = {},
     onResetTimer: () -> Unit = {},
     onPauseTimer: () -> Unit = {},
     onResumeTimer: () -> Unit = {},
@@ -50,7 +50,7 @@ fun MainScreenContainer(
     onAppNameReset: () -> Unit = {},
 ) {
     // === STAN GŁÓWNY ===
-    var isTimeUp by remember { mutableStateOf(currentTime >= targetDate) }
+    // POPRAWKA: Nie obliczaj isTimeUp na podstawie targetDate, użyj przekazanego parametru
     var currentTimeState by remember { mutableLongStateOf(currentTime) }
     var timeRemaining by remember {
         mutableLongStateOf(
@@ -121,8 +121,9 @@ fun MainScreenContainer(
                     lastCheckTime = lastCheckTime,
                     activity = activity,
                     onTimeRemainingUpdate = { timeRemaining = it },
-                    onIsTimeUpUpdate = { isTimeUp = it },
-                    onLastCheckTimeUpdate = { lastCheckTime = it })
+                    onLastCheckTimeUpdate = { lastCheckTime = it }
+                    // USUNIĘTO: onIsTimeUpUpdate - już nie zmieniamy isTimeUp
+                )
             }
         }
     }
@@ -150,7 +151,7 @@ fun MainScreenContainer(
     // === RENDEROWANIE UI ===
     MainScreenLayout(
         modifier = modifier,
-        isTimeUp = isTimeUp,
+        isTimeUp = isTimeUp, // POPRAWKA: Użyj przekazanego parametru
         timeRemaining = timeRemaining,
         isTimerMode = isTimerMode,
         timerRemainingTime = timerRemainingTime,
@@ -243,7 +244,10 @@ private suspend fun handleTimerModeUpdate(
     }
 }
 
-/** Obsługuje aktualizację w trybie urodzinowym */
+/**
+ * Obsługuje aktualizację w trybie urodzinowym POPRAWKA: Usunięto
+ * onIsTimeUpUpdate - już nie zmieniamy isTimeUp w czasie działania
+ */
 private suspend fun handleBirthdayModeUpdate(
     currentTimeState: Long,
     targetDate: Long,
@@ -252,7 +256,6 @@ private suspend fun handleBirthdayModeUpdate(
     lastCheckTime: Long,
     activity: MainActivity?,
     onTimeRemainingUpdate: (Long) -> Unit,
-    onIsTimeUpUpdate: (Boolean) -> Unit,
     onLastCheckTimeUpdate: (Long) -> Unit,
 ) {
     if (currentSection == NavigationSection.BIRTHDAY_COUNTDOWN) {
@@ -280,15 +283,8 @@ private suspend fun handleBirthdayModeUpdate(
             }
         }
 
-        // Sprawdź czy czas się skończył
-        if (currentTimeState >= targetDate) {
-            onIsTimeUpUpdate(true)
-            if (activity != null) {
-                Timber.d("Uruchamiam ostatnie sprawdzenie pliku po upływie czasu")
-                activity.checkFileNow()
-                onLastCheckTimeUpdate(currentTimeState)
-            }
-        }
+        // USUNIĘTO: Sprawdzanie czy czas się skończył i aktualizacja isTimeUp
+        // MainActivity już to sprawdza i przekazuje isTimeUp jako parametr
     }
     delay(1000)
 }

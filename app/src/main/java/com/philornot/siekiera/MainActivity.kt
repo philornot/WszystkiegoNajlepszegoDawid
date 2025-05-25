@@ -171,10 +171,15 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
+                    // POPRAWKA: Oblicz osobno targetDate dla countdown i sprawdź isTimeUp dla szufladki
+                    val currentTime = timeProvider.getCurrentTimeMillis()
+                    val nextBirthdayDate = calculateNextBirthday()
+                    val isTimeUp = checkIfTimeIsUp(currentTime)
+
                     // Główny ekran
                     MainScreen(
-                        targetDate = calculateNextBirthday(),
-                        currentTime = timeProvider.getCurrentTimeMillis(),
+                        targetDate = nextBirthdayDate, // Dla countdown - następne urodziny
+                        currentTime = currentTime,
                         onGiftClicked = { showDialog.value = true },
                         activity = this@MainActivity,
                         giftReceived = giftReceived,
@@ -216,7 +221,10 @@ class MainActivity : ComponentActivity() {
                         },
                         onAppNameReset = {
                             managers.settingsManager.resetAppName()
-                        })
+                        },
+                        // Przekaż jawnie isTimeUp zamiast polegać na obliczeniach w MainScreen
+                        isTimeUp = isTimeUp
+                    )
 
                     // Dialog pobierania
                     if (showDialog.value) {
@@ -256,7 +264,39 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** Oblicza datę następnych urodzin w oparciu o aktualny czas. */
+    /**
+     * Sprawdza czy aktualny czas jest po dacie urodzin z config.xml w tym
+     * roku. To jest używane do określenia czy pokazać szufladkę nawigacyjną.
+     */
+    private fun checkIfTimeIsUp(currentTime: Long): Boolean {
+        val configCalendar = appConfig.getBirthdayDate()
+        val thisYearBirthday = Calendar.getInstance(WARSAW_TIMEZONE).apply {
+            timeInMillis = currentTime // Ustaw na aktualny czas
+            set(Calendar.MONTH, configCalendar.get(Calendar.MONTH))
+            set(Calendar.DAY_OF_MONTH, configCalendar.get(Calendar.DAY_OF_MONTH))
+            set(Calendar.HOUR_OF_DAY, configCalendar.get(Calendar.HOUR_OF_DAY))
+            set(Calendar.MINUTE, configCalendar.get(Calendar.MINUTE))
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+
+        val isTimeUp = currentTime >= thisYearBirthday.timeInMillis
+
+        if (appConfig.isVerboseLoggingEnabled()) {
+            Timber.d("Sprawdzanie isTimeUp: aktualna data >= data urodzin w tym roku")
+            Timber.d("  Aktualna data: ${TimeUtils.formatDate(java.util.Date(currentTime))}")
+            Timber.d("  Data urodzin (ten rok): ${TimeUtils.formatDate(thisYearBirthday.time)}")
+            Timber.d("  isTimeUp: $isTimeUp")
+        }
+
+        return isTimeUp
+    }
+
+    /**
+     * Oblicza datę następnych urodzin w oparciu o aktualny czas. To jest
+     * używane dla countdown - jeśli urodziny w tym roku już minęły, zwraca
+     * datę urodzin w przyszłym roku.
+     */
     private fun calculateNextBirthday(): Long {
         val currentTime = System.currentTimeMillis()
 
