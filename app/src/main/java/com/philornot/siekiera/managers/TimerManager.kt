@@ -9,13 +9,9 @@ import com.philornot.siekiera.ui.screens.main.navigation.NavigationSection
 import timber.log.Timber
 
 /**
- * Ulepszona wersja TimerManager z lepszą responsywnością i obsługą błędów.
- * Enkapsuluje logikę TimerScheduler i zarządzanie stanem timera. Dodano
- * natychmiastową aktualizację stanu dla lepszych animacji.
- *
- * AKTUALIZACJA: Zmodyfikowano logikę przywracania timera, żeby nie
- * ustawiał automatycznie sekcji na TIMER - to będzie kontrolowane przez
- * ManagerContainer.
+ * TimerManager z responsywnością i obsługą błędów. Enkapsuluje logikę
+ * TimerScheduler i zarządzanie stanem timera. Dodano natychmiastową
+ * aktualizację stanu dla lepszych animacji.
  */
 class TimerManager(
     private val context: Context,
@@ -233,10 +229,6 @@ class TimerManager(
     /**
      * Przywraca timer po restarcie aplikacji z ulepszoną obsługą. Wywoływane w
      * onCreate() MainActivity.
-     *
-     * AKTUALIZACJA: Metoda teraz zwraca boolean informujący czy timer został
-     * przywrócony i nie ustawia automatycznie sekcji na TIMER. Sekcja będzie
-     * ustawiona przez ManagerContainer na podstawie zwróconej wartości.
      *
      * @return true jeśli timer został przywrócony jako aktywny, false w
      *    przeciwnym wypadku

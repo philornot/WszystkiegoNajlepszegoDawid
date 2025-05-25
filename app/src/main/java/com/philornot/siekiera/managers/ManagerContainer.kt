@@ -6,10 +6,6 @@ import timber.log.Timber
 /**
  * Kontener przechowujący wszystkie managery aplikacji. Ułatwia
  * przekazywanie managerów między komponentami.
- *
- * AKTUALIZACJA: Dodano inteligentną logikę nawigacji, która zapewnia że po
- * odebraniu prezentu domyślną sekcją jest "Odliczanie do urodzin", chyba
- * że timer jest rzeczywiście aktywny.
  */
 data class ManagerContainer(
     val appStateManager: AppStateManager,

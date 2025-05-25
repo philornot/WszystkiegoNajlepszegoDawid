@@ -140,7 +140,7 @@ fun CountdownSection(
                             accumulatedDrag = 0f
                             Timber.d("Anulowano przeciąganie timera")
                         }) { _, dragAmount ->
-                            // Bardzo uproszczona logika - jeden piksel = jedna zmiana
+                            // Jeden piksel = jedna zmiana
                             accumulatedDrag += dragAmount
 
                             // Każde 15 pikseli = 1 minuta zmiany
@@ -162,7 +162,7 @@ fun CountdownSection(
                         }
                     }
                 }) {
-            // Lepszy tytuł z animowaną zmianą
+            // Tytuł z animowaną zmianą
             Text(
                 text = when {
                     isTimerMode && isTimerActive && isTimerPaused -> "Timer spauzowany:"
