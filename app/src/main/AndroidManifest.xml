@@ -33,10 +33,11 @@
         android:theme="@style/Theme.WszystkiegoNajlepszegoDawid"
         tools:targetApi="35">
 
-        <!-- Główna aktywność -->
+        <!-- Główna aktywność z ulepszeniami dla powiadomień -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:theme="@style/Theme.WszystkiegoNajlepszegoDawid"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
@@ -55,6 +56,15 @@
                 <data android:scheme="content" />
                 <data android:pathPattern=".*\\.daylio" />
             </intent-filter>
+
+            <!-- Filtr intencji dla powiadomień - umożliwia lepsze rozpoznawanie powiadomień -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data
+                    android:host="notification"
+                    android:scheme="app" />
+            </intent-filter>
         </activity>
 
         <!-- Alias aktywności jako timer (domyślnie wyłączony) -->
@@ -64,6 +74,7 @@
             android:exported="true"
             android:icon="@mipmap/ic_launcher"
             android:label="@string/app_name_timer"
+            android:launchMode="singleTop"
             android:targetActivity=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -80,6 +91,18 @@
         <receiver
             android:name=".notification.TimerReceiver"
             android:exported="false" />
+
+        <!-- Receiver do akcji z powiadomień timera -->
+        <receiver
+            android:name=".notification.TimerActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.philornot.siekiera.DISMISS_TIMER_NOTIFICATION" />
+                <action android:name="com.philornot.siekiera.PAUSE_TIMER" />
+                <action android:name="com.philornot.siekiera.RESUME_TIMER" />
+                <action android:name="com.philornot.siekiera.CANCEL_TIMER" />
+            </intent-filter>
+        </receiver>
 
         <!-- Receiver do ponownego zaplanowania alarmów po restarcie urządzenia -->
         <receiver
@@ -112,19 +135,29 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
-    
-    <!-- Required: set your sentry.io project identifier (DSN) -->
-    <meta-data android:name="io.sentry.dsn" android:value="https://820d9bbd53f5c44259cf2c233777fa34@o4509377565163520.ingest.de.sentry.io/4509377569095760" />
 
-    <!-- enable automatic breadcrumbs for user interactions (clicks, swipes, scrolls) -->
-    <meta-data android:name="io.sentry.traces.user-interaction.enable" android:value="true" />
-    <!-- enable screenshot for crashes (could contain sensitive/PII data) -->
-    <meta-data android:name="io.sentry.attach-screenshot" android:value="true" />
-    <!-- enable view hierarchy for crashes -->
-    <meta-data android:name="io.sentry.attach-view-hierarchy" android:value="true" />
+        <!-- Required: set your sentry.io project identifier (DSN) -->
+        <meta-data
+            android:name="io.sentry.dsn"
+            android:value="https://820d9bbd53f5c44259cf2c233777fa34@o4509377565163520.ingest.de.sentry.io/4509377569095760" />
 
-    <!-- enable the performance API by setting a sample-rate, adjust in production env -->
-    <meta-data android:name="io.sentry.traces.sample-rate" android:value="1.0" />
-</application>
+        <!-- enable automatic breadcrumbs for user interactions (clicks, swipes, scrolls) -->
+        <meta-data
+            android:name="io.sentry.traces.user-interaction.enable"
+            android:value="true" />
+        <!-- enable screenshot for crashes (could contain sensitive/PII data) -->
+        <meta-data
+            android:name="io.sentry.attach-screenshot"
+            android:value="true" />
+        <!-- enable view hierarchy for crashes -->
+        <meta-data
+            android:name="io.sentry.attach-view-hierarchy"
+            android:value="true" />
+
+        <!-- enable the performance API by setting a sample-rate, adjust in production env -->
+        <meta-data
+            android:name="io.sentry.traces.sample-rate"
+            android:value="1.0" />
+    </application>
 
 </manifest>

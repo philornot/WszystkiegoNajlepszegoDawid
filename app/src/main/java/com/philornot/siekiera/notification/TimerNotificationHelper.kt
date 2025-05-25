@@ -15,8 +15,11 @@ import com.philornot.siekiera.utils.TimeUtils
 import timber.log.Timber
 
 /**
- * Ulepszona wersja TimerNotificationHelper z lepszą obsługą długich timerów
- * i bardziej informatywnymi powiadomieniami.
+ * Ulepszona wersja TimerNotificationHelper z lepszą obsługą długich
+ * timerów i bardziej informatywnymi powiadomieniami.
+ *
+ * AKTUALIZACJA: Wszystkie powiadomienia teraz poprawnie otwierają
+ * aplikację po kliknięciu dzięki odpowiednim flagom Intent.
  */
 object TimerNotificationHelper {
 
@@ -27,9 +30,7 @@ object TimerNotificationHelper {
     private const val NOTIFICATION_ID_TIMER = 1003
     private const val NOTIFICATION_ID_TIMER_PROGRESS = 1004
 
-    /**
-     * Inicjalizuje kanał powiadomień dla timera z ulepszeniami.
-     */
+    /** Inicjalizuje kanał powiadomień dla timera z ulepszeniami. */
     fun initTimerNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val notificationManager =
@@ -63,15 +64,19 @@ object TimerNotificationHelper {
     fun showTimerCompletedNotification(context: Context, minutes: Int) {
         Timber.d("Wyświetlanie powiadomienia o zakończeniu timera na $minutes minut")
 
-        // Przygotowanie intencji do otwarcia aplikacji
+        // Przygotowanie intencji do otwarcia aplikacji z informacją o zakończonym timerze
         val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            flags =
+                Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             putExtra("SHOW_TIMER_FINISHED", true)
             putExtra("TIMER_MINUTES", minutes)
         }
 
         val pendingIntent = PendingIntent.getActivity(
-            context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            context,
+            NOTIFICATION_ID_TIMER,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         // Inteligentne formatowanie na podstawie długości timera
@@ -81,34 +86,39 @@ object TimerNotificationHelper {
         // Personalizowane komunikaty w zależności od długości timera
         val (title, text, bigText) = when {
             minutes == 1 -> Triple(
-                "Minutnik zakończony!",
+                "Minutnik zakończony! ⏰",
                 "Upłynęła 1 minuta",
                 "Twój minutnik zakończył odliczanie po 1 minucie."
             )
+
             minutes < 60 -> Triple(
-                "Timer zakończony!",
+                "Timer zakończony! ⏰",
                 "Upłynęło $timerDuration",
-                "Twój timer zakończył odliczanie po $timerDuration."
+                "Twój timer zakończył odliczanie po $timerDuration.\n\nKliknij aby otworzyć aplikację."
             )
+
             minutes == 60 -> Triple(
-                "Godzinny timer zakończony!",
+                "Godzinny timer zakończony! ⏰",
                 "Upłynęła 1 godzina",
-                "Twój godzinny timer zakończył odliczanie."
+                "Twój godzinny timer zakończył odliczanie.\n\nKliknij aby otworzyć aplikację."
             )
+
             minutes < 120 -> Triple(
-                "Timer zakończony!",
+                "Timer zakończony! ⏰",
                 "Upłynęło $timerDuration",
-                "Twój timer zakończył odliczanie po $timerDuration."
+                "Twój timer zakończył odliczanie po $timerDuration.\n\nKliknij aby otworzyć aplikację."
             )
+
             minutes % 60 == 0 -> Triple(
-                "Długi timer zakończony!",
+                "Długi timer zakończony! ⏰",
                 "Upłynęło ${minutes / 60} godzin",
-                "Twój ${minutes / 60}-godzinny timer zakończył odliczanie."
+                "Twój ${minutes / 60}-godzinny timer zakończył odliczanie.\n\nKliknij aby otworzyć aplikację."
             )
+
             else -> Triple(
-                "Timer zakończony!",
+                "Timer zakończony! ⏰",
                 "Upłynęło $shortDuration",
-                "Twój timer ($timerDuration) zakończył odliczanie."
+                "Twój timer ($timerDuration) zakończył odliczanie.\n\nKliknij aby otworzyć aplikację."
             )
         }
 
@@ -116,21 +126,27 @@ object TimerNotificationHelper {
         val notification = NotificationCompat.Builder(context, CHANNEL_ID_TIMER)
             .setSmallIcon(R.drawable.notification_timer_icon)
             .setColor(ContextCompat.getColor(context, R.color.colorPrimaryDark))
-            .setContentTitle(title)
-            .setContentText(text)
+            .setContentTitle(title).setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
-            .setAutoCancel(true)
+            .setAutoCancel(true) // Powiadomienie zniknie po kliknięciu
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setVibrate(longArrayOf(0, 500, 250, 500, 250, 500)) // Dłuższa sekwencja dla ważnego powiadomienia
-            .setContentIntent(pendingIntent)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC).setVibrate(
+                longArrayOf(
+                    0,
+                    500,
+                    250,
+                    500,
+                    250,
+                    500
+                )
+            ) // Dłuższa sekwencja dla ważnego powiadomienia
+            .setContentIntent(pendingIntent) // Główny intent otwierający aplikację
             .addAction(
                 android.R.drawable.ic_menu_close_clear_cancel,
                 "Zamknij",
                 createDismissIntent(context)
-            )
-            .build()
+            ).build()
 
         // Wyświetl powiadomienie
         try {
@@ -138,12 +154,14 @@ object TimerNotificationHelper {
             Timber.d("Wyświetlono powiadomienie o zakończeniu timera ($timerDuration)")
         } catch (e: SecurityException) {
             Timber.e(e, "Brak uprawnień do wyświetlania powiadomień")
+        } catch (e: Exception) {
+            Timber.e(e, "Błąd podczas wyświetlania powiadomienia o timerze")
         }
     }
 
     /**
-     * Wyświetla powiadomienie o postępie timera (opcjonalne).
-     * Może być używane dla długich timerów jako przypomnienie.
+     * Wyświetla powiadomienie o postępie timera (opcjonalne). Może być używane
+     * dla długich timerów jako przypomnienie.
      *
      * @param context Kontekst aplikacji
      * @param initialMinutes Początkowa wartość timera
@@ -152,23 +170,28 @@ object TimerNotificationHelper {
     fun showTimerProgressNotification(
         context: Context,
         initialMinutes: Int,
-        remainingMinutes: Int
+        remainingMinutes: Int,
     ) {
         if (remainingMinutes <= 0 || initialMinutes <= 0) return
 
-        val progress = ((initialMinutes - remainingMinutes).toFloat() / initialMinutes.toFloat() * 100).toInt()
+        val progress =
+            ((initialMinutes - remainingMinutes).toFloat() / initialMinutes.toFloat() * 100).toInt()
         val remainingFormatted = TimeUtils.formatTimerDuration(remainingMinutes)
 
         // Wyświetlaj powiadomienia o postępie tylko dla długich timerów
         if (initialMinutes < 30) return
 
         val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            flags =
+                Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             putExtra("SHOW_TIMER_PROGRESS", true)
         }
 
         val pendingIntent = PendingIntent.getActivity(
-            context, 1, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            context,
+            NOTIFICATION_ID_TIMER_PROGRESS,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID_TIMER)
@@ -176,35 +199,29 @@ object TimerNotificationHelper {
             .setColor(ContextCompat.getColor(context, R.color.colorPrimary))
             .setContentTitle("Timer w trakcie")
             .setContentText("Pozostało $remainingFormatted ($progress% ukończone)")
-            .setProgress(100, progress, false)
-            .setOngoing(true) // Nie można usunąć przez swipe
+            .setProgress(100, progress, false).setOngoing(true) // Nie można usunąć przez swipe
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setContentIntent(pendingIntent)
+            .setContentIntent(pendingIntent) // Intent otwierający aplikację
             .addAction(
-                android.R.drawable.ic_media_pause,
-                "Pauzuj",
-                createPauseIntent(context)
-            )
-            .addAction(
-                android.R.drawable.ic_menu_close_clear_cancel,
-                "Anuluj",
-                createCancelIntent(context)
-            )
-            .build()
+                android.R.drawable.ic_media_pause, "Pauzuj", createPauseIntent(context)
+            ).addAction(
+                android.R.drawable.ic_menu_close_clear_cancel, "Anuluj", createCancelIntent(context)
+            ).build()
 
         try {
-            NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_TIMER_PROGRESS, notification)
+            NotificationManagerCompat.from(context)
+                .notify(NOTIFICATION_ID_TIMER_PROGRESS, notification)
             Timber.d("Wyświetlono powiadomienie o postępie timera: $progress%")
         } catch (e: SecurityException) {
             Timber.e(e, "Brak uprawnień do wyświetlania powiadomień o postępie")
+        } catch (e: Exception) {
+            Timber.e(e, "Błąd podczas wyświetlania powiadomienia o postępie timera")
         }
     }
 
-    /**
-     * Anuluje wszystkie powiadomienia timera.
-     */
+    /** Anuluje wszystkie powiadomienia timera. */
     fun cancelTimerNotification(context: Context) {
         try {
             val notificationManager = NotificationManagerCompat.from(context)
@@ -216,9 +233,7 @@ object TimerNotificationHelper {
         }
     }
 
-    /**
-     * Anuluje tylko powiadomienie o postępie timera.
-     */
+    /** Anuluje tylko powiadomienie o postępie timera. */
     fun cancelTimerProgressNotification(context: Context) {
         try {
             NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID_TIMER_PROGRESS)
@@ -228,54 +243,54 @@ object TimerNotificationHelper {
         }
     }
 
-    /**
-     * Wyświetla powiadomienie o spauzowaniu timera.
-     */
+    /** Wyświetla powiadomienie o spauzowaniu timera. */
     fun showTimerPausedNotification(context: Context, remainingMinutes: Int) {
         val remainingFormatted = TimeUtils.formatTimerDuration(remainingMinutes)
 
         val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            flags =
+                Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             putExtra("SHOW_TIMER_PAUSED", true)
         }
 
         val pendingIntent = PendingIntent.getActivity(
-            context, 2, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            context,
+            NOTIFICATION_ID_TIMER_PROGRESS + 1,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID_TIMER)
             .setSmallIcon(R.drawable.notification_timer_icon)
             .setColor(ContextCompat.getColor(context, R.color.colorPrimary))
-            .setContentTitle("Timer spauzowany")
-            .setContentText("Pozostało $remainingFormatted do odliczenia")
-            .setOngoing(true)
+            .setContentTitle("Timer spauzowany ⏸️")
+            .setContentText("Pozostało $remainingFormatted do odliczenia").setStyle(
+                NotificationCompat.BigTextStyle().bigText(
+                    "Timer został spauzowany.\n\n" + "Pozostało $remainingFormatted do odliczenia.\n" + "Kliknij aby otworzyć aplikację i wznowić timer."
+                )
+            ).setOngoing(true) // Timer spauzowany - powinien pozostać w powiadomieniach
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setContentIntent(pendingIntent)
+            .setContentIntent(pendingIntent) // Intent otwierający aplikację
             .addAction(
-                android.R.drawable.ic_media_play,
-                "Wznów",
-                createResumeIntent(context)
-            )
-            .addAction(
-                android.R.drawable.ic_menu_close_clear_cancel,
-                "Anuluj",
-                createCancelIntent(context)
-            )
-            .build()
+                android.R.drawable.ic_media_play, "Wznów", createResumeIntent(context)
+            ).addAction(
+                android.R.drawable.ic_menu_close_clear_cancel, "Anuluj", createCancelIntent(context)
+            ).build()
 
         try {
-            NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_TIMER_PROGRESS, notification)
+            NotificationManagerCompat.from(context)
+                .notify(NOTIFICATION_ID_TIMER_PROGRESS, notification)
             Timber.d("Wyświetlono powiadomienie o spauzowanym timerze")
         } catch (e: SecurityException) {
             Timber.e(e, "Brak uprawnień do wyświetlania powiadomienia o pauzie")
+        } catch (e: Exception) {
+            Timber.e(e, "Błąd podczas wyświetlania powiadomienia o spauzowanym timerze")
         }
     }
 
-    /**
-     * Tworzy PendingIntent dla akcji zamknięcia powiadomienia.
-     */
+    /** Tworzy PendingIntent dla akcji zamknięcia powiadomienia. */
     private fun createDismissIntent(context: Context): PendingIntent {
         val intent = Intent().apply {
             action = "com.philornot.siekiera.DISMISS_TIMER_NOTIFICATION"
@@ -285,9 +300,7 @@ object TimerNotificationHelper {
         )
     }
 
-    /**
-     * Tworzy PendingIntent dla akcji pauzowania timera.
-     */
+    /** Tworzy PendingIntent dla akcji pauzowania timera. */
     private fun createPauseIntent(context: Context): PendingIntent {
         val intent = Intent().apply {
             action = "com.philornot.siekiera.PAUSE_TIMER"
@@ -297,9 +310,7 @@ object TimerNotificationHelper {
         )
     }
 
-    /**
-     * Tworzy PendingIntent dla akcji wznowienia timera.
-     */
+    /** Tworzy PendingIntent dla akcji wznowienia timera. */
     private fun createResumeIntent(context: Context): PendingIntent {
         val intent = Intent().apply {
             action = "com.philornot.siekiera.RESUME_TIMER"
@@ -309,9 +320,7 @@ object TimerNotificationHelper {
         )
     }
 
-    /**
-     * Tworzy PendingIntent dla akcji anulowania timera.
-     */
+    /** Tworzy PendingIntent dla akcji anulowania timera. */
     private fun createCancelIntent(context: Context): PendingIntent {
         val intent = Intent().apply {
             action = "com.philornot.siekiera.CANCEL_TIMER"
@@ -321,14 +330,18 @@ object TimerNotificationHelper {
         )
     }
 
-    /**
-     * Sprawdza czy powiadomienie timera jest aktualnie wyświetlane.
-     */
+    /** Sprawdza czy powiadomienie timera jest aktualnie wyświetlane. */
     fun isTimerNotificationActive(context: Context): Boolean {
         return try {
-            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            notificationManager.activeNotifications.any {
-                it.id == NOTIFICATION_ID_TIMER || it.id == NOTIFICATION_ID_TIMER_PROGRESS
+            val notificationManager =
+                context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                notificationManager.activeNotifications.any {
+                    it.id == NOTIFICATION_ID_TIMER || it.id == NOTIFICATION_ID_TIMER_PROGRESS
+                }
+            } else {
+                // Na starszych wersjach Androida nie można sprawdzić aktywnych powiadomień
+                false
             }
         } catch (e: Exception) {
             Timber.e(e, "Błąd podczas sprawdzania aktywnych powiadomień")

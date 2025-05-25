@@ -102,4 +102,26 @@
     <string name="app_name_changed_toast">Nazwa aplikacji została zmieniona</string>
     <string name="app_name_reset_toast">Nazwa aplikacji została zresetowana</string>
     <string name="app_name_change_failed_toast">Nie udało się zmienić nazwy aplikacji</string>
+
+    <!-- Dodatkowe teksty dla powiadomień - nowe -->
+    <string name="notification_birthday_title">Wszystkiego najlepszego!</string>
+    <string name="notification_birthday_text">Twój prezent jest gotowy do otwarcia</string>
+    <string name="notification_birthday_big_text">Wszystkiego najlepszego z okazji urodzin! 🎉\n\nTwój specjalny prezent jest już gotowy do otwarcia. Kliknij to powiadomienie, aby otworzyć aplikację i odebrać swój prezent urodzinowy.</string>
+
+    <string name="notification_timer_completed_title">Timer zakończony!</string>
+    <string name="notification_timer_progress_title">Timer w trakcie</string>
+    <string name="notification_timer_paused_title">Timer spauzowany</string>
+
+    <!-- Akcje w powiadomieniach -->
+    <string name="notification_action_open_app">Otwórz aplikację</string>
+    <string name="notification_action_dismiss">Zamknij</string>
+    <string name="notification_action_pause">Pauzuj</string>
+    <string name="notification_action_resume">Wznów</string>
+    <string name="notification_action_cancel">Anuluj</string>
+
+    <!-- Komunikaty po otwarciu z powiadomienia -->
+    <string name="opened_from_birthday_notification">Wszystkiego najlepszego! 🎂</string>
+    <string name="opened_from_download_notification">Plik %1$s został pobrany</string>
+    <string name="opened_from_timer_notification">Timer na %1$d minut został zakończony</string>
+    <string name="opened_from_timer_paused_notification">Timer jest spauzowany</string>
 </resources>

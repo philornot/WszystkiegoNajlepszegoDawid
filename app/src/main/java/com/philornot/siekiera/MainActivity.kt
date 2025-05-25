@@ -1,6 +1,7 @@
 package com.philornot.siekiera
 
 import android.Manifest
+import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Build
 import android.os.Bundle
@@ -41,6 +42,10 @@ import java.util.TimeZone
  * Główna aktywność aplikacji - znacznie zmniejszona dzięki użyciu
  * managerów. Odpowiada tylko za podstawowy lifecycle, UI i koordynację
  * między managerami.
+ *
+ * AKTUALIZACJA: Dodana obsługa intencji z powiadomień - aplikacja
+ * poprawnie otwiera się po kliknięciu w powiadomienie i reaguje na różne
+ * typy powiadomień.
  */
 class MainActivity : ComponentActivity() {
 
@@ -77,8 +82,120 @@ class MainActivity : ComponentActivity() {
         // Przywróć stan aplikacji
         restoreApplicationState()
 
+        // Obsłuż intent z powiadomienia jeśli aplikacja została otwarta przez powiadomienie
+        handleNotificationIntent(intent)
+
         // Inicjalizacja UI
         setupUI()
+    }
+
+    /**
+     * Wywoływane gdy nowy intent dociera do już działającej aktywności.
+     * Obsługuje przypadki gdy aplikacja jest już uruchomiona i użytkownik
+     * kliknie w powiadomienie.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        Timber.d("MainActivity onNewIntent: ${intent.action}")
+
+        // Ustaw nowy intent jako obecny
+        setIntent(intent)
+
+        // Obsłuż intent z powiadomienia
+        handleNotificationIntent(intent)
+    }
+
+    /**
+     * Obsługuje intencje pochodzące z powiadomień i wykonuje odpowiednie
+     * akcje.
+     *
+     * @param intent Intent do przetworzenia
+     */
+    private fun handleNotificationIntent(intent: Intent?) {
+        if (intent == null) return
+
+        Timber.d("Sprawdzanie intencji z powiadomienia: action=${intent.action}")
+
+        // Loguj wszystkie extras dla debugowania
+        intent.extras?.let { extras ->
+            for (key in extras.keySet()) {
+                Timber.d("Intent extra: $key = ${extras.get(key)}")
+            }
+        }
+
+        when {
+            // Powiadomienie o pobraniu pliku
+            intent.hasExtra("SHOW_DOWNLOADED_FILE") -> {
+                val fileName = intent.getStringExtra("FILE_NAME") ?: "nieznany plik"
+                Timber.d("Otwarto aplikację z powiadomienia o pobraniu pliku: $fileName")
+
+                // Przełącz na sekcję prezentu jeśli plik został pobrany
+                if (::managers.isInitialized) {
+                    managers.appStateManager.setCurrentSection(NavigationSection.GIFT)
+                }
+
+                Toast.makeText(
+                    this, "Plik $fileName został pobrany", Toast.LENGTH_LONG
+                ).show()
+            }
+
+            // Powiadomienie o zakończeniu timera
+            intent.hasExtra("SHOW_TIMER_FINISHED") -> {
+                val minutes = intent.getIntExtra("TIMER_MINUTES", 0)
+                Timber.d("Otwarto aplikację z powiadomienia o zakończeniu timera: $minutes minut")
+
+                // Przełącz na sekcję timera
+                if (::managers.isInitialized) {
+                    managers.appStateManager.setCurrentSection(NavigationSection.TIMER)
+                }
+
+                Toast.makeText(
+                    this, "Timer na $minutes minut został zakończony", Toast.LENGTH_SHORT
+                ).show()
+            }
+
+            // Powiadomienie o postępie timera
+            intent.hasExtra("SHOW_TIMER_PROGRESS") -> {
+                Timber.d("Otwarto aplikację z powiadomienia o postępie timera")
+
+                // Przełącz na sekcję timera
+                if (::managers.isInitialized) {
+                    managers.appStateManager.setCurrentSection(NavigationSection.TIMER)
+                }
+            }
+
+            // Powiadomienie o spauzowanym timerze
+            intent.hasExtra("SHOW_TIMER_PAUSED") -> {
+                Timber.d("Otwarto aplikację z powiadomienia o spauzowanym timerze")
+
+                // Przełącz na sekcję timera
+                if (::managers.isInitialized) {
+                    managers.appStateManager.setCurrentSection(NavigationSection.TIMER)
+                }
+
+                Toast.makeText(
+                    this, "Timer jest spauzowany", Toast.LENGTH_SHORT
+                ).show()
+            }
+
+            // Powiadomienie urodzinowe (gift reveal)
+            intent.action == Intent.ACTION_MAIN && intent.hasCategory(Intent.CATEGORY_LAUNCHER) -> {
+                // To standardowe uruchomienie aplikacji, nie z powiadomienia
+                Timber.d("Standardowe uruchomienie aplikacji")
+            }
+
+            else -> {
+                // Sprawdź czy to może być powiadomienie urodzinowe (nie ma specjalnych extras)
+                Timber.d("Potencjalne powiadomienie urodzinowe lub standardowe uruchomienie")
+
+                // Jeśli aplikacja została uruchomiona i dzisiaj są urodziny, pokaż odpowiedni komunikat
+                if (isTodayBirthday()) {
+                    Toast.makeText(
+                        this, "Wszystkiego najlepszego! 🎂", Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+        }
     }
 
     /** Inicjalizuje podstawowe komponenty aplikacji. */
@@ -252,9 +369,7 @@ class MainActivity : ComponentActivity() {
 
     /**
      * Sprawdza czy dzisiaj są urodziny (dzień i miesiąc się zgadzają z
-     * konfiguracją). UWAGA: Ta funkcja sprawdza tylko dzień i miesiąc,
-     * ignorując godzinę. Do sprawdzenia czy czas urodzin już nadszedł używaj
-     * funkcji calculateTargetDate().
+     * konfiguracją).
      *
      * @return true jeśli dzisiaj jest dzień i miesiąc urodzin z konfiguracji
      */
@@ -270,7 +385,7 @@ class MainActivity : ComponentActivity() {
                 Calendar.MONTH
             ) == birthdayCalendar.get(Calendar.MONTH)
 
-        Timber.d("Sprawdzanie czy dzisiaj urodziny (dzień i miesiąc):")
+        Timber.d("Sprawdzanie czy dzisiaj urodziny:")
         Timber.d("  Aktualna data: ${TimeUtils.formatDate(currentCalendar.time)}")
         Timber.d("  Dzień urodzin: ${birthdayCalendar.get(Calendar.DAY_OF_MONTH)}")
         Timber.d("  Miesiąc urodzin: ${birthdayCalendar.get(Calendar.MONTH) + 1}")
@@ -279,28 +394,6 @@ class MainActivity : ComponentActivity() {
         Timber.d("  isTodayBirthday: $isSameDayAndMonth")
 
         return isSameDayAndMonth
-    }
-
-    /**
-     * Sprawdza czy czas urodzin już nadszedł (dzień, miesiąc I godzina). Ta
-     * funkcja sprawdza pełną datę i czas z konfiguracji.
-     *
-     * @return true jeśli aktualny czas >= czasie urodzin z konfiguracji w tym
-     *    roku
-     */
-    private fun isBirthdayTimeReached(): Boolean {
-        val currentTime = timeProvider.getCurrentTimeMillis()
-        val birthdayThisYear =
-            calculateBirthdayForYear(Calendar.getInstance(WARSAW_TIMEZONE).get(Calendar.YEAR))
-
-        val result = currentTime >= birthdayThisYear
-
-        Timber.d("Sprawdzanie czy czas urodzin już nadszedł:")
-        Timber.d("  Aktualna data: ${TimeUtils.formatDate(java.util.Date(currentTime))}")
-        Timber.d("  Czas urodzin w tym roku: ${TimeUtils.formatDate(java.util.Date(birthdayThisYear))}")
-        Timber.d("  isBirthdayTimeReached: $result")
-
-        return result
     }
 
     /**
@@ -318,8 +411,7 @@ class MainActivity : ComponentActivity() {
         Timber.d("Sprawdzanie czy urodziny były w tym roku:")
         Timber.d("  Aktualna data: ${TimeUtils.formatDate(java.util.Date(currentTime))}")
         Timber.d("  Urodziny w tym roku: ${TimeUtils.formatDate(java.util.Date(birthdayThisYear))}")
-        Timber.d("  Dzisiaj urodziny (dzień/miesiąc): ${isTodayBirthday()}")
-        Timber.d("  Czas urodzin już nadszedł: ${isBirthdayTimeReached()}")
+        Timber.d("  Dzisiaj urodziny: ${isTodayBirthday()}")
         Timber.d("  isBirthdayPastThisYear: $result")
 
         return result
@@ -328,14 +420,6 @@ class MainActivity : ComponentActivity() {
     /**
      * Oblicza datę docelową w zależności od tego czy dzisiaj są urodziny, czy
      * urodziny już były.
-     *
-     * LOGIKA:
-     * - Jeśli dzisiaj są urodziny (dzień/miesiąc) - zwraca dzisiejszą datę z
-     *   godziną urodzin
-     * - Jeśli urodziny jeszcze nie były w tym roku - zwraca tegoroczną datę
-     *   urodzin
-     * - Jeśli urodziny już były w tym roku - zwraca przyszłoroczną datę
-     *   urodzin
      *
      * @return Datę docelową w milisekundach
      */
@@ -346,10 +430,8 @@ class MainActivity : ComponentActivity() {
 
         return when {
             isTodayBirthday() -> {
-                // Dzisiaj są urodziny (dzień/miesiąc) - zwróć datę z tego roku z godziną urodzin
-                // Jeśli godzina jeszcze nie minęła, timer będzie odliczał do niej
-                // Jeśli godzina już minęła, timer pokaże że czas upłynął
-                Timber.d("Dzisiaj są urodziny - używam daty z tego roku z godziną urodzin")
+                // Dzisiaj są urodziny - zwróć datę z tego roku (będzie pokazywał że czas upłynął)
+                Timber.d("Dzisiaj są urodziny - używam daty z tego roku")
                 birthdayThisYear
             }
 
@@ -404,8 +486,7 @@ class MainActivity : ComponentActivity() {
         Timber.d("Konfiguracja załadowana: data urodzin ${TimeUtils.formatDate(appConfig.getBirthdayDate().time)}")
         Timber.d("Pierwsze uruchomienie aplikacji: $isFirstRun")
         Timber.d("Prezent odebrany: $giftReceived")
-        Timber.d("Dzisiaj urodziny (dzień/miesiąc): ${isTodayBirthday()}")
-        Timber.d("Czas urodzin już nadszedł: ${isBirthdayTimeReached()}")
+        Timber.d("Dzisiaj urodziny: ${isTodayBirthday()}")
         Timber.d("Urodziny były w tym roku: ${isBirthdayPastThisYear()}")
 
         if (appConfig.isTestMode()) {
@@ -427,6 +508,9 @@ class MainActivity : ComponentActivity() {
 
         // Sprawdź stan aplikacji przy wznowieniu
         managers.checkStateOnResume()
+
+        // Sprawdź czy aplikacja została wznowiona z powiadomienia
+        handleNotificationIntent(intent)
     }
 
     override fun onDestroy() {
