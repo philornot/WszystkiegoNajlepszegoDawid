@@ -1,4 +1,4 @@
-package com.philornot.siekiera.ui.screens.main.core
+package com.philornot.siekiera.ui.screens.main.shared
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background

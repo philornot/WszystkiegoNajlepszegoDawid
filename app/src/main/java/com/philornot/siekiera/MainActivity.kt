@@ -28,8 +28,8 @@ import com.philornot.siekiera.managers.ManagerContainer
 import com.philornot.siekiera.managers.ManagerFactory
 import com.philornot.siekiera.notification.NotificationHelper
 import com.philornot.siekiera.notification.TimerNotificationHelper
-import com.philornot.siekiera.ui.screens.main.core.MainScreen
-import com.philornot.siekiera.ui.screens.main.drawer.NavigationSection
+import com.philornot.siekiera.ui.screens.main.navigation.MainScreen
+import com.philornot.siekiera.ui.screens.main.navigation.NavigationSection
 import com.philornot.siekiera.ui.theme.AppTheme
 import com.philornot.siekiera.utils.RealTimeProvider
 import com.philornot.siekiera.utils.TimeProvider

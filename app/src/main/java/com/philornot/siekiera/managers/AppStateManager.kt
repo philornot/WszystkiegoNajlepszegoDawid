@@ -1,6 +1,6 @@
 package com.philornot.siekiera.managers
 
-import com.philornot.siekiera.ui.screens.main.drawer.NavigationSection
+import com.philornot.siekiera.ui.screens.main.navigation.NavigationSection
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

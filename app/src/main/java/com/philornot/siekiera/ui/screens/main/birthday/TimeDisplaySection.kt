@@ -1,4 +1,4 @@
-package com.philornot.siekiera.ui.screens.main.countdown
+package com.philornot.siekiera.ui.screens.main.birthday
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalAnimationApi

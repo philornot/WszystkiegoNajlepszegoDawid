@@ -1,4 +1,4 @@
-package com.philornot.siekiera.ui.screens.main.countdown
+package com.philornot.siekiera.ui.screens.main.effects
 
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -21,11 +21,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.translate
-import com.philornot.siekiera.ui.screens.main.effects.Firework
-import com.philornot.siekiera.ui.screens.main.effects.FireworkPhase
-import com.philornot.siekiera.ui.screens.main.effects.ShootingStar
-import com.philornot.siekiera.ui.screens.main.effects.createFirework
-import com.philornot.siekiera.ui.screens.main.effects.createShootingStar
 import kotlinx.coroutines.delay
 import kotlin.math.PI
 import kotlin.math.cos

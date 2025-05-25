@@ -1,4 +1,4 @@
-package com.philornot.siekiera.ui.screens.main.gift
+package com.philornot.siekiera.ui.screens.main.birthday
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing

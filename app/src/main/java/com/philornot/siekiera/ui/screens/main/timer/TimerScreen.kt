@@ -23,7 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import com.philornot.siekiera.ui.screens.main.countdown.CountdownSection
+import com.philornot.siekiera.ui.screens.main.birthday.CountdownSection
 import kotlin.math.roundToInt
 
 /**

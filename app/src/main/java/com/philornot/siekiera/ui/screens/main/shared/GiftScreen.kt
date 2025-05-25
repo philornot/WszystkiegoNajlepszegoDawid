@@ -1,4 +1,4 @@
-package com.philornot.siekiera.ui.screens.main.gift
+package com.philornot.siekiera.ui.screens.main.shared
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -20,7 +20,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.philornot.siekiera.config.AppConfig
-import com.philornot.siekiera.ui.screens.main.curtain.CurtainSection
+import com.philornot.siekiera.ui.screens.main.birthday.CurtainSection
 import com.philornot.siekiera.utils.FileUtils
 import timber.log.Timber
 

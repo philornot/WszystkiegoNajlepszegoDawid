@@ -1,4 +1,4 @@
-package com.philornot.siekiera.ui.screens.main.curtain
+package com.philornot.siekiera.ui.screens.main.birthday
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
@@ -15,7 +15,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import com.philornot.siekiera.ui.screens.main.gift.GiftButton
 
 /**
  * Sekcja z kurtyną i prezentem, obsługująca długie naciśnięcie dla

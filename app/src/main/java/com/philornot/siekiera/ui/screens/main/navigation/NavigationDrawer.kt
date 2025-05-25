@@ -1,18 +1,15 @@
-package com.philornot.siekiera.ui.screens.main.drawer
+package com.philornot.siekiera.ui.screens.main.navigation
 
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -38,10 +35,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+
+
+/** Navigation sections available in the drawer. */
+enum class NavigationSection {
+    GIFT, TIMER, BIRTHDAY_COUNTDOWN, SETTINGS
+}
 
 /**
  * Navigation drawer for the app that slides in from the left. Contains
@@ -70,9 +72,11 @@ fun NavigationDrawer(
     )
 
     // Drawer system with overlay
-    Box(modifier = modifier
-        .fillMaxSize()
-        .zIndex(10f)) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .zIndex(10f)
+    ) {
         // Scrim (dimming overlay when drawer is open)
         if (isOpen) {
             Box(

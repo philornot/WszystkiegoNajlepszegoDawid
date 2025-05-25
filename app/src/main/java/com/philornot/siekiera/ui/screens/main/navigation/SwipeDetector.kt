@@ -1,4 +1,4 @@
-package com.philornot.siekiera.ui.screens.main.drawer
+package com.philornot.siekiera.ui.screens.main.navigation
 
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.Modifier

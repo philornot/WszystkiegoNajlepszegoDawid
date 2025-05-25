@@ -1,4 +1,4 @@
-package com.philornot.siekiera.ui.screens.main.drawer
+package com.philornot.siekiera.ui.screens.main.navigation
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row

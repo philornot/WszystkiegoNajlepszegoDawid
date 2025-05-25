@@ -1,6 +1,6 @@
 package com.philornot.siekiera.managers
 
-import com.philornot.siekiera.ui.screens.main.drawer.NavigationSection
+import com.philornot.siekiera.ui.screens.main.navigation.NavigationSection
 import timber.log.Timber
 
 /**

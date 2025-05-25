@@ -1,4 +1,4 @@
-package com.philornot.siekiera.ui.screens.main.curtain
+package com.philornot.siekiera.ui.screens.main.birthday
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
