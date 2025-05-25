@@ -43,7 +43,7 @@ import java.util.TimeZone
  * managerów. Odpowiada tylko za podstawowy lifecycle, UI i koordynację
  * między managerami.
  *
- * AKTUALIZACJA: Dodana obsługa intencji z powiadomień - aplikacja
+ * Obsługa intencji z powiadomień - aplikacja
  * poprawnie otwiera się po kliknięciu w powiadomienie i reaguje na różne
  * typy powiadomień.
  */
