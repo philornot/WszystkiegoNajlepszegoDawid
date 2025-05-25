@@ -19,7 +19,6 @@ import com.philornot.siekiera.ui.screens.main.shared.HeaderSection
 import com.philornot.siekiera.ui.screens.main.timer.TimerFinishedMessage
 import com.philornot.siekiera.ui.screens.main.timer.TimerScreen
 import com.philornot.siekiera.ui.screens.settings.SettingsScreen
-import timber.log.Timber
 
 /**
  * Komponent odpowiedzialny za główną zawartość MainScreen. Renderuje
@@ -34,18 +33,18 @@ import timber.log.Timber
  * @param isTimerMode Flaga wskazująca, czy aktywny jest tryb timera.
  * @param timerRemainingTime Pozostały czas timera w milisekundach.
  * @param timerFinished Flaga wskazująca, czy timer zakończył odliczanie.
- * @param showCelebration Flaga wskazująca, czy pokazać ekran celebracji urodzin.
+ * @param showCelebration Flaga wskazująca, czy pokazać ekran celebracji
+ *    urodzin.
  * @param timerMinutes Ustawiona liczba minut dla timera.
  * @param giftReceived Flaga wskazująca, czy prezent został odebrany.
- * @param timerModeEnabled Flaga wskazująca, czy tryb timera jest włączony.
  * @param isTimerPaused Flaga wskazująca, czy timer jest zapauzowany.
  * @param currentSection Aktualnie wybrana sekcja nawigacji.
  * @param isDarkTheme Flaga wskazująca, czy aktywny jest ciemny motyw.
  * @param currentAppName Aktualna nazwa aplikacji.
  * @param isTodayBirthday Flaga wskazująca, czy dzisiaj są urodziny.
- * @param isDrawerAvailable Flaga wskazująca, czy drawer nawigacyjny jest dostępny.
+ * @param isDrawerAvailable Flaga wskazująca, czy drawer nawigacyjny jest
+ *    dostępny.
  * @param onGiftClicked Callback wywoływany po kliknięciu prezentu.
- * @param onTimerModeDiscovered Callback wywoływany po odkryciu trybu timera.
  * @param onTimerReset Callback wywoływany po zresetowaniu timera.
  */
 @Composable
@@ -61,7 +60,6 @@ fun MainScreenContent(
     timerMinutes: Int,
     // Parametry zewnętrzne
     giftReceived: Boolean,
-    timerModeEnabled: Boolean,
     isTimerPaused: Boolean,
     currentSection: NavigationSection,
     isDarkTheme: Boolean,
@@ -70,7 +68,6 @@ fun MainScreenContent(
     isDrawerAvailable: Boolean,
     // Callbacki
     onGiftClicked: (Float, Float) -> Unit,
-    onTimerModeDiscovered: () -> Unit,
     onTimerReset: () -> Unit,
     onCelebrationBack: () -> Unit,
     onTimerFinishedReset: () -> Unit,
@@ -95,11 +92,9 @@ fun MainScreenContent(
                         timeRemaining = timeRemaining,
                         timerMinutes = timerMinutes,
                         giftReceived = giftReceived,
-                        timerModeEnabled = timerModeEnabled,
                         isTimerPaused = isTimerPaused,
                         isDrawerAvailable = isDrawerAvailable,
                         onGiftClicked = onGiftClicked,
-                        onTimerModeDiscovered = onTimerModeDiscovered,
                         onPauseTimer = onPauseTimer,
                         onResumeTimer = onResumeTimer
                     )
@@ -162,11 +157,9 @@ private fun BirthdayCountdownContent(
     timeRemaining: Long,
     timerMinutes: Int,
     giftReceived: Boolean,
-    timerModeEnabled: Boolean,
     isTimerPaused: Boolean,
     isDrawerAvailable: Boolean,
     onGiftClicked: (Float, Float) -> Unit,
-    onTimerModeDiscovered: () -> Unit,
     onPauseTimer: () -> Unit,
     onResumeTimer: () -> Unit,
 ) {
@@ -183,11 +176,7 @@ private fun BirthdayCountdownContent(
             isTimeUp = isTimeUp,
             showGift = true,
             onGiftClicked = onGiftClicked,
-            onGiftLongPressed = {
-                Timber.d("Prezent długo naciśnięty, aktywuję tryb timera")
-                onTimerModeDiscovered()
-            },
-            giftReceived = giftReceived || timerModeEnabled,
+            giftReceived = giftReceived,
             modifier = Modifier.weight(1f)
         )
 

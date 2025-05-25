@@ -36,7 +36,6 @@ fun MainScreenLayout(
     progressValue: Float,
     // Parametry zewnętrzne
     giftReceived: Boolean,
-    timerModeEnabled: Boolean,
     isTimerPaused: Boolean,
     isDrawerOpen: Boolean,
     currentSection: NavigationSection,
@@ -46,7 +45,6 @@ fun MainScreenLayout(
     isBirthdayPastThisYear: Boolean,
     // Callbacki
     onGiftClicked: (Float, Float) -> Unit,
-    onTimerModeDiscovered: () -> Unit,
     onTimerReset: () -> Unit,
     onCelebrationBack: () -> Unit,
     onTimerFinishedReset: () -> Unit,
@@ -105,7 +103,6 @@ fun MainScreenLayout(
             showCelebration = showCelebration,
             timerMinutes = timerMinutes,
             giftReceived = giftReceived,
-            timerModeEnabled = timerModeEnabled,
             isTimerPaused = isTimerPaused,
             currentSection = currentSection,
             isDarkTheme = isDarkTheme,
@@ -113,7 +110,6 @@ fun MainScreenLayout(
             isTodayBirthday = isTodayBirthday,
             isDrawerAvailable = isDrawerAvailable,
             onGiftClicked = onGiftClicked,
-            onTimerModeDiscovered = onTimerModeDiscovered,
             onTimerReset = onTimerReset,
             onCelebrationBack = onCelebrationBack,
             onTimerFinishedReset = onTimerFinishedReset,

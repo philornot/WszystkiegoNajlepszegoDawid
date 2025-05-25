@@ -23,10 +23,6 @@ class AppStateManager {
     private val _isTimerMode = MutableStateFlow(false)
     val isTimerMode: StateFlow<Boolean> = _isTimerMode.asStateFlow()
 
-    // Stan odkrycia trybu timera
-    private val _timerModeDiscovered = MutableStateFlow(false)
-    val timerModeDiscovered: StateFlow<Boolean> = _timerModeDiscovered.asStateFlow()
-
     // Aktywny czas timera (w milisekundach)
     private val _activeTimerRemainingTime = MutableStateFlow(0L)
     val activeTimerRemainingTime: StateFlow<Long> = _activeTimerRemainingTime.asStateFlow()
@@ -37,7 +33,6 @@ class AppStateManager {
 
     // Stan pobierania pliku
     private val _isDownloadInProgress = MutableStateFlow(false)
-    val isDownloadInProgress: StateFlow<Boolean> = _isDownloadInProgress.asStateFlow()
 
     /** Zmienia stan szufladki nawigacyjnej. */
     fun setDrawerOpen(isOpen: Boolean) {
@@ -64,11 +59,6 @@ class AppStateManager {
                 }
             }
         }
-    }
-
-    /** Ustawia stan odkrycia trybu timera. */
-    fun setTimerModeDiscovered(discovered: Boolean) {
-        _timerModeDiscovered.value = discovered
     }
 
     /** Aktualizuje pozostały czas timera. */

@@ -22,7 +22,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
-import androidx.core.content.edit
 import com.philornot.siekiera.config.AppConfig
 import com.philornot.siekiera.managers.ManagerContainer
 import com.philornot.siekiera.managers.ManagerFactory
@@ -124,9 +123,7 @@ class MainActivity : ComponentActivity() {
     /** Przywraca stan aplikacji po restarcie. */
     private fun restoreApplicationState() {
         val giftReceived = prefs.getBoolean("gift_received", false)
-        val timerModeEnabled = prefs.getBoolean("timer_mode_discovered", false)
-
-        managers.restoreApplicationState(giftReceived, timerModeEnabled)
+        managers.restoreApplicationState(giftReceived)
     }
 
     /** Ustawia interfejs użytkownika. */
@@ -137,7 +134,6 @@ class MainActivity : ComponentActivity() {
             val appName by managers.settingsManager.currentAppName.collectAsState()
             val drawerOpen by managers.appStateManager.isDrawerOpen.collectAsState()
             val navigationSection by managers.appStateManager.currentSection.collectAsState()
-            val timerModeDiscovered by managers.appStateManager.timerModeDiscovered.collectAsState()
             val activeTimerTime by managers.appStateManager.activeTimerRemainingTime.collectAsState()
             val isTimerPaused by managers.appStateManager.isTimerPaused.collectAsState()
 
@@ -186,14 +182,6 @@ class MainActivity : ComponentActivity() {
                         isTodayBirthday = isTodayBirthday,
                         isBirthdayPastThisYear = isBirthdayPastThisYear,
                         onTimerSet = { minutes -> managers.timerManager.setTimer(minutes) },
-                        timerModeEnabled = timerModeDiscovered,
-                        onTimerModeDiscovered = {
-                            managers.appStateManager.setTimerModeDiscovered(true)
-                            prefs.edit { putBoolean("timer_mode_discovered", true) }
-                            Toast.makeText(
-                                this@MainActivity, "Odkryto tryb timera!", Toast.LENGTH_SHORT
-                            ).show()
-                        },
                         activeTimer = activeTimerTime,
                         isTimerPaused = isTimerPaused,
                         onResetTimer = { managers.timerManager.resetTimer() },
@@ -377,12 +365,10 @@ class MainActivity : ComponentActivity() {
     private fun logApplicationState() {
         val isFirstRun = prefs.getBoolean("is_first_run", true)
         val giftReceived = prefs.getBoolean("gift_received", false)
-        val timerModeEnabled = prefs.getBoolean("timer_mode_discovered", false)
 
         Timber.d("Konfiguracja załadowana: data urodzin ${TimeUtils.formatDate(appConfig.getBirthdayDate().time)}")
         Timber.d("Pierwsze uruchomienie aplikacji: $isFirstRun")
         Timber.d("Prezent odebrany: $giftReceived")
-        Timber.d("Tryb timera odkryty: $timerModeEnabled")
         Timber.d("Dzisiaj urodziny: ${isTodayBirthday()}")
         Timber.d("Urodziny były w tym roku: ${isBirthdayPastThisYear()}")
 
@@ -397,22 +383,6 @@ class MainActivity : ComponentActivity() {
      */
     fun checkFileNow() {
         managers.fileManager.checkFileNow()
-    }
-
-    /**
-     * Sprawdza pliki okresowo gdy zbliża się koniec odliczania. Wywoływane z
-     * MainScreen.
-     */
-    fun checkFilesPeriodically(timeRemaining: Long) {
-        managers.fileManager.checkFilesPeriodically(timeRemaining)
-    }
-
-    /**
-     * Wykonuje ostatnie sprawdzenie pliku po upływie czasu odliczania.
-     * Wywoływane z MainScreen.
-     */
-    fun performFinalFileCheck() {
-        managers.fileManager.performFinalCheck()
     }
 
     public override fun onResume() {

@@ -51,7 +51,6 @@ import timber.log.Timber
 fun GiftButton(
     modifier: Modifier = Modifier,
     onClick: (centerX: Float, centerY: Float) -> Unit,
-    onLongPress: () -> Unit = {},
     enableLongPress: Boolean = false,
 ) {
     // Animowany scale dla subtelnego efektu pulsowania

@@ -33,8 +33,6 @@ fun MainScreenContainer(
     isTodayBirthday: Boolean = false,
     isBirthdayPastThisYear: Boolean = false,
     onTimerSet: (Int) -> Unit = {},
-    timerModeEnabled: Boolean = false,
-    onTimerModeDiscovered: () -> Unit = {},
     activeTimer: Long = 0,
     isTimerPaused: Boolean = false,
     onResetTimer: () -> Unit = {},
@@ -168,7 +166,6 @@ fun MainScreenContainer(
         progressValue = progressValue,
         // Parametry przekazane dalej
         giftReceived = giftReceived,
-        timerModeEnabled = timerModeEnabled,
         isTimerPaused = isTimerPaused,
         isDrawerOpen = isDrawerOpen,
         currentSection = currentSection,
@@ -185,13 +182,6 @@ fun MainScreenContainer(
                 delay(1500)
                 showCelebration = true
                 onGiftClicked()
-            }
-        },
-        onTimerModeDiscovered = {
-            if (!timerModeEnabled) {
-                timerMinutes = 5
-                timerFinished = false
-                onTimerModeDiscovered()
             }
         },
         onTimerReset = {

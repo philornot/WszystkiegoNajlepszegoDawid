@@ -72,16 +72,6 @@ fun CurtainSection(
             GiftButton(
                 modifier = Modifier.size(200.dp), onClick = { centerX, centerY ->
                 onGiftClicked(centerX, centerY)
-            }, onLongPress = {
-                if (isInGiftScreen) {
-                    // W GiftScreen long press robi to samo co kliknięcie
-                    onGiftClicked(0.5f, 0.5f) // Używamy domyślnych wartości centrum
-                } else {
-                    // W normalnym trybie aktywuj długie naciśnięcie tylko jeśli prezent został odebrany
-                    if (giftReceived) {
-                        onGiftLongPressed()
-                    }
-                }
             }, enableLongPress = isInGiftScreen || giftReceived
             )
         }

@@ -33,16 +33,11 @@ data class ManagerContainer(
      * urodzin", chyba że timer jest aktywny.
      *
      * @param giftReceived Czy prezent został już odebrany
-     * @param timerModeEnabled Czy tryb timera został odkryty przez użytkownika
      */
     fun restoreApplicationState(
         giftReceived: Boolean,
-        timerModeEnabled: Boolean,
     ) {
-        Timber.d("Przywracanie stanu aplikacji: giftReceived=$giftReceived, timerModeEnabled=$timerModeEnabled")
-
-        // Ustaw stan odkrycia trybu timera
-        appStateManager.setTimerModeDiscovered(timerModeEnabled)
+        Timber.d("Przywracanie stanu aplikacji: giftReceived=$giftReceived")
 
         // Przywróć timer jeśli był aktywny - metoda zwraca true jeśli timer jest rzeczywiście aktywny
         val timerIsActive = timerManager.restoreTimerAfterRestart()
