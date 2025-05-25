@@ -53,8 +53,12 @@ import timber.log.Timber
 /**
  * Główny ekran z czystym, lawendowym motywem i minimalnymi animacjami.
  * Ulepszona wersja z lepszą responsywnością timera i poprawionymi
- * animacjami. Zawiera również szufladkę nawigacyjną po odebraniu prezentu.
- * POPRAWKA: Naprawiono synchronizację animacji licznika dla trybu timera.
+ * animacjami. Zawiera również szufladkę nawigacyjną dostępną TYLKO po
+ * dacie określonej w konfiguracji.
+ *
+ * AKTUALIZACJA: Uproszczono logikę - szufladka nawigacyjna jest dostępna
+ * tylko i wyłącznie po dacie urodzin (isTimeUp = true), niezależnie od
+ * stanu odebrania prezentu.
  */
 @Composable
 fun MainScreen(
@@ -83,7 +87,7 @@ fun MainScreen(
     onAppNameChange: (String) -> Unit = {},
     onAppNameReset: () -> Unit = {},
 ) {
-    // Oblicz czy czas upłynął
+    // Oblicz czy czas upłynął - główny warunek określający dostępność nawigacji
     var isTimeUp by remember { mutableStateOf(currentTime >= targetDate) }
 
     // Śledź aktualny czas (aktualizowany co sekundę)
@@ -102,9 +106,6 @@ fun MainScreen(
     // Śledź czy pokazać ekran celebracji po kliknięciu prezentu
     var showCelebration by remember { mutableStateOf(false) }
 
-    // Śledź czy prezent został kliknięty (lokalny stan dla pokazywania szufladki)
-    var giftWasClicked by remember { mutableStateOf(giftReceived) }
-
     // Śledź czy pokazać wybuch konfetti gdy prezent jest kliknięty lub gdy czas upłynie
     var showConfettiExplosion by remember { mutableStateOf(false) }
 
@@ -119,7 +120,7 @@ fun MainScreen(
     var showProgressDialog by remember { mutableStateOf(false) }
     var progressValue by remember { mutableFloatStateOf(0f) }
 
-    // POPRAWKA: Lepsze śledzenie czasu timera z rzeczywistą synchronizacją
+    // Lepsze śledzenie czasu timera z rzeczywistą synchronizacją
     var timerRemainingTime by remember { mutableLongStateOf(activeTimer) }
     var timerFinished by remember { mutableStateOf(false) }
     var previousTimerActive by remember { mutableStateOf(false) }
@@ -127,7 +128,7 @@ fun MainScreen(
     // Czy aplikacja jest w trybie timera (kontrolowane teraz przez currentSection)
     val isTimerMode = currentSection == NavigationSection.TIMER
 
-    // POPRAWKA: Ulepszona inicjalizacja z lepszym śledzeniem zmian stanu timera
+    // Ulepszona inicjalizacja z lepszym śledzeniem zmian stanu timera
     LaunchedEffect(activeTimer, isTimerPaused, isTimerMode) {
         val isCurrentlyActive = activeTimer > 0
 
@@ -142,7 +143,7 @@ fun MainScreen(
             Timber.d("Timer się zakończył - pokazuję celebrację")
             timerFinished = true
         }
-        // Normalne śledzenie aktywnego timera - POPRAWKA: Tylko gdy timer jest aktywny
+        // Normalne śledzenie aktywnego timera - Tylko gdy timer jest aktywny
         else if (isCurrentlyActive) {
             timerRemainingTime = activeTimer
         }
@@ -164,13 +165,13 @@ fun MainScreen(
         }
     }
 
-    // POPRAWKA: Ulepszony system aktualizacji czasu z lepszą synchronizacją dla timera
+    // Ulepszony system aktualizacji czasu z lepszą synchronizacją dla timera
     LaunchedEffect(isTimerMode, activeTimer, isTimerPaused) {
         while (true) {
             currentTimeState = System.currentTimeMillis()
 
             if (isTimerMode) {
-                // POPRAWKA: W trybie timera aktualizuj lokalny stan na podstawie activeTimer
+                // W trybie timera aktualizuj lokalny stan na podstawie activeTimer
                 if (activeTimer > 0 && !isTimerPaused) {
                     // Timer jest aktywny - używaj wartości z activeTimer (zarządzane przez TimerManager)
                     timerRemainingTime = activeTimer
@@ -223,6 +224,7 @@ fun MainScreen(
                     // Sprawdź czy czas się skończył
                     if (currentTimeState >= targetDate && !isTimeUp) {
                         isTimeUp = true
+                        Timber.d("Czas upłynął! Szufladka nawigacyjna staje się dostępna")
 
                         if (activity != null) {
                             Timber.d("Uruchamiam ostatnie sprawdzenie pliku po upływie czasu")
@@ -262,7 +264,8 @@ fun MainScreen(
             .shakeEffect(timeRemaining = if (isTimerMode) timerRemainingTime else timeRemaining)
             .flashEffect(timeRemaining = if (isTimerMode) timerRemainingTime else timeRemaining)
             .then(
-                if (giftWasClicked) {
+                // Dodaj obsługę swipe tylko gdy szufladka jest dostępna (po dacie urodzin)
+                if (isTimeUp) {
                     Modifier.detectHorizontalSwipes(
                         onSwipeLeft = { onDrawerStateChange(false) },
                         onSwipeRight = { onDrawerStateChange(true) })
@@ -274,8 +277,8 @@ fun MainScreen(
         // Tło aplikacji
         AppBackground(isTimeUp = isTimeUp || (isTimerMode && timerFinished))
 
-        // Navigation drawer (pokazuje się po kliknięciu prezentu)
-        if (giftWasClicked) {
+        // Navigation drawer - dostępna TYLKO po dacie urodzin
+        if (isTimeUp) {
             NavigationDrawer(
                 isOpen = isDrawerOpen,
                 onOpenStateChange = onDrawerStateChange,
@@ -300,7 +303,8 @@ fun MainScreen(
                 ) {
                     when (currentSection) {
                         NavigationSection.BIRTHDAY_COUNTDOWN -> {
-                            HeaderSection(hasDrawer = giftWasClicked)
+                            // Przekaż informację o dostępności szufladki (gdy isTimeUp = true)
+                            HeaderSection(hasDrawer = isTimeUp)
 
                             CurtainSection(
                                 isTimeUp = isTimeUp,
@@ -311,7 +315,6 @@ fun MainScreen(
                                     showConfettiExplosion = true
 
                                     MainScope().launch {
-                                        giftWasClicked = true
                                         delay(1500)
                                         showCelebration = true
                                         onGiftClicked()
@@ -329,7 +332,7 @@ fun MainScreen(
                                 modifier = Modifier.weight(1f)
                             )
 
-                            // POPRAWKA: Dla trybu urodzinowego używaj timeRemaining
+                            // Dla trybu urodzinowego używaj timeRemaining
                             CountdownSection(
                                 modifier = Modifier.padding(bottom = 24.dp),
                                 timeRemaining = timeRemaining,
@@ -345,7 +348,7 @@ fun MainScreen(
                         }
 
                         NavigationSection.TIMER -> {
-                            // POPRAWKA: Dla trybu timera przekaż poprawny czas
+                            // Dla trybu timera przekaż poprawny czas
                             TimerScreen(
                                 timerRemainingTime = timerRemainingTime, // Użyj timerRemainingTime zamiast activeTimer
                                 timerFinished = false, // Zawsze false, bo finished obsługujemy osobno
