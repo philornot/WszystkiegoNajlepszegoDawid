@@ -6,6 +6,7 @@ coreKtxVersion = "1.16.0"
 coreTesting = "2.2.0"
 desugar_jdk_libs = "2.1.5"
 espressoCoreVersion = "3.6.1"
+firebaseBom = "33.14.0"
 googleApiClientAndroid = "2.2.0"
 googleApiServicesDrive = "v3-rev20220815-2.0.0"
 googleAuthLibraryOauth2Http = "1.19.0"
@@ -44,6 +45,7 @@ androidx-material-icons-extended = { module = "androidx.compose.material:materia
 androidx-work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "workRuntimeKtx" }
 androidx-work-testing = { module = "androidx.work:work-testing", version.ref = "workRuntimeKtx" }
 desugar_jdk_libs = { module = "com.android.tools:desugar_jdk_libs", version.ref = "desugar_jdk_libs" }
+firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }
 google-api-client-android = { module = "com.google.api-client:google-api-client-android", version.ref = "googleApiClientAndroid" }
 google-api-services-drive = { module = "com.google.apis:google-api-services-drive", version.ref = "googleApiServicesDrive" }
 google-auth-library-oauth2-http = { module = "com.google.auth:google-auth-library-oauth2-http", version.ref = "googleAuthLibraryOauth2Http" }

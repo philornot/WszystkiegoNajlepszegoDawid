@@ -4,7 +4,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("kotlin-parcelize")
-
+    id("com.google.gms.google-services")
     id("io.sentry.android.gradle") version "5.6.0"
 }
 
@@ -142,6 +142,9 @@ android {
 }
 
 dependencies {
+    // Firebase
+    implementation(platform(libs.firebase.bom))
+
     // Biblioteka do desugaring
     coreLibraryDesugaring(libs.desugar.jdk.libs)
 
