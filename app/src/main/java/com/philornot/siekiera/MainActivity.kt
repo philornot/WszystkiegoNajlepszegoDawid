@@ -93,9 +93,24 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * NAPRAWKA: Dodano obsługę onRequestPermissionsResult dla
-     * PermissionManager.
+     * Obsługuje wynik żądania uprawnień.
+     *
+     * Ta metoda jest wywoływana przez system Android, gdy użytkownik odpowie
+     * na prośbę o uprawnienia (np. zezwoli lub odmówi). Wynik jest następnie
+     * przekazywany do PermissionManager w celu dalszego przetworzenia.
+     *
+     * @param requestCode Kod żądania przekazany do `requestPermissions()`.
+     * @param permissions Tablica żądanych uprawnień.
+     * @param grantResults Wyniki dla odpowiednich uprawnień:
+     *    `PERMISSION_GRANTED` lub `PERMISSION_DENIED`.
      */
+    @Deprecated(
+        "This method is deprecated. Use the Activity Result API for better type safety and testability. " + "Specifically, use registerForActivityResult with ActivityResultContracts.RequestMultiplePermissions " + "and handle the result in the ActivityResultCallback.",
+        ReplaceWith(
+            "registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { /* handle result */ }",
+            "androidx.activity.result.contract.ActivityResultContracts"
+        )
+    )
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<String>,
@@ -106,9 +121,7 @@ class MainActivity : ComponentActivity() {
         // Przekaż wynik do PermissionManager
         if (::managers.isInitialized) {
             managers.permissionsManager.handlePermissionResult(
-                requestCode,
-                permissions,
-                grantResults
+                requestCode, permissions, grantResults
             )
         }
     }
@@ -143,7 +156,14 @@ class MainActivity : ComponentActivity() {
         // Loguj wszystkie extras dla debugowania
         intent.extras?.let { extras ->
             for (key in extras.keySet()) {
-                Timber.d("Intent extra: $key = ${extras.get(key)}")
+                val value = when {
+                    extras.getString(key) != null -> extras.getString(key)
+                    extras.getInt(key, Int.MIN_VALUE) != Int.MIN_VALUE -> extras.getInt(key)
+                    extras.getBoolean(key, false) != extras.getBoolean(key, true) -> extras.getBoolean(key)
+                    extras.getLong(key, Long.MIN_VALUE) != Long.MIN_VALUE -> extras.getLong(key)
+                    else -> "unknown type"
+                }
+                Timber.d("Intent extra: $key = $value")
             }
         }
 

@@ -363,7 +363,7 @@ class DriveApiClient(context: Context) {
                     retryCount = attempt + 1
                 } else {
                     Timber.e("Operation '$operation' failed after $attempt attempts")
-                    throw lastException
+                    lastException?.let { throw it } ?: throw RuntimeException("Operation '$operation' failed with unknown error after $attempt attempts")
                 }
             }
         }

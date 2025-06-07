@@ -10,6 +10,7 @@ import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.annotation.RequiresApi
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.philornot.siekiera.config.AppConfig
@@ -59,6 +60,7 @@ class PermissionsManager(
     }
 
     /** Pokazuje instrukcje jak włączyć uprawnienia do alarmów. */
+    @RequiresApi(Build.VERSION_CODES.S)
     private fun showAlarmPermissionInstructions() {
         Toast.makeText(
             activity,
