@@ -3,6 +3,7 @@ package com.philornot.siekiera.workers
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -23,23 +24,23 @@ import com.philornot.siekiera.notification.NotificationHelper
 import com.philornot.siekiera.utils.FileUtils
 import com.philornot.siekiera.utils.TimeUtils
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
 import java.io.IOException
 import java.lang.ref.WeakReference
+import java.net.ConnectException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
+import javax.net.ssl.SSLException
 
 /**
- * Worker, który codziennie o 23:59 sprawdza, czy w folderze na Google
- * Drive jest nowsza wersja pliku.
+ * Enhanced FileCheckWorker with improved network error handling and user
+ * feedback.
  *
- * Dodano mechanizm pobierania pliku do publicznego folderu Pobrane oraz
- * wysyłanie powiadomień o pobraniu pliku.
- *
- * Zawiera mechanizmy zapobiegające wielokrotnemu pobieraniu tego samego
- * pliku.
+ * Handles network issues gracefully and provides better diagnostics for
+ * debugging connection problems with Google Drive API.
  */
 class FileCheckWorker(
     context: Context,
@@ -48,6 +49,14 @@ class FileCheckWorker(
 
     // Używamy WeakReference, aby uniknąć memory leaks
     private val contextRef = WeakReference(context.applicationContext)
+
+    // Enhanced error tracking
+    private var networkErrorType: NetworkErrorType? = null
+    private var lastErrorMessage: String? = null
+
+    enum class NetworkErrorType {
+        NO_INTERNET, DNS_FAILURE, TIMEOUT, SSL_ERROR, AUTH_ERROR, RATE_LIMITED, SERVER_ERROR, UNKNOWN
+    }
 
     // Funkcja pomocnicza do uzyskania kontekstu
     private fun getContext(): Context? = contextRef.get()
@@ -63,59 +72,175 @@ class FileCheckWorker(
         return testDriveClient ?: DriveApiClient.getInstance(context)
     }
 
-    override suspend fun doWork(): Result = coroutineScope {
-        Timber.d("FileCheckWorker: Rozpoczynam workflow sprawdzania pliku")
+    /**
+     * Classifies network exceptions for better error handling and user
+     * feedback
+     */
+    private fun classifyNetworkException(exception: Exception): NetworkErrorType {
+        return when {
+            exception is UnknownHostException -> {
+                val message = exception.message?.lowercase() ?: ""
+                if (message.contains("oauth2.googleapis.com") || message.contains("www.googleapis.com")) {
+                    NetworkErrorType.DNS_FAILURE
+                } else {
+                    NetworkErrorType.NO_INTERNET
+                }
+            }
+
+            exception is ConnectException -> NetworkErrorType.NO_INTERNET
+            exception is SocketTimeoutException -> NetworkErrorType.TIMEOUT
+            exception is SSLException -> NetworkErrorType.SSL_ERROR
+            exception.message?.contains("401") == true || exception.message?.contains("unauthorized") == true -> NetworkErrorType.AUTH_ERROR
+            exception.message?.contains("429") == true -> NetworkErrorType.RATE_LIMITED
+            exception.message?.contains("50") == true -> NetworkErrorType.SERVER_ERROR
+            else -> NetworkErrorType.UNKNOWN
+        }
+    }
+
+    /** Provides user-friendly error message based on network error type */
+    private fun getUserFriendlyErrorMessage(errorType: NetworkErrorType): String {
+        return when (errorType) {
+            NetworkErrorType.NO_INTERNET -> "Brak połączenia z internetem. Sprawdź WiFi lub dane mobilne."
+            NetworkErrorType.DNS_FAILURE -> "Problem z rozwiązywaniem nazw serwerów Google. Sprawdź ustawienia DNS."
+            NetworkErrorType.TIMEOUT -> "Przekroczono limit czasu połączenia. Spróbuj ponownie później."
+            NetworkErrorType.SSL_ERROR -> "Problem z certyfikatami SSL. Sprawdź datę i czas na urządzeniu."
+            NetworkErrorType.AUTH_ERROR -> "Problem z uwierzytelnianiem Google Drive. Skontaktuj się z deweloperem."
+            NetworkErrorType.RATE_LIMITED -> "Przekroczono limit zapytań API. Spróbuj ponownie za kilka minut."
+            NetworkErrorType.SERVER_ERROR -> "Serwery Google Drive są tymczasowo niedostępne."
+            NetworkErrorType.UNKNOWN -> "Wystąpił nieznany błąd sieciowy."
+        }
+    }
+
+    /** Logs detailed network error information for debugging */
+    private fun logNetworkError(operation: String, exception: Exception) {
+        val errorType = classifyNetworkException(exception)
+        networkErrorType = errorType
+        lastErrorMessage = exception.message
+
+        Timber.e("Network error in FileCheckWorker.$operation:")
+        Timber.e("  Error type: $errorType")
+        Timber.e("  Exception: ${exception.javaClass.simpleName}")
+        Timber.e("  Message: ${exception.message}")
+
+        // Add specific diagnostics
+        when (errorType) {
+            NetworkErrorType.DNS_FAILURE -> {
+                Timber.e("  Issue: Cannot resolve Google API hostnames")
+                Timber.e("  Possible solutions: Check network, try different DNS, restart device")
+            }
+
+            NetworkErrorType.NO_INTERNET -> {
+                Timber.e("  Issue: No internet connectivity")
+                Timber.e("  Possible solutions: Enable WiFi/mobile data, check airplane mode")
+            }
+
+            NetworkErrorType.TIMEOUT -> {
+                Timber.e("  Issue: Network requests timing out")
+                Timber.e("  Possible solutions: Check connection speed, try again later")
+            }
+
+            NetworkErrorType.SSL_ERROR -> {
+                Timber.e("  Issue: SSL certificate problems")
+                Timber.e("  Possible solutions: Check device date/time, update system")
+            }
+
+            else -> {
+                Timber.e("  User message: ${getUserFriendlyErrorMessage(errorType)}")
+            }
+        }
+    }
+
+    /** Saves network error information to SharedPreferences for later retrieval */
+    private fun saveNetworkErrorInfo(context: Context) {
+        if (networkErrorType != null) {
+            val prefs = context.getSharedPreferences("network_error_prefs", Context.MODE_PRIVATE)
+            prefs.edit {
+                putString("last_error_type", networkErrorType!!.name)
+                putString("last_error_message", lastErrorMessage ?: "Unknown error")
+                putLong("last_error_time", System.currentTimeMillis())
+            }
+        }
+    }
+
+    override suspend fun doWork(): Result = kotlinx.coroutines.runBlocking {
+        Timber.d("FileCheckWorker: Starting enhanced file check workflow")
 
         try {
+            // Reset error tracking
+            networkErrorType = null
+            lastErrorMessage = null
+
             // Sprawdź czy wymuszamy pobieranie
             val forceDownload = inputData.getBoolean("force_download", false)
 
-            // Najpierw sprawdź czy zadanie nie jest już uruchomione
-            // WAŻNE: Pozwól na wykonanie jeśli wymuszamy pobieranie
+            // Check if another task is already running (unless forcing download)
             if (isWorkAlreadyRunning() && !forceDownload) {
-                Timber.d("FileCheckWorker: Inne zadanie sprawdzania pliku już działa - pomijam")
-                return@coroutineScope Result.success()
+                Timber.d("FileCheckWorker: Another file check task is running - skipping")
+                return@runBlocking Result.success()
             }
-            Timber.d("FileCheckWorker: Brak innych uruchomionych zadań lub wymuszono pobieranie, kontynuuję sprawdzanie")
 
-            // Sprawdź czy już pobraliśmy plik
+            // Check if file is already downloaded (unless forcing download)
             if (isFileAlreadyDownloaded() && !forceDownload) {
-                Timber.d("FileCheckWorker: Plik już został pobrany - pomijam pobieranie")
-                return@coroutineScope Result.success()
+                Timber.d("FileCheckWorker: File already downloaded - skipping")
+                return@runBlocking Result.success()
             }
-            Timber.d("FileCheckWorker: Plik jeszcze nie pobrany lub wymuszono pobieranie, kontynuuję")
 
+            // Perform the main file check operation
             withContext(Dispatchers.IO) {
-                Timber.d("FileCheckWorker: Rozpoczynam sprawdzanie aktualizacji pliku na dispatcherze IO")
+                Timber.d("FileCheckWorker: Starting file update check on IO dispatcher")
                 checkForFileUpdate()
-                Timber.d("FileCheckWorker: Sprawdzanie aktualizacji pliku zakończone pomyślnie")
+                Timber.d("FileCheckWorker: File update check completed successfully")
             }
 
-            // Powiadom aktywność o zakończeniu pracy
-            Timber.d("FileCheckWorker: Wysyłam broadcast o zakończeniu pracy")
+            // Send completion broadcast
             sendCompletionBroadcast()
 
-            Timber.d("FileCheckWorker: Praca zakończona sukcesem")
+            Timber.d("FileCheckWorker: Work completed successfully")
             Result.success()
-        } catch (e: IOException) {
-            // Błędy sieciowe - próbujemy ponownie z backoff policy
-            Timber.e(
-                e, "FileCheckWorker: Błąd sieciowy podczas sprawdzania pliku - spróbuję ponownie"
-            )
-            Result.retry()
-        } catch (e: Exception) {
-            // Nieoczekiwane błędy - zapisujemy do logów i kończymy błędem
-            Timber.e(
-                e, "FileCheckWorker: Nieoczekiwany błąd podczas sprawdzania pliku: ${e.message}"
-            )
 
-            // Maksymalna liczba prób
-            val runAttemptCount = runAttemptCount
-            if (runAttemptCount < MAX_RETRY_ATTEMPTS) {
-                Timber.d("FileCheckWorker: Próba $runAttemptCount z $MAX_RETRY_ATTEMPTS, ponawiam...")
+        } catch (e: IOException) {
+            // Enhanced network error handling
+            logNetworkError("doWork", e)
+
+            val context = getContext()
+            if (context != null) {
+                saveNetworkErrorInfo(context)
+            }
+
+            // Determine retry strategy based on error type
+            val shouldRetry = when (networkErrorType) {
+                NetworkErrorType.NO_INTERNET,
+                NetworkErrorType.DNS_FAILURE,
+                NetworkErrorType.TIMEOUT,
+                    -> runAttemptCount < 3
+
+                NetworkErrorType.SERVER_ERROR,
+                NetworkErrorType.RATE_LIMITED,
+                    -> runAttemptCount < 5
+
+                NetworkErrorType.SSL_ERROR,
+                NetworkErrorType.AUTH_ERROR,
+                    -> runAttemptCount < 1 // Limited retry
+                else -> runAttemptCount < MAX_RETRY_ATTEMPTS
+            }
+
+            if (shouldRetry) {
+                Timber.d("FileCheckWorker: Network error - will retry (attempt $runAttemptCount)")
                 Result.retry()
             } else {
-                Timber.d("FileCheckWorker: Osiągnięto maksymalną liczbę prób ($MAX_RETRY_ATTEMPTS), poddaję się.")
+                Timber.e("FileCheckWorker: Max retries reached for network error")
+                Result.failure()
+            }
+
+        } catch (e: Exception) {
+            // Handle non-network exceptions
+            Timber.e(e, "FileCheckWorker: Unexpected error: ${e.message}")
+
+            if (runAttemptCount < MAX_RETRY_ATTEMPTS) {
+                Timber.d("FileCheckWorker: Unexpected error - will retry (attempt $runAttemptCount)")
+                Result.retry()
+            } else {
+                Timber.e("FileCheckWorker: Max retries reached for unexpected error")
                 Result.failure()
             }
         }
@@ -124,28 +249,24 @@ class FileCheckWorker(
     /** Sprawdza, czy już istnieje uruchomione zadanie sprawdzania pliku */
     private fun isWorkAlreadyRunning(): Boolean {
         val context = getContext() ?: return false
-        Timber.d("FileCheckWorker: Sprawdzam czy inne zadanie sprawdzania jest już uruchomione")
 
-        // Sprawdź czy wymuszamy pobieranie - NOWE
         val forceDownload = inputData.getBoolean("force_download", false)
         if (forceDownload) {
-            Timber.d("FileCheckWorker: Wymuszono pobieranie, ignoruję czas ostatniego sprawdzenia")
+            Timber.d("FileCheckWorker: Force download enabled - ignoring running check")
             return false
         }
 
-        // Używamy shared preferences do synchronizacji między instancjami
         val prefs = context.getSharedPreferences("file_check_prefs", Context.MODE_PRIVATE)
         val lastCheckTime = prefs.getLong("last_check_time", 0)
         val currentTime = System.currentTimeMillis()
 
-        // Jeśli od ostatniego sprawdzenia minęło mniej niż 5 sekund, zakładamy że już działa
+        // If less than 5 seconds since last check, assume another instance is running
         if (currentTime - lastCheckTime < 5000) {
-            Timber.d("FileCheckWorker: Inne sprawdzenie rozpoczęto mniej niż 5 sekund temu (${currentTime - lastCheckTime}ms) - uznano za już uruchomione")
+            Timber.d("FileCheckWorker: Recent check detected (${currentTime - lastCheckTime}ms ago)")
             return true
         }
 
-        // Zapisz aktualny czas sprawdzenia
-        Timber.d("FileCheckWorker: Brak wykrytych niedawnych sprawdzeń, aktualizuję last_check_time")
+        // Update last check time
         prefs.edit { putLong("last_check_time", currentTime) }
         return false
     }
@@ -154,156 +275,133 @@ class FileCheckWorker(
     private fun isFileAlreadyDownloaded(): Boolean {
         val context = getContext() ?: return false
         val appConfig = getAppConfig() ?: return false
-        Timber.d("FileCheckWorker: Sprawdzam czy plik został już pobrany")
 
-        // Sprawdź, czy prezent został już odebrany (ale tylko gdy nie jesteśmy w trybie wymuszania)
         val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
         val giftReceived = prefs.getBoolean("gift_received", false)
         val forceDownload = inputData.getBoolean("force_download", false)
-        Timber.d("FileCheckWorker: Aktualny stan - gift_received=$giftReceived, force_download=$forceDownload")
 
         if (giftReceived && !forceDownload) {
-            // Dodatkowo sprawdź, czy plik istnieje w folderze Pobrane
             val fileName = appConfig.getDaylioFileName()
             val fileExists = FileUtils.isFileInPublicDownloads(fileName)
-            Timber.d("FileCheckWorker: Prezent już odebrany i plik lokalny istnieje=$fileExists")
+            Timber.d("FileCheckWorker: Gift received, file exists: $fileExists")
             return fileExists
         }
 
-        Timber.d("FileCheckWorker: Plik musi zostać pobrany (prezent nie odebrany lub wymuszono pobieranie)")
         return false
     }
 
-    /**
-     * Wysyła broadcast o zakończeniu pracy workera. Pozwala na powiadomienie
-     * aktywności, że pobranie pliku zostało zakończone.
-     */
-    private fun sendCompletionBroadcast() {
-        val context = getContext() ?: return
-        Timber.d("FileCheckWorker: Wysyłam broadcast że praca została zakończona")
-        val intent = Intent("com.philornot.siekiera.WORK_COMPLETED")
-        context.sendBroadcast(intent)
-        Timber.d("FileCheckWorker: Broadcast wysłany: com.philornot.siekiera.WORK_COMPLETED")
-    }
-
+    /** Enhanced file update check with better error handling */
     private suspend fun checkForFileUpdate() {
-        val context = getContext() ?: run {
-            Timber.e("FileCheckWorker: Brak kontekstu - nie można kontynuować")
-            throw IllegalStateException("Brak kontekstu - nie można kontynuować")
-        }
+        val context = getContext() ?: throw IllegalStateException("Context unavailable")
+        val appConfig = getAppConfig() ?: throw IllegalStateException("AppConfig unavailable")
 
-        val appConfig = getAppConfig() ?: run {
-            Timber.e("FileCheckWorker: Brak konfiguracji - nie można kontynuować")
-            throw IllegalStateException("Brak konfiguracji - nie można kontynuować")
-        }
-
-        // Pobierz dane z konfiguracji
         val folderId = appConfig.getDriveFolderId()
         val fileName = appConfig.getDaylioFileName()
 
-        Timber.d("FileCheckWorker: Sprawdzanie aktualizacji pliku w folderze: $folderId, docelowy plik: $fileName")
+        Timber.d("FileCheckWorker: Checking for file updates - folder: $folderId, target: $fileName")
 
-        // Sprawdź czy plik już istnieje w folderze Pobrane
+        // Check if file already exists locally
         val forceDownload = inputData.getBoolean("force_download", false)
         if (FileUtils.isFileInPublicDownloads(fileName) && !forceDownload) {
-            Timber.d("FileCheckWorker: Plik $fileName już istnieje w folderze Pobrane - pomijam pobieranie")
+            Timber.d("FileCheckWorker: File $fileName already exists locally")
+            markGiftAsReceived(context, fileName)
+            return
+        }
 
-            // Oznacz prezent jako odebrany, nawet jeśli już wcześniej istniał
+        try {
+            // Get Drive client with health check
+            val driveClient = getDriveClient(context)
+
+            // Check client health before proceeding
+            if (!driveClient.isHealthy()) {
+                Timber.w("FileCheckWorker: DriveClient is not healthy, attempting reinitialization")
+            }
+
+            // Initialize client with enhanced error handling
+            if (!driveClient.initialize()) {
+                throw IOException("Failed to initialize Drive API client")
+            }
+
+            Timber.d("FileCheckWorker: Drive API client initialized successfully")
+
+            // Search for .daylio files in the folder
+            val files =
+                driveClient.listFilesInFolder(folderId).filter { it.name.endsWith(".daylio") }
+
+            Timber.d("FileCheckWorker: Found ${files.size} .daylio files in folder")
+
+            if (files.isEmpty()) {
+                Timber.d("FileCheckWorker: No .daylio files found - nothing to download")
+                return
+            }
+
+            // Find the newest file
+            val newestFile = files.maxByOrNull { it.modifiedTime.time } ?: return
+
+            Timber.d("FileCheckWorker: Newest file: ${newestFile.name}")
+            Timber.d("  Modified: ${TimeUtils.formatDate(newestFile.modifiedTime)}")
+            Timber.d("  Size: ${newestFile.size} bytes")
+
+            // Check if we should download the file
             val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-            prefs.edit { putBoolean("gift_received", true) }
-            Timber.d("FileCheckWorker: Zaktualizowano preferencje: gift_received=true")
+            val giftReceived = prefs.getBoolean("gift_received", false)
 
-            return
-        }
+            if (giftReceived && !forceDownload) {
+                Timber.d("FileCheckWorker: Gift already received and not forcing download")
+                return
+            }
 
-        Timber.d("FileCheckWorker: Plik wymaga pobrania${if (forceDownload) " (wymuszono pobranie)" else ""}")
+            // Download the file
+            Timber.d("FileCheckWorker: Starting direct download of file")
+            val success = downloadFileDirect(driveClient, newestFile.id, fileName)
 
-        // Get the Drive client using the testable method
-        val driveClient = getDriveClient(context)
-        Timber.d("FileCheckWorker: Uzyskano instancję klienta Drive API")
-
-        // Zainicjalizuj klienta, jeśli nie jest już zainicjalizowany
-        if (!driveClient.initialize()) {
-            Timber.e("FileCheckWorker: Nie udało się zainicjalizować klienta Drive API")
-            throw IOException("Nie udało się zainicjalizować klienta Drive API")
-        }
-        Timber.d("FileCheckWorker: Klient Drive API zainicjalizowany pomyślnie")
-
-        // Wyszukaj wszystkie pliki .daylio w folderze (bez filtrowania po nazwie)
-        Timber.d("FileCheckWorker: Wyszukiwanie plików .daylio w folderze")
-        val files = driveClient.listFilesInFolder(folderId).filter { it.name.endsWith(".daylio") }
-        Timber.d("FileCheckWorker: Znaleziono ${files.size} plików .daylio w folderze")
-
-        if (files.isEmpty()) {
-            Timber.d("FileCheckWorker: Nie znaleziono plików .daylio w folderze - nic do pobrania")
-            return
-        }
-
-        // Znajdź najnowszy plik - sortuj według daty modyfikacji w kolejności malejącej
-        val newestFile = files.maxByOrNull { it.modifiedTime.time } ?: return
-        Timber.d(
-            "FileCheckWorker: Najnowszy plik: ${newestFile.name}, zmodyfikowany: ${
-                TimeUtils.formatDate(
-                    newestFile.modifiedTime
-                )
-            }, rozmiar: ${newestFile.size} bajtów"
-        )
-
-        // Sprawdź, czy prezent został już odebrany
-        val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-        val giftReceived = prefs.getBoolean("gift_received", false)
-
-        // Jeśli prezent został już odebrany i nie wymuszamy pobrania, nie pobieraj pliku ponownie
-        if (giftReceived && !forceDownload) {
-            Timber.d("FileCheckWorker: Prezent został już odebrany i nie wymuszono pobrania - pomijam pobieranie")
-            return
-        }
-
-        // Użyj nazwy pliku bezpośrednio z konfiguracji
-        val downloadFileName = fileName
-        Timber.d("FileCheckWorker: Plik zostanie pobrany jako: $downloadFileName")
-
-        // Pobierz plik bezpośrednio do katalogu Pobrane
-        Timber.d("FileCheckWorker: Rozpoczynam bezpośrednie pobieranie pliku")
-        val result = downloadFileDirect(driveClient, newestFile.id, downloadFileName)
-
-        if (result) {
-            // Powiadomienie o pobraniu pliku - tylko jeśli to pierwsze powiadomienie
-            val firstDownloadNotified = prefs.getBoolean("first_download_notified", false)
-
-            if (!firstDownloadNotified) {
-                Timber.d("FileCheckWorker: Wyświetlam pierwsze powiadomienie o pobraniu")
-                NotificationHelper.showDownloadCompleteNotification(context, downloadFileName)
-                prefs.edit { putBoolean("first_download_notified", true) }
+            if (success) {
+                handleSuccessfulDownload(context, fileName, prefs)
             } else {
-                Timber.d("FileCheckWorker: Powiadomienie o pobraniu było już wcześniej wyświetlone - pomijam")
+                throw IOException("File download failed")
             }
 
-            // Zapisz, że prezent został odebrany i przy okazji zapisz nazwę pliku
-            prefs.edit {
-                putBoolean("gift_received", true).putString(
-                    "downloaded_file_name", downloadFileName
-                )
-            }
-            Timber.d("FileCheckWorker: Zaktualizowano preferencje: gift_received=true, downloaded_file_name=$downloadFileName")
-
-            Timber.d("FileCheckWorker: Plik pobrany pomyślnie: $downloadFileName")
-        } else {
-            Timber.e("FileCheckWorker: Nieudane pobranie pliku")
-            throw IOException("Nieudane pobranie pliku")
+        } catch (e: Exception) {
+            // Log network error details and rethrow
+            logNetworkError("checkForFileUpdate", e)
+            throw e
         }
     }
 
-    /**
-     * Pobiera plik z Google Drive i zapisuje go bezpośrednio w publicznym
-     * folderze Pobrane, używając nowoczesnego podejścia zgodnego z Scoped
-     * Storage.
-     *
-     * @param client Klient DriveAPI
-     * @param fileId ID pliku Google Drive
-     * @param fileName Docelowa nazwa pliku
-     * @return true jeśli pobieranie się powiodło, false w przeciwnym razie
-     */
+    /** Handles successful download with notifications and preferences update */
+    private fun handleSuccessfulDownload(
+        context: Context,
+        fileName: String,
+        prefs: SharedPreferences,
+    ) {
+        val firstDownloadNotified = prefs.getBoolean("first_download_notified", false)
+
+        // Show notification only for first download
+        if (!firstDownloadNotified) {
+            Timber.d("FileCheckWorker: Showing first download notification")
+            NotificationHelper.showDownloadCompleteNotification(context, fileName)
+            prefs.edit { putBoolean("first_download_notified", true) }
+        } else {
+            Timber.d("FileCheckWorker: Download notification already shown previously")
+        }
+
+        // Mark gift as received
+        markGiftAsReceived(context, fileName)
+
+        Timber.d("FileCheckWorker: File downloaded successfully: $fileName")
+    }
+
+    /** Marks the gift as received in preferences */
+    private fun markGiftAsReceived(context: Context, fileName: String) {
+        val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        prefs.edit {
+            putBoolean("gift_received", true)
+            putString("downloaded_file_name", fileName)
+        }
+        Timber.d("FileCheckWorker: Marked gift as received: $fileName")
+    }
+
+    /** Enhanced direct file download with better error handling */
     private suspend fun downloadFileDirect(
         client: DriveApiClient,
         fileId: String,
@@ -311,120 +409,125 @@ class FileCheckWorker(
     ): Boolean {
         return withContext(Dispatchers.IO) {
             try {
-                Timber.d("FileCheckWorker: Rozpoczynam proces bezpośredniego pobierania pliku dla fileId: $fileId jako: $fileName")
+                Timber.d("FileCheckWorker: Starting direct download - fileId: $fileId, fileName: $fileName")
 
-                // Najpierw sprawdź, czy plik już istnieje
-                val context = getContext() ?: throw IllegalStateException("Brak kontekstu")
+                val context = getContext() ?: throw IllegalStateException("Context unavailable")
 
-                // Sprawdź czy wymuszamy pobieranie - NOWE
+                // Check if file exists and we're not forcing download
                 val forceDownload = inputData.getBoolean("force_download", false)
                 if (FileUtils.isFileInPublicDownloads(fileName) && !forceDownload) {
-                    Timber.d("FileCheckWorker: Plik $fileName już istnieje w folderze Pobrane - używam istniejącego pliku")
+                    Timber.d("FileCheckWorker: File already exists, using existing")
                     return@withContext true
                 }
-                Timber.d("FileCheckWorker: Plik nie istnieje lokalnie lub wymuszono pobieranie, będzie pobrany z Drive")
 
-                // Pobierz zawartość pliku z Google Drive
-                Timber.d("FileCheckWorker: Pobieranie zawartości pliku z Google Drive")
+                // Download file content from Google Drive
+                Timber.d("FileCheckWorker: Downloading content from Google Drive")
                 val inputStream = client.downloadFile(fileId)
-                Timber.d("FileCheckWorker: Pomyślnie uzyskano strumień wejściowy z API Drive")
+                Timber.d("FileCheckWorker: Successfully obtained input stream from Drive API")
 
                 var uri: Uri? = null
 
-                // Różne podejścia do zapisywania pliku w zależności od wersji Androida
+                // Save file using appropriate method based on Android version
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    Timber.d("FileCheckWorker: Używam podejścia MediaStore dla Android 10+")
-                    // Android 10+ używa MediaStore
+                    // Android 10+ uses MediaStore
+                    Timber.d("FileCheckWorker: Using MediaStore approach for Android 10+")
                     val contentValues = ContentValues().apply {
                         put(MediaStore.Downloads.DISPLAY_NAME, fileName)
                         put(MediaStore.Downloads.MIME_TYPE, "application/octet-stream")
                         put(MediaStore.Downloads.IS_PENDING, 1)
                     }
-                    Timber.d("FileCheckWorker: Przygotowano ContentValues dla MediaStore")
 
                     val resolver = context.contentResolver
                     uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
-                    Timber.d("FileCheckWorker: Uzyskano URI z MediaStore: $uri")
 
                     if (uri != null) {
-                        Timber.d("FileCheckWorker: Otwieram strumień wyjściowy do zapisu danych pliku")
                         resolver.openOutputStream(uri)?.use { outputStream ->
                             inputStream.use { input ->
                                 val bytesCopied = input.copyTo(outputStream)
-                                Timber.d("FileCheckWorker: Skopiowano $bytesCopied bajtów do strumienia wyjściowego")
+                                Timber.d("FileCheckWorker: Copied $bytesCopied bytes to output stream")
                             }
                         }
 
-                        // Zakończ transakcję
-                        Timber.d("FileCheckWorker: Kończę transakcję MediaStore")
+                        // Complete the transaction
                         contentValues.clear()
                         contentValues.put(MediaStore.Downloads.IS_PENDING, 0)
                         resolver.update(uri, contentValues, null, null)
 
-                        Timber.d("FileCheckWorker: Plik zapisany przez MediaStore: $uri")
+                        Timber.d("FileCheckWorker: File saved via MediaStore: $uri")
                         return@withContext true
                     } else {
-                        Timber.e("FileCheckWorker: Nie można utworzyć URI dla pliku")
-                        return@withContext false
+                        throw IOException("Failed to create MediaStore URI")
                     }
                 } else {
-                    // Dla starszych wersji Androida, korzystamy z External Storage
-                    Timber.d("FileCheckWorker: Używam podejścia External Storage dla starszych wersji Androida")
+                    // Older Android versions use direct file access
+                    Timber.d("FileCheckWorker: Using External Storage approach for older Android")
                     try {
                         val downloadsDir =
                             Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
                         if (!downloadsDir.exists()) {
-                            Timber.d("FileCheckWorker: Katalog Pobrane nie istnieje, tworzę go")
                             downloadsDir.mkdirs()
                         }
 
                         val destinationFile = File(downloadsDir, fileName)
-                        Timber.d("FileCheckWorker: Zapisuję plik do ${destinationFile.absolutePath}")
+                        Timber.d("FileCheckWorker: Saving to ${destinationFile.absolutePath}")
 
                         java.io.FileOutputStream(destinationFile).use { outputStream ->
                             inputStream.use { input ->
                                 val bytesCopied = input.copyTo(outputStream)
-                                Timber.d("FileCheckWorker: Skopiowano $bytesCopied bajtów do pliku wyjściowego")
+                                Timber.d("FileCheckWorker: Copied $bytesCopied bytes to file")
                             }
                         }
 
                         val fileExists = destinationFile.exists()
                         val fileSize = destinationFile.length()
-                        Timber.d("FileCheckWorker: Plik zapisany do ${destinationFile.absolutePath}, istnieje=$fileExists, rozmiar=$fileSize bajtów")
+                        Timber.d("FileCheckWorker: File saved - exists: $fileExists, size: $fileSize bytes")
                         return@withContext fileExists && fileSize > 0
-                    } catch (e: IOException) {
-                        // Jeśli metoda z External Storage nie zadziała, spróbuj użyć MediaStore
-                        Timber.w(
-                            "FileCheckWorker: Nie udało się zapisać pliku bezpośrednio, próbuję przez MediaStore\n" + "wyjątek: $e"
-                        )
 
-                        // Alternatywne podejście: zapisz we własnym katalogu aplikacji
+                    } catch (e: IOException) {
+                        // Fallback to app-specific directory
+                        Timber.w("FileCheckWorker: External storage failed, using app directory fallback")
+
                         val internalFile = File(
                             context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), fileName
                         )
-                        Timber.d("FileCheckWorker: Użycie fallbacku do własnego katalogu aplikacji: ${internalFile.absolutePath}")
 
                         java.io.FileOutputStream(internalFile).use { outputStream ->
                             inputStream.use { input ->
                                 val bytesCopied = input.copyTo(outputStream)
-                                Timber.d("FileCheckWorker: Skopiowano $bytesCopied bajtów do wewnętrznego pliku aplikacji")
+                                Timber.d("FileCheckWorker: Copied $bytesCopied bytes to app directory")
                             }
                         }
 
                         val fileExists = internalFile.exists()
                         val fileSize = internalFile.length()
-                        Timber.d("FileCheckWorker: Plik zapisany do katalogu aplikacji: ${internalFile.absolutePath}, istnieje=$fileExists, rozmiar=$fileSize bajtów")
+                        Timber.d("FileCheckWorker: Fallback save - exists: $fileExists, size: $fileSize bytes")
                         return@withContext fileExists && fileSize > 0
                     }
                 }
             } catch (e: Exception) {
-                Timber.e(
-                    e,
-                    "FileCheckWorker: Błąd podczas bezpośredniego pobierania pliku do folderu Pobrane: ${e.message}"
-                )
+                logNetworkError("downloadFileDirect", e)
+                Timber.e(e, "FileCheckWorker: Error during direct file download")
                 return@withContext false
             }
         }
+    }
+
+    /** Sends completion broadcast with error information if applicable */
+    private fun sendCompletionBroadcast() {
+        val context = getContext() ?: return
+
+        val intent = Intent("com.philornot.siekiera.WORK_COMPLETED").apply {
+            setPackage(context.packageName)
+
+            // Add error information if available
+            networkErrorType?.let { errorType ->
+                putExtra("network_error_type", errorType.name)
+                putExtra("error_message", getUserFriendlyErrorMessage(errorType))
+            }
+        }
+
+        context.sendBroadcast(intent)
+        Timber.d("FileCheckWorker: Completion broadcast sent")
     }
 
     companion object {
@@ -432,90 +535,106 @@ class FileCheckWorker(
         @JvmStatic
         internal var testDriveClient: DriveApiClient? = null
 
-        // Maksymalna liczba ponownych prób w przypadku błędu
-        private const val MAX_RETRY_ATTEMPTS = 3
+        // Enhanced retry settings
+        private const val MAX_RETRY_ATTEMPTS = 4
 
-        // Stałe dla WorkManager
+        // WorkManager constants
         private const val FILE_CHECK_WORK_TAG = "file_check"
         private const val ONE_TIME_WORK_NAME = "one_time_file_check"
 
-        /**
-         * Tworzy request workera z odpowiednią polityką backoff. Używaj tej metody
-         * w MainActivity zamiast bezpośrednio tworzyć request.
-         */
+        /** Creates work request with network-aware retry policy */
         fun createWorkRequest(intervalHours: Long) = PeriodicWorkRequestBuilder<FileCheckWorker>(
             intervalHours, TimeUnit.HOURS
         ).setBackoffCriteria(
-            BackoffPolicy.EXPONENTIAL, 30, // Minimalne opóźnienie to 30 minut
+            BackoffPolicy.EXPONENTIAL, 30, // Minimum backoff of 30 minutes
             TimeUnit.MINUTES
+        ).setConstraints(
+            Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED)
+                .setRequiresBatteryNotLow(true) // Don't drain battery on poor network
+                .build()
         ).addTag(FILE_CHECK_WORK_TAG)
 
-        /**
-         * Tworzy jednorazowy request sprawdzający aktualizacje pliku. Użyteczne
-         * przy częstszym sprawdzaniu gdy licznik dobiega końca.
-         *
-         * @param forceDownload Czy wymusić pobieranie pliku nawet jeśli prezent
-         *    został już odebrany
-         */
+        /** Creates one-time work request with enhanced constraints */
         fun createOneTimeCheckRequest(forceDownload: Boolean = false) =
             OneTimeWorkRequestBuilder<FileCheckWorker>().setConstraints(
-                Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
-            ).addTag(FILE_CHECK_WORK_TAG).setInputData(
-                androidx.work.Data.Builder().putBoolean("force_download", forceDownload).build()
-            )
+                    Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED)
+                        .setRequiresBatteryNotLow(false) // Allow on low battery for user-initiated actions
+                        .build()
+                ).addTag(FILE_CHECK_WORK_TAG).setInputData(
+                    androidx.work.Data.Builder().putBoolean("force_download", forceDownload).build()
+                )
 
-        /**
-         * Sprawdza, czy można uruchomić sprawdzenie pliku, aby uniknąć zbyt
-         * częstego wywoływania.
-         *
-         * @param context Kontekst aplikacji
-         * @return true jeśli można wykonać sprawdzenie, false jeśli należy
-         *    poczekać
-         */
+        /** Enhanced check for whether file check can be performed */
         fun canCheckFile(context: Context): Boolean {
             val prefs = context.getSharedPreferences("file_check_prefs", Context.MODE_PRIVATE)
             val lastCheckTime = prefs.getLong("last_check_time", 0)
             val currentTime = System.currentTimeMillis()
             val timeDiff = currentTime - lastCheckTime
 
-            // Jeśli od ostatniego sprawdzenia minęło mniej niż 2 sekundy, pomijamy
-            val canCheck = timeDiff > 2000
-            Timber.d("FileCheckWorker: Sprawdzam czy można uruchomić sprawdzenie pliku - ostatnie sprawdzenie ${timeDiff}ms temu, canCheck=$canCheck")
+            // Check for recent network errors
+            val errorPrefs =
+                context.getSharedPreferences("network_error_prefs", Context.MODE_PRIVATE)
+            val lastErrorTime = errorPrefs.getLong("last_error_time", 0)
+            val recentNetworkError = currentTime - lastErrorTime < TimeUnit.MINUTES.toMillis(10)
+
+            // Allow check if enough time has passed and no recent critical network errors
+            val canCheck = timeDiff > 2000 && !recentNetworkError
+
+            if (!canCheck) {
+                val reason = when {
+                    timeDiff <= 2000 -> "recent check (${timeDiff}ms ago)"
+                    recentNetworkError -> "recent network error"
+                    else -> "unknown"
+                }
+                Timber.d("FileCheckWorker: Cannot check file - reason: $reason")
+            }
+
             return canCheck
         }
 
-        /**
-         * Planuje jednorazowe sprawdzenie pliku z ochroną przed duplikatami.
-         *
-         * @param context Kontekst aplikacji
-         * @param forceDownload Czy wymusić pobieranie pliku
-         */
+        /** Enhanced one-time check scheduling with network awareness */
         fun planOneTimeCheck(context: Context, forceDownload: Boolean = false) {
-            Timber.d("FileCheckWorker: Planowanie jednorazowego sprawdzenia pliku (forceDownload=$forceDownload)")
+            Timber.d("FileCheckWorker: Planning one-time check (forceDownload=$forceDownload)")
 
-            // Sprawdź, czy można wykonać sprawdzenie (nie za często)
-            if (!canCheckFile(context) && !forceDownload) {  // NOWE: Dodano warunek !forceDownload
-                Timber.d("FileCheckWorker: Zbyt częste próby sprawdzenia pliku - pomijam")
+            // Check if we can perform the operation
+            if (!canCheckFile(context) && !forceDownload) {
+                Timber.d("FileCheckWorker: Cannot perform check - conditions not met")
                 return
             }
 
-            // Zbuduj żądanie jednorazowego sprawdzenia
+            // Build the work request
             val request = createOneTimeCheckRequest(forceDownload).build()
-            Timber.d("FileCheckWorker: Utworzono żądanie jednorazowego sprawdzenia")
 
-            // Użyj REPLACE aby zastąpić inne oczekujące zadania
+            // Use REPLACE to replace any pending tasks
             WorkManager.getInstance(context).enqueueUniqueWork(
                 ONE_TIME_WORK_NAME, ExistingWorkPolicy.REPLACE, request
             )
-            Timber.d("FileCheckWorker: Dodano zadanie jednorazowego sprawdzenia do kolejki WorkManager z polityką REPLACE")
 
-            // Aktualizuj czas ostatniego sprawdzenia
-            context.getSharedPreferences("file_check_prefs", Context.MODE_PRIVATE).edit {
-                putLong("last_check_time", System.currentTimeMillis())
+            // Update last check time
+            val prefs = context.getSharedPreferences("file_check_prefs", Context.MODE_PRIVATE)
+            prefs.edit { putLong("last_check_time", System.currentTimeMillis()) }
+
+            Timber.d("FileCheckWorker: One-time check scheduled successfully")
+        }
+
+        /** Gets last network error information for diagnostics */
+        fun getLastNetworkError(context: Context): Triple<String?, String?, Long>? {
+            val prefs = context.getSharedPreferences("network_error_prefs", Context.MODE_PRIVATE)
+            val errorType = prefs.getString("last_error_type", null)
+            val errorMessage = prefs.getString("last_error_message", null)
+            val errorTime = prefs.getLong("last_error_time", 0)
+
+            return if (errorType != null && errorTime > 0) {
+                Triple(errorType, errorMessage, errorTime)
+            } else {
+                null
             }
-            Timber.d("FileCheckWorker: Zaktualizowano czas ostatniego sprawdzenia w preferencjach")
+        }
 
-            Timber.d("FileCheckWorker: Zaplanowano jednorazowe sprawdzenie pliku (forceDownload=$forceDownload)")
+        /** Clears stored network error information */
+        fun clearNetworkErrorInfo(context: Context) {
+            val prefs = context.getSharedPreferences("network_error_prefs", Context.MODE_PRIVATE)
+            prefs.edit { clear() }
         }
     }
 }
