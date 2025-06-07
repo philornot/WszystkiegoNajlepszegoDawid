@@ -3,7 +3,7 @@
     <!-- Konfiguracja daty urodzin -->
     <integer name="birthday_year">2025</integer>
     <integer name="birthday_month">8</integer> <!-- 1-12, gdzie 8 = sierpień -->
-    <integer name="birthday_day">24</integer>
+    <integer name="birthday_day">4</integer>
     <integer name="birthday_hour">8</integer>
     <integer name="birthday_minute">24</integer>
 

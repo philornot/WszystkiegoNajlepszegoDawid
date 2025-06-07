@@ -16,8 +16,8 @@ android {
         applicationId = "com.philornot.siekiera"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "hej Dawid"
+        versionCode = 2
+        versionName = "hej Dawid!"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
