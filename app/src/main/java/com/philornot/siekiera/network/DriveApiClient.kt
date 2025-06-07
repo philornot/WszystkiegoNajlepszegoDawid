@@ -456,7 +456,7 @@ class DriveApiClient(context: Context) {
                 NetworkErrorType.SSL_ERROR
             )
             !(isRecent && isCritical)
-        } ?: true
+        } != false
 
         return hasValidService && tokenNotExpired && noRecentCriticalErrors
     }
