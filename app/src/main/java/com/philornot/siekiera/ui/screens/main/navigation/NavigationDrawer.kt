@@ -147,7 +147,7 @@ fun NavigationDrawer(
 
                 DrawerItem(
                     icon = Icons.Default.Cake,
-                    title = "Odliczanie urodzin",
+                    title = "Odliczanie do urodzin",
                     isSelected = currentSection == NavigationSection.BIRTHDAY_COUNTDOWN,
                     onClick = {
                         onSectionSelected(NavigationSection.BIRTHDAY_COUNTDOWN)

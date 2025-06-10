@@ -69,7 +69,7 @@ fun BirthdayMessage(
                 Spacer(modifier = Modifier.Companion.weight(1f))
 
                 Text(
-                    text = "ten ekran będzie dostępny do północy",
+                    text = "ten konkretny ekran będzie dostępny do północy\n(ale prezent będziesz mógł odebrać jeszcze raz)",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Companion.Center,
