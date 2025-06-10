@@ -2,6 +2,8 @@ package com.philornot.siekiera.network
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport
 import com.google.api.client.http.HttpIOExceptionHandler
 import com.google.api.client.http.HttpRequest
@@ -22,8 +24,6 @@ import timber.log.Timber
 import java.io.ByteArrayInputStream
 import java.io.InputStream
 import java.lang.ref.WeakReference
-import java.net.ConnectException
-import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -31,19 +31,16 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
-import javax.net.ssl.SSLException
 
 /**
- * Enhanced DriveApiClient with improved network error handling and diagnostics.
+ * Ulepszona wersja klienta API Google Drive z lepszą obsługą błędów
+ * sieciowych i mechanizmami sprawdzania połączenia internetowego.
  *
- * Handles various network scenarios:
- * - No internet connection
- * - DNS resolution failures
- * - SSL/TLS errors
- * - Connection timeouts
- * - Google API server errors
- *
- * Provides intelligent retry mechanisms with exponential backoff.
+ * Dodano:
+ * - Sprawdzanie połączenia internetowego przed operacjami
+ * - Lepszą obsługę błędów DNS i sieciowych
+ * - Szczegółowe komunikaty o błędach dla różnych scenariuszy
+ * - Mechanizmy retry z inteligentnym backoff
  */
 class DriveApiClient(context: Context) {
     // Używamy WeakReference aby uniknąć memory leak
@@ -56,149 +53,144 @@ class DriveApiClient(context: Context) {
     // Limity ponownych prób
     private var retryCount = 0
 
-    // Network diagnostics
-    private var lastNetworkError: NetworkErrorInfo? = null
-
-    /**
-     * Enhanced network error classification for better diagnostics
-     */
-    data class NetworkErrorInfo(
-        val errorType: NetworkErrorType,
-        val originalException: Exception,
-        val timestamp: Long = System.currentTimeMillis(),
-        val retryAttempt: Int = 0
-    )
-
-    enum class NetworkErrorType {
-        NO_INTERNET,           // UnknownHostException, ConnectException
-        DNS_RESOLUTION_FAILED, // Specific DNS issues
-        SSL_ERROR,             // SSL/TLS certificate issues
-        TIMEOUT,               // Connection/read timeouts
-        AUTH_ERROR,            // Google Auth specific errors
-        RATE_LIMITED,          // API rate limiting (429)
-        SERVER_ERROR,          // Google server errors (5xx)
-        UNKNOWN_NETWORK_ERROR  // Other network issues
-    }
-
     // Funkcja pomocnicza do uzyskania kontekstu
     private fun getContext(): Context? = contextRef.get()
 
-    // Getter dla AppConfig - nie przechowujemy referencji, tylko pobieramy w razie potrzeby
+    // Getter dla AppConfig
     private fun getAppConfig(): AppConfig? {
         val context = getContext() ?: return null
         return AppConfig.getInstance(context)
     }
 
     /**
-     * Classifies network exceptions for better error handling
+     * Sprawdza czy urządzenie ma dostęp do internetu. Używa nowoczesnego API
+     * NetworkCapabilities dla Android 6.0+
      */
-    private fun classifyNetworkError(exception: Exception): NetworkErrorType {
-        return when {
-            exception is UnknownHostException -> {
-                val message = exception.message?.lowercase() ?: ""
-                when {
-                    message.contains("oauth2.googleapis.com") ||
-                            message.contains("www.googleapis.com") -> NetworkErrorType.DNS_RESOLUTION_FAILED
-                    else -> NetworkErrorType.NO_INTERNET
+    private fun isNetworkAvailable(): Boolean {
+        val context = getContext() ?: return false
+        val connectivityManager =
+            context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+                ?: return false
+
+        return try {
+            val network = connectivityManager.activeNetwork ?: return false
+            val capabilities =
+                connectivityManager.getNetworkCapabilities(network) ?: return false
+
+            when {
+                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> {
+                    Timber.d("Połączenie Wi-Fi dostępne")
+                    true
+                }
+
+                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> {
+                    Timber.d("Połączenie komórkowe dostępne")
+                    true
+                }
+
+                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> {
+                    Timber.d("Połączenie Ethernet dostępne")
+                    true
+                }
+                else -> {
+                    Timber.d("Nieznany typ połączenia internetowego")
+                    capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
                 }
             }
-            exception is ConnectException -> NetworkErrorType.NO_INTERNET
-            exception is SocketTimeoutException -> NetworkErrorType.TIMEOUT
-            exception is SSLException -> NetworkErrorType.SSL_ERROR
-            exception.message?.contains("401") == true ||
-                    exception.message?.contains("unauthorized") == true -> NetworkErrorType.AUTH_ERROR
-            exception.message?.contains("429") == true ||
-                    exception.message?.contains("rate limit") == true -> NetworkErrorType.RATE_LIMITED
-            exception.message?.contains("50") == true -> NetworkErrorType.SERVER_ERROR
-            else -> NetworkErrorType.UNKNOWN_NETWORK_ERROR
+        } catch (e: Exception) {
+            Timber.w(e, "Błąd podczas sprawdzania połączenia internetowego")
+            false
         }
     }
 
-    /**
-     * Enhanced error logging with network diagnostics
-     */
-    private fun logNetworkError(operation: String, exception: Exception, attempt: Int = 0) {
-        val errorType = classifyNetworkError(exception)
-        val errorInfo = NetworkErrorInfo(errorType, exception, retryAttempt = attempt)
-        lastNetworkError = errorInfo
+    /** Sprawdza czy błąd jest związany z problemami sieciowymi/DNS. */
+    private fun isNetworkError(exception: Exception): Boolean {
+        val message = exception.message?.lowercase() ?: ""
+        val isNetworkError = when {
+            exception is UnknownHostException -> true
+            message.contains("no address associated with hostname") -> true
+            message.contains("unable to resolve host") -> true
+            message.contains("network is unreachable") -> true
+            message.contains("connection refused") -> true
+            message.contains("connection timed out") -> true
+            message.contains("eai_nodata") -> true
+            message.contains("eai_again") -> true
+            message.contains("oauth2.googleapis.com") -> true
+            message.contains("www.googleapis.com") -> true
+            else -> false
+        }
 
-        Timber.w("Network error in $operation (attempt $attempt):")
-        Timber.w("  Error type: $errorType")
-        Timber.w("  Exception: ${exception.javaClass.simpleName}")
-        Timber.w("  Message: ${exception.message}")
+        if (isNetworkError) {
+            Timber.w("Wykryto błąd sieciowy: ${exception.javaClass.simpleName}: $message")
+        }
 
-        // Add specific diagnostics based on error type
-        when (errorType) {
-            NetworkErrorType.DNS_RESOLUTION_FAILED -> {
-                Timber.w("  Diagnosis: DNS cannot resolve Google API hostnames")
-                Timber.w("  Possible causes: Network connectivity issues, DNS server problems, firewall blocking")
+        return isNetworkError
+    }
+
+    /** Tworzy szczegółowy komunikat o błędzie na podstawie typu wyjątku. */
+    private fun createDetailedErrorMessage(exception: Exception): String {
+        val message = exception.message?.lowercase() ?: ""
+
+        return when {
+            !isNetworkAvailable() -> {
+                "Brak połączenia z internetem. Sprawdź połączenie Wi-Fi lub mobilne i spróbuj ponownie."
             }
-            NetworkErrorType.NO_INTERNET -> {
-                Timber.w("  Diagnosis: No internet connectivity")
-                Timber.w("  Possible causes: WiFi/mobile data disabled, airplane mode, network outage")
+
+            message.contains("oauth2.googleapis.com") -> {
+                "Nie można połączyć się z serwerami uwierzytelniania Google. Sprawdź czy Google Services są dostępne w Twojej sieci."
             }
-            NetworkErrorType.SSL_ERROR -> {
-                Timber.w("  Diagnosis: SSL/TLS certificate issues")
-                Timber.w("  Possible causes: Outdated system certificates, man-in-the-middle blocking")
+
+            message.contains("no address associated with hostname") || message.contains("eai_nodata") -> {
+                "Problemy z rozwiązywaniem nazw serwerów. Sprawdź ustawienia DNS lub spróbuj z innej sieci."
             }
-            NetworkErrorType.AUTH_ERROR -> {
-                Timber.w("  Diagnosis: Google authentication failed")
-                Timber.w("  Possible causes: Invalid service account, expired token, permissions")
+
+            message.contains("unable to resolve host") -> {
+                "Nie można znaleźć serwerów Google Drive. Sprawdź połączenie internetowe."
             }
-            NetworkErrorType.RATE_LIMITED -> {
-                Timber.w("  Diagnosis: API rate limit exceeded")
-                Timber.w("  Recommended action: Implement longer delays between requests")
+
+            message.contains("connection refused") -> {
+                "Serwery Google Drive odrzuciły połączenie. Spróbuj ponownie za chwilę."
             }
-            NetworkErrorType.SERVER_ERROR -> {
-                Timber.w("  Diagnosis: Google server error")
-                Timber.w("  Recommended action: Retry with exponential backoff")
+
+            message.contains("connection timed out") || message.contains("timeout") -> {
+                "Przekroczono limit czasu połączenia. Sprawdź stabilność połączenia internetowego."
             }
+
             else -> {
-                Timber.w("  Diagnosis: Unknown network issue")
+                "Wystąpił problem z połączeniem: ${exception.message ?: "Nieznany błąd"}"
             }
         }
     }
 
     /**
-     * Checks if we should retry based on error type and attempt count
+     * Sprawdza połączenie internetowe przed wykonaniem operacji API. Rzuca
+     * wyjątek z opisowym komunikatem jeśli brak połączenia.
      */
-    private fun shouldRetryForNetworkError(errorType: NetworkErrorType, attempt: Int): Boolean {
-        if (attempt >= MAX_RETRY_COUNT) return false
+    private suspend fun checkNetworkConnectivity() {
+        if (!isNetworkAvailable()) {
+            throw NetworkUnavailableException(
+                "Brak dostępu do internetu. Sprawdź połączenie Wi-Fi lub mobilne."
+            )
+        }
 
-        return when (errorType) {
-            NetworkErrorType.NO_INTERNET,
-            NetworkErrorType.DNS_RESOLUTION_FAILED -> attempt < 2 // Limited retries for connectivity issues
-            NetworkErrorType.TIMEOUT,
-            NetworkErrorType.SERVER_ERROR -> true // Always retry these
-            NetworkErrorType.RATE_LIMITED -> true // Retry with longer delays
-            NetworkErrorType.SSL_ERROR,
-            NetworkErrorType.AUTH_ERROR -> attempt < 1 // One retry only
-            NetworkErrorType.UNKNOWN_NETWORK_ERROR -> attempt < 2
+        // Dodatkowe sprawdzenie - próba prostego ping do Google DNS
+        try {
+            withContext(Dispatchers.IO) {
+                val runtime = Runtime.getRuntime()
+                val process = runtime.exec("ping -c 1 8.8.8.8")
+                val exitCode = process.waitFor()
+                if (exitCode != 0) {
+                    Timber.w("Ping do 8.8.8.8 nieudany (kod: $exitCode)")
+                }
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "Nie można wykonać ping - może być ograniczony")
         }
     }
 
     /**
-     * Calculates retry delay based on error type
-     */
-    private fun getRetryDelay(errorType: NetworkErrorType, attempt: Int): Long {
-        val baseDelay = when (errorType) {
-            NetworkErrorType.RATE_LIMITED -> 60_000L // 1 minute for rate limiting
-            NetworkErrorType.SERVER_ERROR -> 5_000L   // 5 seconds for server errors
-            NetworkErrorType.TIMEOUT -> 3_000L        // 3 seconds for timeouts
-            NetworkErrorType.DNS_RESOLUTION_FAILED,
-            NetworkErrorType.NO_INTERNET -> 10_000L   // 10 seconds for connectivity
-            else -> 2_000L                            // 2 seconds default
-        }
-
-        // Exponential backoff with jitter
-        val exponentialDelay = baseDelay * (1 shl attempt)
-        val jitter = (Math.random() * 1000).toLong()
-
-        return (exponentialDelay + jitter).coerceAtMost(MAX_BACKOFF_DELAY_MS)
-    }
-
-    /**
-     * Inicjalizuje klienta Google Drive API z ulepszną obsługą błędów sieciowych.
+     * Inicjalizuje klienta Google Drive API z lepszą obsługą błędów
+     * sieciowych.
      */
     @SuppressLint("DiscouragedApi")
     suspend fun initialize(): Boolean = withContext(Dispatchers.IO) {
@@ -206,23 +198,25 @@ class DriveApiClient(context: Context) {
             val context = getContext() ?: return@withContext false
             val appConfig = getAppConfig() ?: return@withContext false
 
-            // Sprawdź, czy serwis jest już zainicjalizowany i czy token nie jest przeterminowany
+            Timber.d("Rozpoczynam inicjalizację DriveApiClient")
+
+            // Sprawdź połączenie internetowe przed inicjalizacją
+            checkNetworkConnectivity()
+
+            // Sprawdź, czy serwis jest już zainicjalizowany
             if (driveService != null) {
                 val currentTime = System.currentTimeMillis()
                 if (currentTime - lastInitTime < TimeUnit.MINUTES.toMillis(50)) {
+                    Timber.d("DriveService już zainicjalizowany i token jest świeży")
                     return@withContext true
                 }
                 Timber.d("Token może niedługo wygasnąć - odświeżam połączenie")
             }
 
-            // Reset retry count for new initialization
-            retryCount = 0
-
-            // Konfiguracja transportu HTTP z ulepszeniami
+            // Konfiguracja transportu HTTP z zwiększonymi timeoutami
             val httpTransport: HttpTransport = GoogleNetHttpTransport.newTrustedTransport()
             val jsonFactory: JsonFactory = GsonFactory.getDefaultInstance()
 
-            // Pobierz nazwę pliku service account z konfiguracji
             val serviceAccountFileName = appConfig.getServiceAccountFileName()
 
             // Pobierz poświadczenia z zasobów aplikacji
@@ -230,92 +224,90 @@ class DriveApiClient(context: Context) {
                 val resourceField = R.raw::class.java.getField(serviceAccountFileName)
                 val resourceId = resourceField.getInt(null)
                 context.resources.openRawResource(resourceId)
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 Timber.w("Nie znaleziono bezpośredniego identyfikatora zasobu, używam getIdentifier")
                 val resourceId = context.resources.getIdentifier(
                     serviceAccountFileName, "raw", context.packageName
                 )
                 if (resourceId == 0) {
-                    throw IllegalStateException("Service account file not found: $serviceAccountFileName")
+                    throw IllegalStateException("Nie znaleziono pliku service account: $serviceAccountFileName")
                 }
                 context.resources.openRawResource(resourceId)
             }
 
-            // Skonfiguruj poświadczenia konta usługi
+            // Skonfiguruj poświadczenia konta usługi z retry
             val credentials = ServiceAccountCredentials.fromStream(serviceAccountStream)
                 .createScoped(listOf(DriveScopes.DRIVE_READONLY))
 
-            // Utwórz HttpRequestInitializer z ulepszoną obsługą błędów
             val requestInitializer = HttpCredentialsAdapter(credentials)
 
-            // Utwórz usługę Drive API
+            // Utwórz usługę Drive API z ulepszonymi timeoutami
             driveService = Drive.Builder(
-                httpTransport, jsonFactory, createEnhancedRequestInitializer(requestInitializer)
+                httpTransport, jsonFactory, createRequestInitializerWithRetry(requestInitializer)
             ).setApplicationName(APPLICATION_NAME).build()
 
-            // Zapamiętaj czas inicjalizacji
             lastInitTime = System.currentTimeMillis()
-            lastNetworkError = null // Clear previous errors on successful init
 
-            Timber.d("DriveApiClient successfully initialized")
+            Timber.d("DriveApiClient zainicjalizowany pomyślnie")
             true
+        } catch (_: NetworkUnavailableException) {
+            Timber.w("Inicjalizacja niemożliwa - brak połączenia internetowego")
+            false
         } catch (e: Exception) {
-            logNetworkError("initialize", e)
+            when {
+                isNetworkError(e) -> {
+                    val detailedMessage = createDetailedErrorMessage(e)
+                    Timber.w(e, "Błąd sieciowy podczas inicjalizacji: $detailedMessage")
+                }
+
+                else -> {
+                    Timber.e(e, "Nieoczekiwany błąd podczas inicjalizacji klienta Drive API")
+                }
+            }
             false
         }
     }
 
-    /**
-     * Creates enhanced HttpRequestInitializer with better error handling
-     */
-    private fun createEnhancedRequestInitializer(delegate: HttpRequestInitializer): HttpRequestInitializer {
+    /** Tworzy HttpRequestInitializer z ulepszoną obsługą błędów sieciowych. */
+    private fun createRequestInitializerWithRetry(delegate: HttpRequestInitializer): HttpRequestInitializer {
         return HttpRequestInitializer { request ->
             delegate.initialize(request)
 
-            // Enhanced timeouts
-            request.connectTimeout = 30000 // 30 seconds
-            request.readTimeout = 45000    // 45 seconds (longer for large files)
+            // Zwiększone limity czasu dla słabych połączeń
+            request.connectTimeout = 45000 // 45 sekund
+            request.readTimeout = 60000    // 60 sekund
 
-            // Enhanced retry logic
-            request.numberOfRetries = 3
-            request.ioExceptionHandler = HttpIOExceptionHandler { httpRequest: HttpRequest, supportsRetry: Boolean ->
-                val currentTime = System.currentTimeMillis()
-                Timber.w("HTTP IOException in request to ${httpRequest.url}")
-                Timber.w("  SupportsRetry: $supportsRetry")
-                Timber.w("  Timestamp: ${SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(currentTime))}")
+            // Zwiększona liczba ponownych prób dla błędów sieciowych
+            request.numberOfRetries = 5
+            request.ioExceptionHandler =
+                HttpIOExceptionHandler { httpRequest: HttpRequest, supportsRetry: Boolean ->
+                    Timber.w("IOException w żądaniu Drive API, supportsRetry=$supportsRetry")
+                    supportsRetry
+                }
 
-                // Always attempt retry for network errors if supported
-                supportsRetry
-            }
-
-            // Enhanced headers
+            // Dodatkowe nagłówki dla lepszej kompatybilności
             request.headers.set("Accept", "application/json")
-            request.headers.set("User-Agent", "$APPLICATION_NAME (Android)")
+            request.headers.set("User-Agent", "$APPLICATION_NAME/1.0")
         }
     }
 
-    /**
-     * Sprawdza limity API z ulepszonym zarządzaniem częstotliwością.
-     */
+    /** Sprawdza limity API i opóźnia żądanie jeśli to konieczne. */
     private suspend fun checkApiLimits() {
         val currentTime = System.currentTimeMillis()
 
         // Reset licznika co 5 minut
         if (currentTime - lastMinuteReset.get() > RESET_INTERVAL_MS) {
-            val previousCount = requestCount.getAndSet(0)
+            Timber.d("Resetuję licznik żądań API (było: ${requestCount.get()})")
+            requestCount.set(0)
             lastMinuteReset.set(currentTime)
-            if (previousCount > 0) {
-                Timber.d("API request counter reset (previous: $previousCount requests)")
-            }
             return
         }
 
         // Sprawdź czy nie przekraczamy limitu
-        val currentCount = requestCount.get()
-        if (currentCount >= MAX_REQUESTS_PER_INTERVAL) {
+        if (requestCount.get() >= MAX_REQUESTS_PER_INTERVAL) {
             val waitTime = RESET_INTERVAL_MS - (currentTime - lastMinuteReset.get())
             if (waitTime > 0) {
-                Timber.w("API rate limit reached ($currentCount requests) - waiting ${waitTime}ms")
+                Timber.w("Osiągnięto limit API (${requestCount.get()}) - opóźnienie kolejnego żądania o $waitTime ms")
                 delay(waitTime)
                 requestCount.set(0)
                 lastMinuteReset.set(System.currentTimeMillis())
@@ -323,110 +315,29 @@ class DriveApiClient(context: Context) {
         }
 
         val newCount = requestCount.incrementAndGet()
-        if (newCount % 10 == 0) { // Log every 10th request to avoid spam
-            Timber.d("API request count: $newCount")
-        }
+        Timber.d("API request count: $newCount")
     }
 
-    /**
-     * Enhanced retry logic with network-aware error handling
-     */
-    private suspend fun <T> executeWithRetry(
-        operation: String,
-        block: suspend () -> T
-    ): T {
-        var lastException: Exception? = null
-
-        repeat(MAX_RETRY_COUNT + 1) { attempt ->
-            try {
-                checkApiLimits()
-                val result = block()
-
-                if (attempt > 0) {
-                    Timber.d("Operation '$operation' succeeded after $attempt retries")
-                }
-
-                // Reset retry count on success
-                retryCount = 0
-                return result
-
-            } catch (e: Exception) {
-                lastException = e
-                logNetworkError(operation, e, attempt)
-
-                val errorType = classifyNetworkError(e)
-
-                if (attempt < MAX_RETRY_COUNT && shouldRetryForNetworkError(errorType, attempt)) {
-                    val delay = getRetryDelay(errorType, attempt)
-                    Timber.d("Retrying '$operation' in ${delay}ms (attempt ${attempt + 1}/$MAX_RETRY_COUNT)")
-                    delay(delay)
-                    retryCount = attempt + 1
-                } else {
-                    Timber.e("Operation '$operation' failed after $attempt attempts")
-                    lastException?.let { throw it } ?: throw RuntimeException("Operation '$operation' failed with unknown error after $attempt attempts")
-                }
-            }
-        }
-
-        throw lastException ?: RuntimeException("Operation failed with unknown error")
-    }
-
-    /**
-     * Pobiera informacje o pliku z Google Drive z ulepszną obsługą błędów.
-     */
-    suspend fun getFileInfo(fileId: String): FileInfo = executeWithRetry("getFileInfo") {
+    /** Pobiera informacje o pliku z Google Drive z lepszą obsługą błędów. */
+    suspend fun getFileInfo(fileId: String): FileInfo = withContext(Dispatchers.IO) {
         val driveService = this@DriveApiClient.driveService
-            ?: throw IllegalStateException("Drive API client not initialized")
+            ?: throw IllegalStateException("Klient Drive API nie został zainicjalizowany")
 
-        Timber.d("Fetching file info for: $fileId")
+        try {
+            // Sprawdź połączenie przed operacją
+            checkNetworkConnectivity()
 
-        val file = driveService.files().get(fileId)
-            .setFields("id, name, mimeType, size, modifiedTime")
-            .execute()
+            // Sprawdź limity API przed wykonaniem żądania
+            checkApiLimits()
 
-        val fileSize = file.size.toLong()
+            Timber.d("Pobieranie informacji o pliku o ID: $fileId")
 
-        FileInfo(
-            id = file.id,
-            name = file.name,
-            mimeType = file.mimeType,
-            size = fileSize,
-            modifiedTime = parseRfc3339Date(file.modifiedTime.toStringRfc3339())
-        )
-    }
+            val file =
+                driveService.files().get(fileId).setFields("id, name, mimeType, size, modifiedTime")
+                    .execute()
 
-    /**
-     * Pobiera zawartość pliku z Google Drive z ulepszną obsługą błędów.
-     */
-    suspend fun downloadFile(fileId: String): InputStream = executeWithRetry("downloadFile") {
-        val driveService = this@DriveApiClient.driveService
-            ?: throw IllegalStateException("Drive API client not initialized")
-
-        Timber.d("Downloading file: $fileId")
-
-        val outputStream = java.io.ByteArrayOutputStream()
-        driveService.files().get(fileId).executeMediaAndDownloadTo(outputStream)
-
-        ByteArrayInputStream(outputStream.toByteArray())
-    }
-
-    /**
-     * Sprawdza pliki w folderze z ulepszną obsługą błędów.
-     */
-    suspend fun listFilesInFolder(folderId: String): List<FileInfo> = executeWithRetry("listFilesInFolder") {
-        val driveService = this@DriveApiClient.driveService
-            ?: throw IllegalStateException("Drive API client not initialized")
-
-        Timber.d("Listing files in folder: $folderId")
-
-        val query = "'$folderId' in parents and trashed = false"
-        val result = driveService.files().list()
-            .setQ(query)
-            .setFields("files(id, name, mimeType, size, modifiedTime)")
-            .execute()
-
-        result.files.map { file ->
             val fileSize = file.size.toLong()
+            retryCount = 0
 
             FileInfo(
                 id = file.id,
@@ -435,30 +346,158 @@ class DriveApiClient(context: Context) {
                 size = fileSize,
                 modifiedTime = parseRfc3339Date(file.modifiedTime.toStringRfc3339())
             )
+        } catch (e: Exception) {
+            handleApiException(e, "pobierania informacji o pliku: $fileId") {
+                getFileInfo(fileId)
+            }
+        }
+    }
+
+    /** Pobiera zawartość pliku z Google Drive z lepszą obsługą błędów. */
+    suspend fun downloadFile(fileId: String): InputStream = withContext(Dispatchers.IO) {
+        val driveService = this@DriveApiClient.driveService
+            ?: throw IllegalStateException("Klient Drive API nie został zainicjalizowany")
+
+        try {
+            // Sprawdź połączenie przed operacją
+            checkNetworkConnectivity()
+
+            checkApiLimits()
+            Timber.d("Pobieranie pliku o ID: $fileId")
+
+            val outputStream = java.io.ByteArrayOutputStream()
+            driveService.files().get(fileId).executeMediaAndDownloadTo(outputStream)
+
+            retryCount = 0
+            ByteArrayInputStream(outputStream.toByteArray())
+        } catch (e: Exception) {
+            handleApiException(e, "pobierania pliku: $fileId") {
+                downloadFile(fileId)
+            }
         }
     }
 
     /**
-     * Provides diagnostic information about the last network error
+     * Sprawdza pliki w określonym folderze Google Drive z lepszą obsługą
+     * błędów.
      */
-    fun getLastNetworkErrorInfo(): NetworkErrorInfo? = lastNetworkError
+    suspend fun listFilesInFolder(folderId: String): List<FileInfo> = withContext(Dispatchers.IO) {
+        val driveService = this@DriveApiClient.driveService
+            ?: throw IllegalStateException("Klient Drive API nie został zainicjalizowany")
 
-    /**
-     * Checks if the client is in a good state for API calls
-     */
-    fun isHealthy(): Boolean {
-        val hasValidService = driveService != null
-        val tokenNotExpired = System.currentTimeMillis() - lastInitTime < TimeUnit.MINUTES.toMillis(50)
-        val noRecentCriticalErrors = lastNetworkError?.let { error ->
-            val isRecent = System.currentTimeMillis() - error.timestamp < TimeUnit.MINUTES.toMillis(5)
-            val isCritical = error.errorType in setOf(
-                NetworkErrorType.AUTH_ERROR,
-                NetworkErrorType.SSL_ERROR
-            )
-            !(isRecent && isCritical)
-        } != false
+        try {
+            // Sprawdź połączenie przed operacją
+            checkNetworkConnectivity()
 
-        return hasValidService && tokenNotExpired && noRecentCriticalErrors
+            checkApiLimits()
+            Timber.d("Listowanie plików w folderze: $folderId")
+
+            val query = "'$folderId' in parents and trashed = false"
+            val result = driveService.files().list().setQ(query)
+                .setFields("files(id, name, mimeType, size, modifiedTime)").execute()
+
+            retryCount = 0
+
+            result.files.map { file ->
+                val fileSize = file.size.toLong()
+                FileInfo(
+                    id = file.id,
+                    name = file.name,
+                    mimeType = file.mimeType,
+                    size = fileSize,
+                    modifiedTime = parseRfc3339Date(file.modifiedTime.toStringRfc3339())
+                )
+            }
+        } catch (e: Exception) {
+            handleApiException(e, "listowania plików w folderze: $folderId") {
+                listFilesInFolder(folderId)
+            }
+        }
+    }
+
+    /** Ujednolicona obsługa wyjątków API z lepszymi komunikatami błędów. */
+    private suspend fun <T> handleApiException(
+        exception: Exception,
+        operation: String,
+        retryOperation: suspend () -> T,
+    ): T {
+        Timber.e(exception, "Błąd podczas $operation")
+
+        when {
+            isNetworkError(exception) -> {
+                val detailedMessage = createDetailedErrorMessage(exception)
+
+                if (shouldRetry(exception)) {
+                    Timber.d("Ponawiam operację $operation po błędzie sieciowym...")
+                    return retryOperation()
+                } else {
+                    throw NetworkException(detailedMessage, exception)
+                }
+            }
+
+            shouldRetry(exception) -> {
+                Timber.d("Ponawiam operację $operation po błędzie...")
+                return retryOperation()
+            }
+
+            else -> {
+                throw exception
+            }
+        }
+    }
+
+    /** Ulepszona logika ponownych prób z lepszą obsługą błędów sieciowych. */
+    private suspend fun shouldRetry(exception: Exception): Boolean {
+        if (retryCount >= MAX_RETRY_COUNT) {
+            Timber.d("Osiągnięto maksymalną liczbę ponownych prób: $retryCount")
+            return false
+        }
+
+        // Specjalna obsługa błędów sieciowych
+        if (isNetworkError(exception)) {
+            // Sprawdź ponownie połączenie internetowe
+            if (!isNetworkAvailable()) {
+                Timber.d("Brak połączenia internetowego - nie ponawiam próby")
+                return false
+            }
+
+            retryCount++
+            val delayMs = (2000L * retryCount).coerceAtMost(MAX_BACKOFF_DELAY_MS)
+            Timber.d("Błąd sieciowy - czekam ${delayMs}ms przed ponowieniem próby ($retryCount z $MAX_RETRY_COUNT)")
+            delay(delayMs)
+            return true
+        }
+
+        // Sprawdź, czy token nie wygasł
+        val exceptionMessage = exception.message?.lowercase() ?: ""
+        if (exceptionMessage.contains("token") && exceptionMessage.contains("expire")) {
+            Timber.d("Token wygasł, ponowna inicjalizacja...")
+            val initialized = initialize()
+            if (!initialized) {
+                Timber.d("Nie udało się ponownie zainicjalizować klienta po wygaśnięciu tokenu")
+                return false
+            }
+            retryCount++
+            return true
+        }
+
+        // Inne błędy tymczasowe
+        val isTransientError =
+            exceptionMessage.contains("timeout") || exceptionMessage.contains("refused") || exceptionMessage.contains(
+                "reset"
+            ) || exceptionMessage.contains("unavailable") || exceptionMessage.contains("rate limit") || exceptionMessage.contains(
+                "429"
+            ) || exceptionMessage.contains("500") || exceptionMessage.contains("503")
+
+        if (isTransientError) {
+            retryCount++
+            val delayMs = (1000L * (1 shl (retryCount - 1))).coerceAtMost(MAX_BACKOFF_DELAY_MS)
+            Timber.d("Czekam $delayMs ms przed ponowieniem próby (próba $retryCount z $MAX_RETRY_COUNT)")
+            delay(delayMs)
+            return true
+        }
+
+        return false
     }
 
     /** Parsuje datę w formacie RFC 3339 używanym przez Google API. */
@@ -467,7 +506,7 @@ class DriveApiClient(context: Context) {
         return try {
             format.parse(dateString) ?: Date()
         } catch (e: Exception) {
-            Timber.e(e, "Error parsing date: $dateString")
+            Timber.e(e, "Błąd parsowania daty: $dateString")
             Date()
         }
     }
@@ -481,15 +520,18 @@ class DriveApiClient(context: Context) {
         val modifiedTime: Date,
     )
 
+    /** Wyjątek rzucany gdy brak połączenia internetowego. */
+    class NetworkUnavailableException(message: String) : Exception(message)
+
+    /** Wyjątek rzucany przy problemach sieciowych z opisowym komunikatem. */
+    class NetworkException(message: String, cause: Throwable? = null) : Exception(message, cause)
+
     companion object {
-        // Nazwa aplikacji, która będzie widoczna w logach Google API
         private const val APPLICATION_NAME = "Wszystkiego Najlepszego Dawid"
+        private const val MAX_RETRY_COUNT = 5 // Zwiększono z 3 do 5
+        private const val MAX_BACKOFF_DELAY_MS = 45_000L // Zwiększono do 45 sekund
 
-        // Enhanced retry settings
-        private const val MAX_RETRY_COUNT = 4 // Increased from 3
-        private const val MAX_BACKOFF_DELAY_MS = 60_000L // Increased to 60 seconds
-
-        // Do testów - pozwala na wstrzyknięcie mocka
+        // Do testów
         @JvmStatic
         internal var mockInstance: DriveApiClient? = null
 
@@ -500,23 +542,16 @@ class DriveApiClient(context: Context) {
         @Volatile
         private var lastMinuteReset = AtomicLong(System.currentTimeMillis())
 
-        // API rate limiting settings
-        private const val RESET_INTERVAL_MS = 5 * 60 * 1000L // 5 minutes
-        private const val MAX_REQUESTS_PER_INTERVAL = 35 // Reduced to be more conservative
+        private const val RESET_INTERVAL_MS = 5 * 60 * 1000L // 5 minut
+        private const val MAX_REQUESTS_PER_INTERVAL = 40
 
-        /**
-         * Pobiera instancję klienta Drive API z diagnostyką zdrowia.
-         */
         @JvmStatic
         fun getInstance(context: Context): DriveApiClient {
             return mockInstance ?: synchronized(this) {
-                mockInstance ?: DriveApiClient(context.applicationContext).also {
-                    mockInstance = it
-                }
+                mockInstance ?: DriveApiClient(context.applicationContext)
             }
         }
 
-        // Dla testów - metoda do czyszczenia mocka
         @JvmStatic
         fun clearMockInstance() {
             mockInstance = null
