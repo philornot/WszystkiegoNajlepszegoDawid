@@ -1,6 +1,8 @@
 package com.philornot.siekiera.ui.screens.settings
 
 import android.widget.Toast
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,12 +27,13 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -39,7 +42,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.content.edit
 import com.philornot.siekiera.R
 import com.philornot.siekiera.config.AppConfig
 import com.philornot.siekiera.network.DriveApiClient
@@ -51,19 +56,22 @@ import timber.log.Timber
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import androidx.core.content.edit
 
 /**
- * Ekran ustawień aplikacji zawierający opcje zmiany nazwy aplikacji,
- * motywu i informację o najnowszym pliku Daylio z 5-minutowym cache'em.
+ * Settings screen with admin configuration access via secret gesture.
  *
- * @param modifier Modifier dla całego ekranu
- * @param currentAppName Aktualna nazwa aplikacji
- * @param isDarkTheme Czy aktywny jest ciemny motyw
- * @param onThemeToggle Callback wywoływany przy zmianie motywu
- * @param onAppNameChange Callback wywoływany przy zmianie nazwy aplikacji
- * @param onAppNameReset Callback wywoływany przy resetowaniu nazwy
- *    aplikacji
+ * Contains options for:
+ * - Theme toggle
+ * - App name change
+ * - File sync status
+ * - Admin configuration (5 taps on title to access)
+ *
+ * @param modifier Modifier for the entire screen
+ * @param currentAppName Current app name
+ * @param isDarkTheme Whether dark theme is active
+ * @param onThemeToggle Callback called when theme is toggled
+ * @param onAppNameChange Callback called when app name is changed
+ * @param onAppNameReset Callback called when app name is reset
  */
 @Composable
 fun SettingsScreen(
@@ -77,30 +85,37 @@ fun SettingsScreen(
     val context = LocalContext.current
     val scrollState = rememberScrollState()
 
-    // Stany dla dialogu zmiany nazwy
+    // States for app name dialog
     var showChangeNameDialog by remember { mutableStateOf(false) }
     var newAppName by remember { mutableStateOf("") }
 
-    // Stany dla informacji o pliku
+    // States for file info
     var fileInfo by remember { mutableStateOf("Sprawdzanie...") }
     var isRefreshing by remember { mutableStateOf(false) }
 
-    // Domyślna nazwa aplikacji
+    // Secret gesture for admin settings
+    var tapCount by remember { mutableIntStateOf(0) }
+    var lastTapTime by remember { mutableLongStateOf(0L) }
+    var showAdminSettings by remember { mutableStateOf(false) }
+
+    // Default app name
     val defaultAppName = stringResource(R.string.app_name)
     val timerPlaceholder = stringResource(R.string.app_name_timer)
 
-    // Sprawdź czy nazwa aplikacji jest domyślna
+    // Check if app name is default
     val isDefaultName = currentAppName == defaultAppName
 
-    // Klucze dla SharedPreferences
+    // Keys for SharedPreferences
     val PREF_LAST_CHECK_TIME = "file_sync_last_check_time"
     val PREF_LAST_FILE_INFO = "file_sync_last_file_info"
     val PREF_LAST_SYNC_TIME_DISPLAY = "file_sync_last_sync_time_display"
 
-    // Limit sprawdzania - 5 minut
+    // Check limit - 5 minutes
     val CHECK_LIMIT_MS = 5 * 60 * 1000L
 
-    /** Pobiera zapisane dane z cache'u */
+    /**
+     * Gets cached data from SharedPreferences.
+     */
     fun getCachedData(): Triple<String, Long, String> {
         val prefs =
             context.getSharedPreferences("settings_cache", android.content.Context.MODE_PRIVATE)
@@ -110,7 +125,9 @@ fun SettingsScreen(
         return Triple(lastFileInfo, lastCheckTime, lastSyncTimeDisplay)
     }
 
-    /** Zapisuje dane do cache'u */
+    /**
+     * Saves data to cache.
+     */
     fun saveCachedData(fileInfo: String, checkTime: Long, syncTimeDisplay: String) {
         val prefs =
             context.getSharedPreferences("settings_cache", android.content.Context.MODE_PRIVATE)
@@ -121,15 +138,17 @@ fun SettingsScreen(
         }
     }
 
-    /** Formatuje czas sprawdzenia do czytelnej postaci */
+    /**
+     * Formats check time to readable format.
+     */
     fun formatCheckTime(timeMs: Long): String {
         val formatter = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
         return formatter.format(Date(timeMs))
     }
 
     /**
-     * Funkcja do sprawdzania informacji o najnowszym pliku Daylio. Sprawdza
-     * limity API i cache, żeby nie nadużywać API Google Drive.
+     * Function to check latest Daylio file info.
+     * Checks API limits and cache to avoid overusing Google Drive API.
      */
     suspend fun checkLatestFileInfo(forceRefresh: Boolean = false): String {
         return withContext(Dispatchers.IO) {
@@ -137,12 +156,12 @@ fun SettingsScreen(
                 val currentTime = System.currentTimeMillis()
                 val (cachedFileInfo, lastCheckTime, lastSyncTimeDisplay) = getCachedData()
 
-                // Sprawdź czy można wykonać sprawdzenie (nie częściej niż raz na 5 minut)
+                // Check if we can perform check (not more than once per 5 minutes)
                 if (!forceRefresh && currentTime - lastCheckTime < CHECK_LIMIT_MS) {
                     val remainingMinutes =
                         ((CHECK_LIMIT_MS) - (currentTime - lastCheckTime)) / (60 * 1000L)
 
-                    // Jeśli mamy cache'owane dane, pokaż je z informacją o ostatniej synchronizacji
+                    // If we have cached data, show it with last sync info
                     return@withContext if (cachedFileInfo.isNotEmpty() && lastSyncTimeDisplay.isNotEmpty()) {
                         "Z ostatniej synchronizacji ($lastSyncTimeDisplay):\n$cachedFileInfo\n\nMożna odświeżyć za $remainingMinutes minut"
                     } else {
@@ -153,14 +172,14 @@ fun SettingsScreen(
                 val appConfig = AppConfig.getInstance(context)
                 val driveClient = DriveApiClient.getInstance(context)
 
-                // Zainicjalizuj klienta
+                // Initialize client
                 if (!driveClient.initialize()) {
                     return@withContext "Błąd połączenia z Google Drive"
                 }
 
                 val folderId = appConfig.getDriveFolderId()
 
-                // Pobierz listę plików .daylio
+                // Get list of .daylio files
                 val files =
                     driveClient.listFilesInFolder(folderId).filter { it.name.endsWith(".daylio") }
 
@@ -168,7 +187,7 @@ fun SettingsScreen(
                     return@withContext "Nie znaleziono plików .daylio"
                 }
 
-                // Znajdź najnowszy plik
+                // Find newest file
                 val newestFile = files.maxByOrNull { it.modifiedTime.time }
                     ?: return@withContext "Błąd podczas wyszukiwania najnowszego pliku"
 
@@ -177,7 +196,7 @@ fun SettingsScreen(
                 val newFileInfo =
                     "Najnowszy plik: ${newestFile.name}\nData modyfikacji: $formattedDate"
 
-                // Zapisz nowe dane do cache'u
+                // Save new data to cache
                 saveCachedData(newFileInfo, currentTime, syncTimeDisplay)
 
                 return@withContext newFileInfo
@@ -189,7 +208,9 @@ fun SettingsScreen(
         }
     }
 
-    /** Funkcja do odświeżania informacji o pliku */
+    /**
+     * Function to refresh file info.
+     */
     fun refreshFileInfo() {
         if (isRefreshing) return
 
@@ -207,13 +228,22 @@ fun SettingsScreen(
         }
     }
 
-    // Automatyczne sprawdzenie przy pierwszym załadowaniu
+    // Automatic check on first load
     LaunchedEffect(Unit) {
         fileInfo = try {
             checkLatestFileInfo()
         } catch (_: Exception) {
             "Błąd podczas ładowania"
         }
+    }
+
+    // Show admin settings if activated
+    if (showAdminSettings) {
+        AdminSettingsScreen(
+            onBack = { showAdminSettings = false },
+            modifier = Modifier.fillMaxSize()
+        )
+        return
     }
 
     Column(
@@ -223,25 +253,49 @@ fun SettingsScreen(
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Nagłówek
+        // Header with secret gesture (5 taps)
         Text(
             text = "Ustawienia",
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(top = 16.dp, bottom = 32.dp)
+            modifier = Modifier
+                .padding(top = 16.dp, bottom = 32.dp)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) {
+                    val currentTime = System.currentTimeMillis()
+                    if (currentTime - lastTapTime < 500) { // Tap within 500ms
+                        tapCount++
+                        if (tapCount >= 5) {
+                            showAdminSettings = true
+                            tapCount = 0
+                            Toast
+                                .makeText(
+                                    context,
+                                    "🔓 Tryb administratora odblokowany",
+                                    Toast.LENGTH_SHORT
+                                )
+                                .show()
+                        }
+                    } else {
+                        tapCount = 1
+                    }
+                    lastTapTime = currentTime
+                }
         )
 
-        // Sekcja motywu
+        // Theme section
         SettingsCard(
             title = "Wygląd", description = "Personalizuj wygląd aplikacji"
         ) {
-            // Przełącznik motywu
+            // Theme toggle
             SettingsItem(
                 icon = if (isDarkTheme) Icons.Default.DarkMode else Icons.Default.LightMode,
                 title = "Ciemny motyw",
                 description = if (isDarkTheme) "Włączony" else "Wyłączony",
                 trailing = {
-                    Switch(
+                    androidx.compose.material3.Switch(
                         checked = isDarkTheme, onCheckedChange = onThemeToggle
                     )
                 })
@@ -249,12 +303,12 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Sekcja nazwy aplikacji
+        // App name section
         SettingsCard(
             title = "Nazwa aplikacji", description = "Zmień nazwę wyświetlaną w systemie"
         ) {
             Column {
-                // Aktualna nazwa
+                // Current name
                 SettingsItem(
                     icon = Icons.Default.AppRegistration,
                     title = "Aktualna nazwa",
@@ -266,7 +320,7 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
                 )
 
-                // Przycisk zmiany nazwy
+                // Change name button
                 SettingsItemButton(
                     icon = Icons.Default.AppRegistration,
                     title = "Zmień nazwę aplikacji",
@@ -276,7 +330,7 @@ fun SettingsScreen(
                         showChangeNameDialog = true
                     })
 
-                // Przycisk resetowania nazwy (tylko jeśli nazwa nie jest domyślna)
+                // Reset name button (only if name is not default)
                 if (!isDefaultName) {
                     SettingsItemButton(
                         icon = Icons.Default.Refresh,
@@ -290,7 +344,7 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Sekcja informacji o pliku Daylio
+        // File sync section
         SettingsCard(
             title = "Plik z wpisami",
             description = "Informacja o najnowszym pliku Daylio na Google Drive"
@@ -298,7 +352,7 @@ fun SettingsScreen(
             Row(
                 modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically
             ) {
-                // Ikona informacji
+                // Info icon
                 androidx.compose.material3.Icon(
                     imageVector = Icons.Default.CloudSync,
                     contentDescription = null,
@@ -308,7 +362,7 @@ fun SettingsScreen(
 
                 Spacer(modifier = Modifier.width(16.dp))
 
-                // Informacja o pliku
+                // File info
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Status synchronizacji",
@@ -328,7 +382,7 @@ fun SettingsScreen(
                     )
                 }
 
-                // Przycisk odświeżania
+                // Refresh button
                 IconButton(
                     onClick = { refreshFileInfo() }, enabled = !isRefreshing
                 ) {
@@ -348,7 +402,7 @@ fun SettingsScreen(
                 }
             }
 
-            // Dodatkowa informacja o limitach
+            // Additional info about limits
             if (fileInfo.contains("Można odświeżyć za")) {
                 Spacer(modifier = Modifier.height(8.dp))
 

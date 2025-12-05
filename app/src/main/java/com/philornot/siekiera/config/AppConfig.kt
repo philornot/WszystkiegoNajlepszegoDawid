@@ -10,50 +10,76 @@ import java.util.Calendar
 import java.util.TimeZone
 
 /**
- * Klasa konfiguracyjna aplikacji, która zapewnia scentralizowany dostęp do
- * wszystkich parametrów konfiguracyjnych.
+ * Application configuration class that provides centralized access to all
+ * configuration parameters.
  *
- * Wszystkie wartości są odczytywane z pliku res/values/config.xml oraz
- * BuildConfig. Używa bezpiecznego podejścia z WeakReference i lazy
- * initialization.
+ * All values are read from res/values/config.xml and BuildConfig, but
+ * can be overridden by AdminConfigManager for easy configuration changes
+ * without reinstalling the app.
+ *
+ * Uses safe approach with WeakReference and lazy initialization.
  */
 class AppConfig private constructor(context: Context) {
 
-    // Używamy WeakReference do kontekstu, aby uniknąć wycieków pamięci
+    // Use WeakReference to context to avoid memory leaks
     private val contextRef: WeakReference<Context> = WeakReference(context.applicationContext)
 
-    // Strefa czasowa Warszawy
+    // Admin config manager for overriding default values
+    private val adminConfig: AdminConfigManager by lazy {
+        AdminConfigManager.getInstance(context.applicationContext)
+    }
+
+    // Remote config manager for cross-device configuration
+    private val remoteConfig: RemoteConfigManager by lazy {
+        RemoteConfigManager.getInstance(context.applicationContext)
+    }
+
+    // Warsaw timezone
     private val WARSAW_TIMEZONE = TimeZone.getTimeZone("Europe/Warsaw")
 
-    // Cache dla często używanych wartości
+    // Cache for frequently used values
     private var _birthdayDateCache: Calendar? = null
     private var _driveFolderIdCache: String? = null
 
     /**
-     * Getter dla kontekstu, który sprawdza czy referencja jest wciąż ważna
+     * Getter for context that checks if reference is still valid.
      *
-     * @throws IllegalStateException jeśli kontekst nie jest dostępny
+     * @throws IllegalStateException if context is not available
      */
     private fun getContext(): Context {
         return contextRef.get()
-            ?: throw IllegalStateException("Kontekst aplikacji nie jest dostępny - może wystąpić memory leak")
+            ?: throw IllegalStateException("Application context is not available - possible memory leak")
     }
 
     /**
-     * Pobiera datę urodzin jako obiekt Calendar w strefie czasowej Warszawy.
-     * Wartości konfiguracyjne są pobierane z pliku config.xml. Wynik jest
-     * cache'owany dla lepszej wydajności.
+     * Gets birthday date as Calendar object in Warsaw timezone.
      *
-     * @return Obiekt Calendar z ustawioną datą i czasem urodzin
+     * Priority: Remote Config > Admin Config > config.xml Result is cached for
+     * better performance.
+     *
+     * @return Calendar object with set birthday date and time
      */
     fun getBirthdayDate(): Calendar {
-        // Sprawdź cache
+        // Priority 1: Remote config (cross-device)
+        remoteConfig.getRemoteBirthdayDate()?.let {
+            Timber.d("Using remote-configured birthday date")
+            return it
+        }
+
+        // Priority 2: Admin config (local override)
+        adminConfig.getAdminBirthdayDate()?.let {
+            Timber.d("Using admin-configured birthday date")
+            return it
+        }
+
+        // Priority 3: Default from config.xml
+        // Check cache
         _birthdayDateCache?.let { return it }
 
         val context = getContext()
 
         val year = context.resources.getInteger(R.integer.birthday_year)
-        // Miesiące w Calendar są indeksowane od 0, ale w config.xml używamy 1-12 dla czytelności
+        // Months in Calendar are indexed from 0, but in config.xml we use 1-12 for readability
         val month = context.resources.getInteger(R.integer.birthday_month) - 1
         val day = context.resources.getInteger(R.integer.birthday_day)
         val hour = context.resources.getInteger(R.integer.birthday_hour)
@@ -69,51 +95,64 @@ class AppConfig private constructor(context: Context) {
             set(Calendar.MILLISECOND, 0)
         }
 
-        // Cache wynik
+        // Cache result
         _birthdayDateCache = calendar
 
         if (isVerboseLoggingEnabled()) {
-            Timber.d("Data urodzin z konfiguracji: ${TimeUtils.formatDate(calendar.time)}")
+            Timber.d("Birthday date from config: ${TimeUtils.formatDate(calendar.time)}")
         }
 
         return calendar
     }
 
     /**
-     * Pobiera datę urodzin w milisekundach.
+     * Gets birthday date in milliseconds.
      *
-     * @return Czas w milisekundach
+     * @return Time in milliseconds
      */
-    fun getBirthdayTimeMillis(): Long = getBirthdayDate().timeInMillis
+    fun getBirthdayTimeMillis(): Long {
+        // Check admin config first
+        adminConfig.getAdminBirthdayTimeMillis()?.let {
+            return it
+        }
+
+        return getBirthdayDate().timeInMillis
+    }
 
     /**
-     * Pobiera ID folderu Google Drive. Używa wyłącznie BuildConfig (z
-     * local.properties lub CI/CD)
+     * Gets Google Drive folder ID. Uses only BuildConfig (from
+     * local.properties or CI/CD) but can be overridden by AdminConfigManager.
      *
-     * @return ID folderu Google Drive
-     * @throws IllegalStateException jeśli ID nie jest skonfigurowane
+     * @return Google Drive folder ID
+     * @throws IllegalStateException if ID is not configured
      */
     fun getDriveFolderId(): String {
-        // Sprawdź cache
+        // Check if admin config overrides default
+        adminConfig.getAdminDriveFolderId()?.let {
+            Timber.d("Using admin-configured Drive folder ID")
+            return it
+        }
+
+        // Check cache
         _driveFolderIdCache?.let { return it }
 
         val folderId = BuildConfig.GDRIVE_FOLDER_ID
 
         if (folderId.isBlank()) {
             throw IllegalStateException(
-                "ID folderu Google Drive nie jest skonfigurowane. " + "Ustaw gdrive.folder.id w local.properties lub zdefiniuj w BuildConfig."
+                "Google Drive folder ID is not configured. " + "Set gdrive.folder.id in local.properties or define in BuildConfig."
             )
         }
 
-        // Cache wynik
+        // Cache result
         _driveFolderIdCache = folderId
         return folderId
     }
 
     /**
-     * Pobiera nazwę pliku z zasobu service_account.
+     * Gets service account file name from resources.
      *
-     * @return Nazwa pliku (bez rozszerzenia .json)
+     * @return File name (without .json extension)
      */
     fun getServiceAccountFileName(): String {
         val context = getContext()
@@ -121,19 +160,34 @@ class AppConfig private constructor(context: Context) {
     }
 
     /**
-     * Pobiera nazwę pliku Daylio.
+     * Gets Daylio file name, can be overridden by Remote or Admin Config.
      *
-     * @return Nazwa pliku Daylio
+     * Priority: Remote Config > Admin Config > config.xml
+     *
+     * @return Daylio file name
      */
     fun getDaylioFileName(): String {
+        // Priority 1: Remote config
+        remoteConfig.getRemoteDaylioFileName()?.let {
+            Timber.d("Using remote-configured Daylio file name")
+            return it
+        }
+
+        // Priority 2: Admin config
+        adminConfig.getAdminDaylioFileName()?.let {
+            Timber.d("Using admin-configured Daylio file name")
+            return it
+        }
+
+        // Priority 3: Default from resources
         val context = getContext()
         return context.resources.getString(R.string.daylio_file_name)
     }
 
     /**
-     * Sprawdza, czy codzienne sprawdzanie pliku jest włączone.
+     * Checks if daily file checking is enabled.
      *
-     * @return true jeśli włączone, false w przeciwnym wypadku
+     * @return true if enabled, false otherwise
      */
     fun isDailyFileCheckEnabled(): Boolean {
         val context = getContext()
@@ -141,9 +195,9 @@ class AppConfig private constructor(context: Context) {
     }
 
     /**
-     * Sprawdza, czy powiadomienie urodzinowe jest włączone.
+     * Checks if birthday notification is enabled.
      *
-     * @return true jeśli włączone, false w przeciwnym wypadku
+     * @return true if enabled, false otherwise
      */
     fun isBirthdayNotificationEnabled(): Boolean {
         val context = getContext()
@@ -151,9 +205,9 @@ class AppConfig private constructor(context: Context) {
     }
 
     /**
-     * Pobiera interwał sprawdzania pliku w godzinach.
+     * Gets file check interval in hours.
      *
-     * @return Interwał w godzinach
+     * @return Interval in hours
      */
     fun getFileCheckIntervalHours(): Int {
         val context = getContext()
@@ -161,19 +215,19 @@ class AppConfig private constructor(context: Context) {
     }
 
     /**
-     * Sprawdza, czy szczegółowe logowanie jest włączone. Używa BuildConfig
-     * (ustawianego w build.gradle.kts).
+     * Checks if verbose logging is enabled. Uses BuildConfig (set in
+     * build.gradle.kts).
      *
-     * @return true jeśli włączone, false w przeciwnym wypadku
+     * @return true if enabled, false otherwise
      */
     fun isVerboseLoggingEnabled(): Boolean {
         return BuildConfig.DEBUG_LOGGING
     }
 
     /**
-     * Pobiera identyfikator dla codziennego zadania sprawdzania pliku.
+     * Gets identifier for daily file check task.
      *
-     * @return Identyfikator zadania WorkManager
+     * @return WorkManager task identifier
      */
     fun getDailyFileCheckWorkName(): String {
         val context = getContext()
@@ -181,88 +235,106 @@ class AppConfig private constructor(context: Context) {
     }
 
     /**
-     * Sprawdza, czy jest włączony tryb testowy. W trybie testowym aplikacja
-     * używa pliku testowego i ignoruje sprawdzanie czasu. Używa BuildConfig
-     * (ustawianego w build.gradle.kts).
+     * Checks if test mode is enabled. In test mode, app uses test file and
+     * ignores time checking. Uses BuildConfig (set in build.gradle.kts).
      *
-     * @return true jeśli tryb testowy jest włączony, false w przeciwnym
-     *    wypadku
+     * @return true if test mode is enabled, false otherwise
      */
     fun isTestMode(): Boolean {
         return BuildConfig.TEST_MODE
     }
 
     /**
-     * Sprawdza, czy aplikacja jest w trybie debug.
+     * Checks if app is in debug build.
      *
-     * @return true jeśli debug build, false w przeciwnym wypadku
+     * @return true if debug build, false otherwise
      */
     fun isDebugBuild(): Boolean = BuildConfig.DEBUG
 
     /**
-     * Pobiera wersję aplikacji.
+     * Gets app version.
      *
-     * @return Wersja aplikacji jako string
+     * @return App version as string
      */
     fun getAppVersion(): String = BuildConfig.VERSION_NAME
 
     /**
-     * Pobiera kod wersji aplikacji.
+     * Gets app version code.
      *
-     * @return Kod wersji jako integer
+     * @return Version code as integer
      */
     fun getAppVersionCode(): Int = BuildConfig.VERSION_CODE
 
     /**
-     * Waliduje konfigurację aplikacji i zwraca listę błędów. Przydatne do
-     * debugowania problemów z konfiguracją.
+     * Validates app configuration and returns list of errors. Useful for
+     * debugging configuration issues.
      *
-     * @return Lista komunikatów o błędach (pusta jeśli wszystko OK)
+     * @return List of error messages (empty if all OK)
      */
     fun validateConfiguration(): List<String> {
         val errors = mutableListOf<String>()
 
         try {
-            // Sprawdź datę urodzin
+            // Check birthday date
             val birthday = getBirthdayDate()
             if (birthday.timeInMillis <= System.currentTimeMillis() && !isTestMode()) {
-                errors.add("Data urodzin jest w przeszłości i tryb testowy jest wyłączony")
+                errors.add("Birthday date is in the past and test mode is disabled")
             }
         } catch (e: Exception) {
-            errors.add("Błąd konfiguracji daty urodzin: ${e.message}")
+            errors.add("Error in birthday date configuration: ${e.message}")
         }
 
         try {
-            // Sprawdź ID folderu Google Drive
+            // Check Google Drive folder ID
             getDriveFolderId()
         } catch (e: Exception) {
-            errors.add("Błąd konfiguracji Google Drive: ${e.message}")
+            errors.add("Error in Google Drive configuration: ${e.message}")
         }
 
         try {
-            // Sprawdź nazwę pliku service account
+            // Check service account file name
             val serviceAccountFile = getServiceAccountFileName()
             if (serviceAccountFile.isBlank()) {
-                errors.add("Nazwa pliku service account nie jest skonfigurowana")
+                errors.add("Service account file name is not configured")
             }
         } catch (e: Exception) {
-            errors.add("Błąd konfiguracji service account: ${e.message}")
+            errors.add("Error in service account configuration: ${e.message}")
         }
 
         return errors
     }
 
+    /** Gets summary of current configuration including admin overrides. */
+    fun getConfigSummary(): String {
+        val isAdminActive = adminConfig.isAdminConfigEnabled()
+
+        return buildString {
+            appendLine("Configuration Status:")
+            if (isAdminActive) {
+                appendLine("⚠️ Admin overrides ACTIVE")
+                appendLine()
+                appendLine(adminConfig.getConfigSummary())
+            } else {
+                appendLine("✓ Using default config.xml values")
+                appendLine()
+                appendLine("Birthday: ${TimeUtils.formatDate(getBirthdayDate().time)}")
+                appendLine("Drive Folder: ${getDriveFolderId().take(20)}...")
+                appendLine("File Name: ${getDaylioFileName()}")
+            }
+        }
+    }
+
     companion object {
-        // Używamy volatile dla bezpieczeństwa wielowątkowego
+        // Use volatile for thread-safe access
         @Volatile
         private var INSTANCE: WeakReference<AppConfig>? = null
 
         /**
-         * Pobiera instancję konfiguracji aplikacji (singleton z weak reference).
-         * Thread-safe implementation z double-checked locking.
+         * Gets app configuration instance (singleton with weak reference).
+         * Thread-safe implementation with double-checked locking.
          *
-         * @param context Kontekst aplikacji
-         * @return Instancja AppConfig
+         * @param context Application context
+         * @return AppConfig instance
          */
         fun getInstance(context: Context): AppConfig {
             // Fast check with no locking
@@ -288,11 +360,11 @@ class AppConfig private constructor(context: Context) {
                     val newInstance = AppConfig(context.applicationContext)
                     INSTANCE = WeakReference(newInstance)
 
-                    // Waliduj konfigurację w debug builds
+                    // Validate configuration in debug builds
                     if (newInstance.isDebugBuild()) {
                         val errors = newInstance.validateConfiguration()
                         if (errors.isNotEmpty()) {
-                            Timber.w("Problemy z konfiguracją: ${errors.joinToString(", ")}")
+                            Timber.w("Configuration issues: ${errors.joinToString(", ")}")
                         }
                     }
 
@@ -302,13 +374,13 @@ class AppConfig private constructor(context: Context) {
         }
 
         /**
-         * Czyści instancję singleton. Używane głównie w testach lub gdy aplikacja
-         * jest zamykana, aby pomóc garbage collectorowi.
+         * Clears singleton instance. Used mainly in tests or when app is closing
+         * to help garbage collector.
          */
         fun clearInstance() {
             synchronized(this) {
                 INSTANCE?.get()?.let { instance ->
-                    // Wyczyść cache
+                    // Clear cache
                     instance._birthdayDateCache = null
                     instance._driveFolderIdCache = null
                 }
@@ -317,9 +389,9 @@ class AppConfig private constructor(context: Context) {
         }
 
         /**
-         * Sprawdza czy instancja jest zainicjalizowana. Przydatne w testach.
+         * Checks if instance is initialized. Useful in tests.
          *
-         * @return true jeśli instancja istnieje, false w przeciwnym wypadku
+         * @return true if instance exists, false otherwise
          */
         fun isInitialized(): Boolean {
             return INSTANCE?.get() != null
