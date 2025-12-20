@@ -1,112 +1,202 @@
 package com.philornot.siekiera
 
 import android.app.Application
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import androidx.work.Configuration
 import com.philornot.siekiera.config.AppConfig
 import com.philornot.siekiera.config.RemoteConfigManager
 import com.philornot.siekiera.notification.NotificationHelper
 import com.philornot.siekiera.notification.NotificationScheduler
 import com.philornot.siekiera.utils.TimeUtils
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import kotlin.math.min
+import kotlin.math.pow
 
 /**
- * Główna klasa aplikacji odpowiedzialna za inicjalizację globalnych
- * komponentów.
+ * Main application class responsible for initializing global components.
  *
- * Powiadomienia są planowane tylko na podstawie daty z
- * konfiguracji, niezależnie od statusu odebrania prezentu.
+ * Notifications are scheduled based on the date from configuration,
+ * regardless of gift receipt status.
  */
 class GiftApp : Application(), Configuration.Provider {
 
-    // Przechowuje referencję do konfiguracji
+    // Stores reference to configuration
     private lateinit var appConfig: AppConfig
 
-// W GiftApp.kt, dodaj w metodzie onCreate() po inicjalizacji TimeUtils:
+    // Retry configuration for remote config fetching
+    private companion object {
+        const val MAX_RETRY_ATTEMPTS = 3
+        const val INITIAL_RETRY_DELAY_MS = 5000L // 5 seconds
+        const val MAX_RETRY_DELAY_MS = 60000L // 1 minute
+    }
 
     override fun onCreate() {
         super.onCreate()
 
-        // Inicjalizacja AppConfig PRZED jakimkolwiek użyciem
+        // Initialize AppConfig BEFORE any usage
         appConfig = AppConfig.getInstance(applicationContext)
 
-        // Inicjalizacja TimeUtils
+        // Initialize TimeUtils
         TimeUtils.initialize(applicationContext)
 
-        // Inicjalizacja kanałów powiadomień
+        // Initialize notification channels
         NotificationHelper.initNotificationChannels(applicationContext)
 
-        // Inicjalizacja Timber do logowania
+        // Initialize Timber for logging
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())
         }
 
-        // 🆕 Pobierz zdalną konfigurację asynchronicznie
-        fetchRemoteConfigInBackground()
+        // 🆕 Fetch remote configuration asynchronously with smart retry
+        fetchRemoteConfigWithRetry()
 
-        // Zaplanuj powiadomienie jeśli potrzebne
+        // Schedule notification if needed
         checkAndScheduleNotification()
     }
 
     /**
-     * Fetches remote configuration from Google Drive in background.
-     * This allows admin to update configuration for all app instances.
+     * Checks if device has active internet connection.
+     *
+     * @return true if connected to internet, false otherwise
      */
-    private fun fetchRemoteConfigInBackground() {
+    private fun isNetworkAvailable(): Boolean {
+        val connectivityManager =
+            getSystemService(CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
+
+        return try {
+            val network = connectivityManager.activeNetwork ?: return false
+            val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+
+            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) && capabilities.hasCapability(
+                NetworkCapabilities.NET_CAPABILITY_VALIDATED
+            )
+        } catch (e: Exception) {
+            Timber.d("Network check failed: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * Fetches remote configuration from Google Drive with intelligent retry
+     * mechanism.
+     * - Checks internet connectivity before attempting fetch
+     * - Uses exponential backoff for retries
+     * - Gracefully handles network unavailability
+     * - Does not log errors to Sentry for expected failures (no internet, no
+     *   file)
+     */
+    private fun fetchRemoteConfigWithRetry() {
         kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            try {
-                val remoteConfig = RemoteConfigManager.getInstance(applicationContext)
-                val folderId = appConfig.getDriveFolderId()
+            var attempt = 0
+            var success = false
 
-                val success = remoteConfig.fetchRemoteConfig(folderId)
+            while (attempt < MAX_RETRY_ATTEMPTS && !success) {
+                attempt++
 
-                if (success) {
-                    Timber.d("✅ Remote config fetched successfully")
+                // Check network availability before attempt
+                if (!isNetworkAvailable()) {
+                    Timber.d("⏸️ Remote config fetch skipped - no internet connection (attempt $attempt/$MAX_RETRY_ATTEMPTS)")
 
-                    // Clear cached birthday date to force reload
-                    AppConfig.clearInstance()
-                    appConfig = AppConfig.getInstance(applicationContext)
-
-                    // Reschedule notifications with new config
-                    kotlinx.coroutines.MainScope().launch {
-                        checkAndScheduleNotification()
+                    // Wait before next attempt with exponential backoff
+                    if (attempt < MAX_RETRY_ATTEMPTS) {
+                        val delayMs = min(
+                            INITIAL_RETRY_DELAY_MS * 2.0.pow(attempt - 1).toLong(),
+                            MAX_RETRY_DELAY_MS
+                        )
+                        Timber.d("⏰ Retrying remote config fetch in ${delayMs / 1000}s...")
+                        delay(delayMs)
                     }
-                } else {
-                    Timber.d("ℹ️ No remote config available or not updated")
+                    continue
                 }
-            } catch (e: Exception) {
-                Timber.w(e, "Failed to fetch remote config (this is OK if file doesn't exist)")
+
+                try {
+                    val remoteConfig = RemoteConfigManager.getInstance(applicationContext)
+                    val folderId = appConfig.getDriveFolderId()
+
+                    Timber.d("🔄 Attempting to fetch remote config (attempt $attempt/$MAX_RETRY_ATTEMPTS)")
+                    success = remoteConfig.fetchRemoteConfig(folderId)
+
+                    if (success) {
+                        Timber.d("✅ Remote config fetched successfully")
+
+                        // Clear cached birthday date to force reload
+                        AppConfig.clearInstance()
+                        appConfig = AppConfig.getInstance(applicationContext)
+
+                        // Reschedule notifications with new config
+                        kotlinx.coroutines.MainScope().launch {
+                            checkAndScheduleNotification()
+                        }
+                    } else {
+                        Timber.d("ℹ️ No remote config available or not updated (attempt $attempt/$MAX_RETRY_ATTEMPTS)")
+
+                        // If no config file exists, don't retry - this is expected
+                        break
+                    }
+                } catch (e: Exception) {
+                    // Distinguish between network errors and other errors
+                    val isNetworkError = e is java.net.UnknownHostException || e.message?.contains(
+                        "network", ignoreCase = true
+                    ) == true || e.message?.contains(
+                        "connection", ignoreCase = true
+                    ) == true || e.message?.contains("timeout", ignoreCase = true) == true
+
+                    if (isNetworkError) {
+                        Timber.d("🌐 Network error during remote config fetch (attempt $attempt/$MAX_RETRY_ATTEMPTS): ${e.message}")
+
+                        // Retry network errors
+                        if (attempt < MAX_RETRY_ATTEMPTS) {
+                            val delayMs = min(
+                                INITIAL_RETRY_DELAY_MS * 2.0.pow(attempt - 1).toLong(),
+                                MAX_RETRY_DELAY_MS
+                            )
+                            Timber.d("⏰ Retrying in ${delayMs / 1000}s...")
+                            delay(delayMs)
+                        }
+                    } else {
+                        // Non-network errors (e.g., file not found, config error) - don't retry
+                        Timber.d("ℹ️ Remote config not available: ${e.message}")
+                        break
+                    }
+                }
+            }
+
+            if (!success && attempt >= MAX_RETRY_ATTEMPTS) {
+                Timber.d("⚠️ Remote config fetch failed after $MAX_RETRY_ATTEMPTS attempts - using local config")
             }
         }
     }
 
     /**
-     * Sprawdza i planuje powiadomienie urodzinowe na podstawie daty z
-     * konfiguracji.
+     * Checks and schedules birthday notification based on date from
+     * configuration.
      *
-     * Nie sprawdza czy prezent został odebrany - powiadomienie
-     * jest planowane tylko jeśli data urodzin jest w przyszłości.
+     * Does not check if gift was received - notification is scheduled only if
+     * birthday date is in the future.
      */
     private fun checkAndScheduleNotification() {
-        // Sprawdź czy powiadomienia są włączone w konfiguracji
+        // Check if birthday notifications are enabled in configuration
         if (!appConfig.isBirthdayNotificationEnabled()) {
-            Timber.d("Powiadomienia urodzinowe są wyłączone w konfiguracji")
+            Timber.d("Birthday notifications disabled in configuration")
             return
         }
 
-        // Pobierz datę urodzin z konfiguracji
+        // Get birthday date from configuration
         val revealDateMillis = appConfig.getBirthdayTimeMillis()
         val currentTimeMillis = System.currentTimeMillis()
 
         if (currentTimeMillis < revealDateMillis) {
-            Timber.d("Planowanie powiadomienia o odsłonięciu prezentu")
+            Timber.d("Scheduling gift reveal notification")
             NotificationScheduler.scheduleGiftRevealNotification(this, appConfig)
         } else {
-            Timber.d("Data odsłonięcia już minęła, nie planuję powiadomienia")
+            Timber.d("Birthday date already passed, not scheduling notification")
         }
     }
 
-    // Konfiguracja WorkManager
+    // WorkManager configuration
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder().setMinimumLoggingLevel(android.util.Log.INFO).build()
 }

@@ -2,6 +2,8 @@ package com.philornot.siekiera.config
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import androidx.core.content.edit
 import com.philornot.siekiera.network.DriveApiClient
 import kotlinx.coroutines.Dispatchers
@@ -14,20 +16,14 @@ import java.util.Calendar
 import java.util.TimeZone
 
 /**
- * Manager for remote configuration stored on Google Drive.
- * Allows one admin to change configuration for all app instances.
+ * Manager for remote configuration stored on Google Drive. Allows one
+ * admin to change configuration for all app instances.
  *
- * Configuration file format (app_config.json):
- * {
- *   "version": 1,
- *   "birthday_year": 2025,
- *   "birthday_month": 5,
- *   "birthday_day": 15,
- *   "birthday_hour": 12,
- *   "birthday_minute": 0,
- *   "daylio_file_name": "backup.daylio",
- *   "last_updated": 1234567890
- * }
+ *
+ * Configuration file format (app_config.json): { "version": 1,
+ * "birthday_year": 2025, "birthday_month": 5, "birthday_day":
+ * 15, "birthday_hour": 12, "birthday_minute": 0,
+ * "daylio_file_name": "backup.daylio", "last_updated": 1234567890 }
  */
 class RemoteConfigManager private constructor(context: Context) {
 
@@ -37,9 +33,7 @@ class RemoteConfigManager private constructor(context: Context) {
     private val warsawTimezone = TimeZone.getTimeZone("Europe/Warsaw")
     private val appContext = context.applicationContext
 
-    /**
-     * Data class representing remote configuration.
-     */
+    /** Data class representing remote configuration. */
     data class RemoteConfig(
         val birthdayYear: Int,
         val birthdayMonth: Int, // 0-11 (Calendar format)
@@ -47,19 +41,38 @@ class RemoteConfigManager private constructor(context: Context) {
         val birthdayHour: Int,
         val birthdayMinute: Int,
         val daylioFileName: String,
-        val lastUpdated: Long
+        val lastUpdated: Long,
     )
 
     /**
-     * Check if remote config is enabled and downloaded.
+     * Checks if device has active internet connection.
+     *
+     * @return true if connected to internet, false otherwise
      */
+    private fun isNetworkAvailable(): Boolean {
+        val connectivityManager =
+            appContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+                ?: return false
+
+        return try {
+            val network = connectivityManager.activeNetwork ?: return false
+            val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+
+            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) && capabilities.hasCapability(
+                NetworkCapabilities.NET_CAPABILITY_VALIDATED
+            )
+        } catch (e: Exception) {
+            Timber.d("Network check failed: ${e.message}")
+            false
+        }
+    }
+
+    /** Check if remote config is enabled and downloaded. */
     fun hasRemoteConfig(): Boolean {
         return prefs.contains(KEY_BIRTHDAY_YEAR)
     }
 
-    /**
-     * Get remote configuration from local cache.
-     */
+    /** Get remote configuration from local cache. */
     fun getRemoteConfig(): RemoteConfig? {
         if (!hasRemoteConfig()) return null
 
@@ -74,14 +87,12 @@ class RemoteConfigManager private constructor(context: Context) {
                 lastUpdated = prefs.getLong(KEY_LAST_UPDATED, 0L)
             )
         } catch (e: Exception) {
-            Timber.e(e, "Error reading remote config")
+            Timber.e(e, "Error reading remote config from cache")
             null
         }
     }
 
-    /**
-     * Get birthday date from remote config as Calendar.
-     */
+    /** Get birthday date from remote config as Calendar. */
     fun getRemoteBirthdayDate(): Calendar? {
         val config = getRemoteConfig() ?: return null
 
@@ -98,9 +109,7 @@ class RemoteConfigManager private constructor(context: Context) {
         }
     }
 
-    /**
-     * Get Daylio file name from remote config.
-     */
+    /** Get Daylio file name from remote config. */
     fun getRemoteDaylioFileName(): String? {
         return getRemoteConfig()?.daylioFileName?.takeIf { it.isNotEmpty() }
     }
@@ -108,27 +117,53 @@ class RemoteConfigManager private constructor(context: Context) {
     /**
      * Fetch remote configuration from Google Drive.
      *
+     * Error handling and network checking to avoid Sentry
+     * noise.
+     *
      * @param folderId Google Drive folder ID containing app_config.json
      * @return true if config was successfully downloaded, false otherwise
      */
     suspend fun fetchRemoteConfig(folderId: String): Boolean = withContext(Dispatchers.IO) {
         try {
+            // Check network before attempting any Drive operations
+            if (!isNetworkAvailable()) {
+                Timber.d("Cannot fetch remote config - no internet connection")
+                return@withContext false
+            }
+
             Timber.d("Fetching remote config from Drive folder: $folderId")
 
             val driveClient = DriveApiClient.getInstance(appContext)
 
-            // Initialize client
+            // Initialize client with network check
             if (!driveClient.initialize()) {
-                Timber.e("Failed to initialize Drive client for remote config")
+                Timber.d("Failed to initialize Drive client - likely no internet")
                 return@withContext false
             }
 
             // List files in folder and find app_config.json
-            val files = driveClient.listFilesInFolder(folderId)
+            val files = try {
+                driveClient.listFilesInFolder(folderId)
+            } catch (e: DriveApiClient.NetworkUnavailableException) {
+                Timber.d("Network unavailable when listing files")
+                return@withContext false
+            } catch (e: DriveApiClient.NetworkException) {
+                Timber.d("Network error when listing files: ${e.message}")
+                return@withContext false
+            } catch (e: Exception) {
+                // Only log as warning if it's not a network-related issue
+                if (isNetworkRelatedError(e)) {
+                    Timber.d("Network-related error when listing files: ${e.message}")
+                } else {
+                    Timber.w("Unexpected error when listing files: ${e.message}")
+                }
+                return@withContext false
+            }
+
             val configFile = files.find { it.name == CONFIG_FILE_NAME }
 
             if (configFile == null) {
-                Timber.d("Remote config file not found in Drive folder")
+                Timber.d("Remote config file not found in Drive folder - this is expected if not set up yet")
                 return@withContext false
             }
 
@@ -137,15 +172,21 @@ class RemoteConfigManager private constructor(context: Context) {
             // Check if we already have this version
             val lastKnownUpdate = prefs.getLong(KEY_LAST_UPDATED, 0L)
             if (configFile.modifiedTime.time <= lastKnownUpdate) {
-                Timber.d("Remote config is not newer than cached version, skipping download")
+                Timber.d("Remote config is not newer than cached version")
                 return@withContext true
             }
 
             // Download and parse config file
-            val inputStream = driveClient.downloadFile(configFile.id)
+            val inputStream = try {
+                driveClient.downloadFile(configFile.id)
+            } catch (e: DriveApiClient.NetworkException) {
+                Timber.d("Network error when downloading config: ${e.message}")
+                return@withContext false
+            }
+
             val content = BufferedReader(InputStreamReader(inputStream)).use { it.readText() }
 
-            Timber.d("Downloaded remote config content: $content")
+            Timber.d("Downloaded remote config content (${content.length} chars)")
 
             // Parse JSON
             val json = JSONObject(content)
@@ -153,13 +194,14 @@ class RemoteConfigManager private constructor(context: Context) {
             // Validate version
             val version = json.optInt("version", 0)
             if (version < 1) {
-                Timber.e("Invalid config version: $version")
+                Timber.w("Invalid remote config version: $version")
                 return@withContext false
             }
 
             // Extract configuration
             val birthdayYear = json.getInt("birthday_year")
-            val birthdayMonth = json.getInt("birthday_month") - 1 // Convert to Calendar format (0-11)
+            val birthdayMonth =
+                json.getInt("birthday_month") - 1 // Convert to Calendar format (0-11)
             val birthdayDay = json.getInt("birthday_day")
             val birthdayHour = json.getInt("birthday_hour")
             val birthdayMinute = json.getInt("birthday_minute")
@@ -177,14 +219,45 @@ class RemoteConfigManager private constructor(context: Context) {
                 putLong(KEY_LAST_UPDATED, lastUpdated)
             }
 
-            Timber.d("Successfully cached remote config: birthday=${birthdayYear}-${birthdayMonth+1}-${birthdayDay} ${birthdayHour}:${birthdayMinute}, file=$daylioFileName")
+            Timber.d("Successfully cached remote config: birthday=${birthdayYear}-${birthdayMonth + 1}-${birthdayDay} ${birthdayHour}:${birthdayMinute}, file=$daylioFileName")
 
             true
 
         } catch (e: Exception) {
-            Timber.e(e, "Error fetching remote config")
+            // Only log as warning if it's not a network-related or expected error
+            when {
+                isNetworkRelatedError(e) -> {
+                    Timber.d("Network-related error fetching remote config: ${e.message}")
+                }
+
+                isExpectedError(e) -> {
+                    Timber.d("Expected error fetching remote config: ${e.message}")
+                }
+
+                else -> {
+                    Timber.w("Unexpected error fetching remote config: ${e.message}")
+                }
+            }
             false
         }
+    }
+
+    /** Checks if exception is network-related. */
+    private fun isNetworkRelatedError(e: Exception): Boolean {
+        val message = e.message?.lowercase() ?: ""
+        return e is java.net.UnknownHostException || e is java.net.SocketTimeoutException || e is java.net.ConnectException || e is java.io.IOException && (message.contains(
+            "network"
+        ) || message.contains("connection") || message.contains("timeout") || message.contains("no address") || message.contains(
+            "resolve host"
+        ) || message.contains("oauth2.googleapis.com") || message.contains("www.googleapis.com"))
+    }
+
+    /** Checks if exception is an expected error (not worth logging as warning). */
+    private fun isExpectedError(e: Exception): Boolean {
+        val message = e.message?.lowercase() ?: ""
+        return message.contains("not found") || message.contains("does not exist") || message.contains(
+            "no such file"
+        )
     }
 
     /**
@@ -194,52 +267,59 @@ class RemoteConfigManager private constructor(context: Context) {
      * @param config Configuration to upload
      * @return true if upload was successful, false otherwise
      */
-    suspend fun uploadRemoteConfig(folderId: String, config: RemoteConfig): Boolean = withContext(Dispatchers.IO) {
-        try {
-            Timber.d("Uploading remote config to Drive folder: $folderId")
+    suspend fun uploadRemoteConfig(folderId: String, config: RemoteConfig): Boolean =
+        withContext(Dispatchers.IO) {
+            try {
+                // Check network before attempting upload
+                if (!isNetworkAvailable()) {
+                    Timber.d("Cannot upload remote config - no internet connection")
+                    return@withContext false
+                }
 
-            // Create JSON content
-            val json = JSONObject().apply {
-                put("version", 1)
-                put("birthday_year", config.birthdayYear)
-                put("birthday_month", config.birthdayMonth + 1) // Convert from Calendar format
-                put("birthday_day", config.birthdayDay)
-                put("birthday_hour", config.birthdayHour)
-                put("birthday_minute", config.birthdayMinute)
-                put("daylio_file_name", config.daylioFileName)
-                put("last_updated", System.currentTimeMillis())
+                Timber.d("Uploading remote config to Drive folder: $folderId")
+
+                // Create JSON content
+                val json = JSONObject().apply {
+                    put("version", 1)
+                    put("birthday_year", config.birthdayYear)
+                    put("birthday_month", config.birthdayMonth + 1) // Convert from Calendar format
+                    put("birthday_day", config.birthdayDay)
+                    put("birthday_hour", config.birthdayHour)
+                    put("birthday_minute", config.birthdayMinute)
+                    put("daylio_file_name", config.daylioFileName)
+                    put("last_updated", System.currentTimeMillis())
+                }
+
+                val jsonString = json.toString(2) // Pretty print with indent
+
+                Timber.d("Generated config JSON (${jsonString.length} chars)")
+
+                // TODO: Implement upload to Google Drive
+                // This requires Drive API write permissions
+                // For now, admin needs to manually create/update the file
+
+                Timber.d("Remote config upload not implemented - admin must manually create app_config.json")
+                Timber.d("JSON to upload:\n$jsonString")
+
+                false
+
+            } catch (e: Exception) {
+                if (isNetworkRelatedError(e)) {
+                    Timber.d("Network error uploading remote config: ${e.message}")
+                } else {
+                    Timber.e(e, "Error uploading remote config")
+                }
+                false
             }
-
-            val jsonString = json.toString(2) // Pretty print with indent
-
-            Timber.d("Generated config JSON: $jsonString")
-
-            // TODO: Implement upload to Google Drive
-            // This requires Drive API write permissions
-            // For now, admin needs to manually create/update the file
-
-            Timber.w("Remote config upload not implemented - admin must manually create app_config.json in Drive folder")
-            Timber.d("JSON to upload:\n$jsonString")
-
-            false
-
-        } catch (e: Exception) {
-            Timber.e(e, "Error uploading remote config")
-            false
         }
-    }
 
-    /**
-     * Clear cached remote configuration.
-     */
+    /** Clear cached remote configuration. */
     fun clearRemoteConfig() {
         prefs.edit { clear() }
         Timber.d("Cleared remote config cache")
     }
 
-    /**
-     * Get time of last config update.
-     */
+    /** Get time of last config update. */
     fun getLastUpdateTime(): Long {
         return prefs.getLong(KEY_LAST_UPDATED, 0L)
     }
